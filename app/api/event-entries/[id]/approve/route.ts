@@ -20,10 +20,11 @@ export async function PATCH(
       );
     }
 
-    // Update the entry to approved
+    // Update the entry to approved and mark payment as paid
     const updatedEntry = {
       ...entry,
       approved: true,
+      paymentStatus: 'paid' as const, // Mark payment as paid when approved
       approvedAt: new Date().toISOString()
     };
 

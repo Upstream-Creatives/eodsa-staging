@@ -115,7 +115,7 @@ export default function AdminDashboard() {
     description: '',
     region: '',
     ageCategory: 'All',
-    performanceType: 'All',
+    performanceType: 'Solo',
     eventDate: '',
     registrationDeadline: '',
     venue: '',
@@ -271,7 +271,7 @@ export default function AdminDashboard() {
           description: '',
           region: '',
           ageCategory: 'All',
-          performanceType: 'All',
+          performanceType: 'Solo',
           eventDate: '',
           registrationDeadline: '',
           venue: '',
@@ -1943,6 +1943,23 @@ export default function AdminDashboard() {
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     placeholder="50"
                   />
+                </div>
+
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Performance Type *</label>
+                  <select
+                    value={newEvent.performanceType}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, performanceType: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
+                    required
+                  >
+                    {PERFORMANCE_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Tip: Create separate events for different performance types (e.g., "Solo Competition" and "Group Competition")
+                  </p>
                 </div>
               </div>
 

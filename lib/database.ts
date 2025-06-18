@@ -810,7 +810,7 @@ export const db = {
   },
 
   // Event Entries
-    async createEventEntry(eventEntry: Omit<EventEntry, 'id' | 'submittedAt'>) {
+  async createEventEntry(eventEntry: Omit<EventEntry, 'id' | 'submittedAt'>) {
     const sqlClient = getSql();
     const id = Date.now().toString();
     const submittedAt = new Date().toISOString();
@@ -820,20 +820,61 @@ export const db = {
         INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
         VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
       `;
+      
+      console.log(`✅ Event entry ${id} created successfully for contestant ${eventEntry.contestantId}`);
     } catch (error: any) {
+      console.error('❌ Event entry creation error:', error);
+      
       // Handle foreign key constraint errors for unified system dancers
       if (error?.code === '23503' && error?.constraint === 'event_entries_contestant_id_fkey') {
-        console.log('🔧 Foreign key constraint error detected, inserting without validation for unified system dancer');
+        console.log('🔧 Foreign key constraint error detected, creating contestant record for unified system dancer');
         
-        // Insert without foreign key validation using a different approach
-        await sqlClient.unsafe(`
-          INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
-          VALUES ('${id}', '${eventEntry.eventId}', '${eventEntry.contestantId}', '${eventEntry.eodsaId}', '${JSON.stringify(eventEntry.participantIds)}', ${eventEntry.calculatedFee}, '${eventEntry.paymentStatus}', '${submittedAt}', ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, '${eventEntry.itemName}', '${eventEntry.choreographer}', '${eventEntry.mastery}', '${eventEntry.itemStyle}', ${eventEntry.estimatedDuration})
-        `);
-        console.log('✅ Event entry created successfully bypassing foreign key constraint');
+        try {
+          // Get dancer info from unified system to create a contestant record
+          const dancer = await unifiedDb.getDancerById(eventEntry.contestantId);
+          if (dancer) {
+            console.log(`📝 Creating contestant record for unified dancer: ${dancer.name} (${dancer.eodsaId})`);
+            
+            // Create a contestant record based on the unified system dancer
+            // Only use columns that definitely exist in the contestants table
+            await sqlClient`
+              INSERT INTO contestants (id, eodsa_id, name, email, phone, type, date_of_birth, registration_date)
+              VALUES (${eventEntry.contestantId}, ${dancer.eodsaId}, ${dancer.name}, ${dancer.email || 'temp@example.com'}, ${dancer.phone || '0000000000'}, 'private', ${dancer.dateOfBirth}, ${new Date().toISOString()})
+              ON CONFLICT (id) DO NOTHING
+            `;
+            
+            console.log(`✅ Contestant record created for dancer ${dancer.name}`);
+            
+            // Now try to insert the event entry again
+            await sqlClient`
+              INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
+              VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
+            `;
+            
+            console.log(`✅ Event entry ${id} created successfully after creating contestant record`);
+          } else {
+            console.error(`❌ Could not find unified system dancer with ID: ${eventEntry.contestantId}`);
+            throw new Error(`Unified system dancer not found: ${eventEntry.contestantId}`);
+          }
+        } catch (contestantError) {
+          console.error('❌ Failed to create contestant record for unified system dancer:', contestantError);
+          throw contestantError;
+        }
       } else {
         throw error; // Re-throw other errors
       }
+    }
+
+    // Verify the entry was actually saved
+    try {
+      const savedEntry = await sqlClient`SELECT id FROM event_entries WHERE id = ${id}` as any[];
+      if (savedEntry.length === 0) {
+        throw new Error(`Event entry ${id} was not saved to database`);
+      }
+      console.log(`✅ Verified event entry ${id} exists in database`);
+    } catch (verifyError) {
+      console.error('❌ Failed to verify event entry save:', verifyError);
+      throw verifyError;
     }
 
     return { ...eventEntry, id, submittedAt };
@@ -1677,6 +1718,86 @@ export const db = {
     await sqlClient`DELETE FROM judges WHERE is_admin = false`;
     
     console.log('✅ Database cleaned successfully - Admin user and fee schedule preserved');
+  },
+
+  // NEW: Event status management methods
+  async updateEventStatuses() {
+    const sqlClient = getSql();
+    const now = new Date();
+    
+    // Update events based on current time
+    // 1. Set to 'registration_open' if current time is before registration deadline and status is 'upcoming'
+    await sqlClient`
+      UPDATE events 
+      SET status = 'registration_open' 
+      WHERE status = 'upcoming' 
+      AND registration_deadline > ${now.toISOString()}
+    `;
+    
+    // 2. Set to 'registration_closed' if registration deadline has passed but event hasn't started
+    await sqlClient`
+      UPDATE events 
+      SET status = 'registration_closed' 
+      WHERE status IN ('upcoming', 'registration_open') 
+      AND registration_deadline <= ${now.toISOString()} 
+      AND event_date > ${now.toISOString()}
+    `;
+    
+    // 3. Set to 'in_progress' if event has started
+    await sqlClient`
+      UPDATE events 
+      SET status = 'in_progress' 
+      WHERE status != 'completed' 
+      AND event_date <= ${now.toISOString()} 
+      AND event_date > ${new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()}
+    `;
+    
+    // 4. Set to 'completed' if event was more than 24 hours ago
+    await sqlClient`
+      UPDATE events 
+      SET status = 'completed' 
+      WHERE status != 'completed' 
+      AND event_date <= ${new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()}
+    `;
+    
+    console.log('✅ Event statuses updated based on current date/time');
+  },
+
+  async canRegisterForEvent(eventId: string): Promise<{ canRegister: boolean; reason?: string }> {
+    const event = await this.getEventById(eventId);
+    if (!event) {
+      return { canRegister: false, reason: 'Event not found' };
+    }
+    
+    const now = new Date();
+    const registrationDeadline = new Date(event.registrationDeadline);
+    const eventDate = new Date(event.eventDate);
+    
+    // Check if registration deadline has passed
+    if (now > registrationDeadline) {
+      return { 
+        canRegister: false, 
+        reason: `Registration deadline has passed. The deadline was ${registrationDeadline.toLocaleDateString()} at ${registrationDeadline.toLocaleTimeString()}.`
+      };
+    }
+    
+    // Check if event has already started
+    if (now > eventDate) {
+      return { 
+        canRegister: false, 
+        reason: 'This event has already started or completed.'
+      };
+    }
+    
+    // Check event status
+    if (!['upcoming', 'registration_open'].includes(event.status)) {
+      return { 
+        canRegister: false, 
+        reason: `Registration is currently ${event.status === 'registration_closed' ? 'closed' : 'not available'} for this event.`
+      };
+    }
+    
+    return { canRegister: true };
   },
 
   // Waiver management for minors under 18

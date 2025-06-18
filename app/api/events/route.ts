@@ -3,6 +3,9 @@ import { db as database, initializeDatabase } from '@/lib/database';
 
 export async function GET() {
   try {
+    // Update event statuses based on current date/time before fetching
+    await database.updateEventStatuses();
+    
     const events = await database.getAllEvents();
     return NextResponse.json({
       success: true,
@@ -39,12 +42,23 @@ export async function POST(request: Request) {
     // Validate date fields
     const eventDate = new Date(body.eventDate);
     const registrationDeadline = new Date(body.registrationDeadline);
+    const now = new Date();
     
     if (registrationDeadline >= eventDate) {
       return NextResponse.json(
         { success: false, error: 'Registration deadline must be before event date' },
         { status: 400 }
       );
+    }
+
+    // Automatically set the correct initial status based on dates
+    let initialStatus: 'upcoming' | 'registration_open' | 'registration_closed' | 'in_progress' | 'completed' = 'upcoming';
+    if (now < registrationDeadline) {
+      initialStatus = 'registration_open';
+    } else if (now >= registrationDeadline && now < eventDate) {
+      initialStatus = 'registration_closed';
+    } else if (now >= eventDate) {
+      initialStatus = 'completed';
     }
 
     const event = await database.createEvent({
@@ -56,7 +70,7 @@ export async function POST(request: Request) {
       eventDate: body.eventDate,
       registrationDeadline: body.registrationDeadline,
       venue: body.venue,
-      status: body.status || 'upcoming',
+      status: initialStatus,
       maxParticipants: body.maxParticipants,
       entryFee: body.entryFee,
       createdBy: body.createdBy

@@ -15,8 +15,16 @@ async function ensureDbInitialized() {
 export async function GET() {
   try {
     await ensureDbInitialized();
-    // This would get all event entries - implement if needed for admin
-    return NextResponse.json({ message: 'Event entries endpoint' });
+    
+    // Get all event entries for debugging
+    const entries = await db.getAllEventEntries();
+    
+    return NextResponse.json({ 
+      success: true,
+      entries: entries,
+      count: entries.length,
+      message: `Found ${entries.length} event entries`
+    });
   } catch (error) {
     console.error('Error fetching event entries:', error);
     return NextResponse.json(
@@ -60,6 +68,15 @@ export async function POST(request: NextRequest) {
     if (!event) {
       return NextResponse.json(
         { error: 'Event not found' },
+        { status: 400 }
+      );
+    }
+
+    // NEW: Check if registration is still allowed
+    const registrationCheck = await db.canRegisterForEvent(body.eventId);
+    if (!registrationCheck.canRegister) {
+      return NextResponse.json(
+        { error: registrationCheck.reason },
         { status: 400 }
       );
     }

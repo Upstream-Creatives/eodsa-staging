@@ -126,7 +126,7 @@ export default function PerformanceTypeEntryPage() {
       // Use EODSA fee calculation with proper options
       const feeBreakdown = calculateEODSAFee(
         formData.mastery,
-        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+        getCapitalizedPerformanceType(performanceType),
         formData.participantIds.length,
         {
           soloCount: 1, // Default to 1 solo per entry (can be enhanced later for multiple solos)
@@ -370,6 +370,12 @@ export default function PerformanceTypeEntryPage() {
     return parseFloat(duration) || 0;
   };
 
+  // Helper function to capitalize performance type for fee calculation
+  const getCapitalizedPerformanceType = (performanceType: string): 'Solo' | 'Duet' | 'Trio' | 'Group' => {
+    const capitalized = performanceType.charAt(0).toUpperCase() + performanceType.slice(1).toLowerCase();
+    return capitalized as 'Solo' | 'Duet' | 'Trio' | 'Group';
+  };
+
   // Helper function to convert decimal minutes to MM:SS format
   const convertMinutesToDuration = (minutes: number): string => {
     const min = Math.floor(minutes);
@@ -413,7 +419,7 @@ export default function PerformanceTypeEntryPage() {
       // Calculate EODSA fee correctly
       const feeBreakdown = calculateEODSAFee(
         formData.mastery,
-        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+        getCapitalizedPerformanceType(performanceType),
         formData.participantIds.length,
         {
           soloCount: 1,
@@ -493,6 +499,27 @@ export default function PerformanceTypeEntryPage() {
       showAlert('Please select an event first', 'warning');
       return;
     }
+    
+    // NEW: Check if selected event is still accepting registrations
+    if (step === 1 && formData.eventId) {
+      const selectedEvent = events.find(e => e.id === formData.eventId);
+      if (selectedEvent) {
+        const now = new Date();
+        const registrationDeadline = new Date(selectedEvent.registrationDeadline);
+        const eventDate = new Date(selectedEvent.eventDate);
+        
+        if (now > eventDate) {
+          showAlert('❌ This event has already completed. Please select a different event.', 'error');
+          return;
+        }
+        
+        if (now > registrationDeadline) {
+          showAlert('❌ Registration deadline has passed for this event. Please select a different event.', 'error');
+          return;
+        }
+      }
+    }
+    
     if (step === 2 && formData.participantIds.length === 0) {
       showAlert('Please select participants', 'warning');
       return;
@@ -539,13 +566,16 @@ export default function PerformanceTypeEntryPage() {
           {formData.mastery && formData.participantIds.length > 0 && (() => {
             const feeBreakdown = calculateEODSAFee(
               formData.mastery,
-              performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+              getCapitalizedPerformanceType(performanceType),
               formData.participantIds.length,
               {
                 soloCount: 1,
                 includeRegistration: true
               }
             );
+            
+            console.log('💰 Success Page Fee Result:', feeBreakdown);
+            
             return (
               <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-2 border-green-500/40 rounded-2xl p-6 mb-6">
                 <p className="text-lg font-bold text-green-300 mb-4">📧 Expect an Email Invoice for:</p>
@@ -710,9 +740,36 @@ export default function PerformanceTypeEntryPage() {
                             : 'border-gray-600 hover:border-purple-400 bg-gray-700/50'
                         }`}
                       >
+                        {/* Registration Status Indicator */}
+                        {(() => {
+                          const now = new Date();
+                          const registrationDeadline = new Date(event.registrationDeadline);
+                          const eventDate = new Date(event.eventDate);
+                          let statusInfo = { text: '', color: '', icon: '' };
+                          
+                          if (now > eventDate) {
+                            statusInfo = { text: 'Event Completed', color: 'bg-gray-500', icon: '✅' };
+                          } else if (now > registrationDeadline) {
+                            statusInfo = { text: 'Registration Closed', color: 'bg-red-500', icon: '🚫' };
+                          } else if (event.status === 'registration_open') {
+                            statusInfo = { text: 'Registration Open', color: 'bg-green-500', icon: '🟢' };
+                          } else {
+                            statusInfo = { text: 'Upcoming', color: 'bg-blue-500', icon: '⏰' };
+                          }
+                          
+                          return (
+                            <div className="absolute top-4 right-4">
+                              <div className={`${statusInfo.color} text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1`}>
+                                <span>{statusInfo.icon}</span>
+                                <span>{statusInfo.text}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* Auto-selected indicator */}
                         {autoAssigned && formData.eventId === event.id && events.length === 1 && (
-                          <div className="absolute top-4 right-4">
+                          <div className="absolute top-14 right-4">
                             <div className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
                               <span>🚀</span>
                               <span>Auto-Selected</span>
@@ -1022,16 +1079,27 @@ export default function PerformanceTypeEntryPage() {
                 
                 <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6 mb-6">
                   <h3 className="text-xl font-bold text-purple-300 mb-4">💰 EODSA Fee Breakdown</h3>
-                  {formData.mastery && formData.participantIds.length > 0 && (() => {
+                  {formData.mastery && formData.participantIds.length > 0 ? (() => {
+                    console.log('💰 Fee Calculation Debug:', {
+                      mastery: formData.mastery,
+                      performanceType,
+                      performanceTypeCapitalized: getCapitalizedPerformanceType(performanceType),
+                      participantCount: formData.participantIds.length,
+                      options: { soloCount: 1, includeRegistration: true }
+                    });
+                    
                     const feeBreakdown = calculateEODSAFee(
                       formData.mastery,
-                      performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+                      getCapitalizedPerformanceType(performanceType),
                       formData.participantIds.length,
                       {
                         soloCount: 1,
                         includeRegistration: true
                       }
                     );
+                    
+                    console.log('💰 Fee Result:', feeBreakdown);
+                    
                     return (
                       <div className="space-y-3">
                         <div className="flex justify-between items-center text-purple-200 text-lg">
@@ -1056,7 +1124,20 @@ export default function PerformanceTypeEntryPage() {
                         </div>
                       </div>
                     );
-                  })()}
+                  })() : (
+                    <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+                      <div className="flex items-center text-yellow-300">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium">Fee calculation requires:</span>
+                      </div>
+                      <ul className="mt-2 ml-7 text-yellow-200 text-sm space-y-1">
+                        {!formData.mastery && <li>• Select a Mastery Level</li>}
+                        {formData.participantIds.length === 0 && <li>• Select at least one participant</li>}
+                      </ul>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6">
@@ -1119,16 +1200,27 @@ export default function PerformanceTypeEntryPage() {
                   {/* Fee Summary */}
                   <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-xl p-6">
                     <h3 className="text-xl font-bold text-purple-300 mb-4">💰 Fee Summary</h3>
-                    {formData.mastery && formData.participantIds.length > 0 && (() => {
+                    {formData.mastery && formData.participantIds.length > 0 ? (() => {
+                      console.log('💰 Fee Calculation Debug:', {
+                        mastery: formData.mastery,
+                        performanceType,
+                        performanceTypeCapitalized: getCapitalizedPerformanceType(performanceType),
+                        participantCount: formData.participantIds.length,
+                        options: { soloCount: 1, includeRegistration: true }
+                      });
+                      
                       const feeBreakdown = calculateEODSAFee(
                         formData.mastery,
-                        performanceType as 'Solo' | 'Duet' | 'Trio' | 'Group',
+                        getCapitalizedPerformanceType(performanceType),
                         formData.participantIds.length,
                         {
                           soloCount: 1,
                           includeRegistration: true
                         }
                       );
+                      
+                      console.log('💰 Final Fee Result:', feeBreakdown);
+                      
                       return (
                         <div className="space-y-3">
                           <div className="flex justify-between text-purple-200 text-lg">
@@ -1147,7 +1239,20 @@ export default function PerformanceTypeEntryPage() {
                           </div>
                         </div>
                       );
-                    })()}
+                    })() : (
+                      <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+                        <div className="flex items-center text-red-300">
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="font-medium">Cannot calculate fee - missing data:</span>
+                        </div>
+                        <ul className="mt-2 ml-7 text-red-200 text-sm space-y-1">
+                          {!formData.mastery && <li>• Mastery Level not selected</li>}
+                          {formData.participantIds.length === 0 && <li>• No participants selected</li>}
+                        </ul>
+                      </div>
+                    )}
                   </div>
 
                   {/* Payment Information (Phase 1) */}
