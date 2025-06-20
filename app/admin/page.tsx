@@ -1143,14 +1143,14 @@ export default function AdminDashboard() {
                       <span className="hidden sm:inline">Bulk Create</span>
                       <span className="sm:hidden">Bulk</span>
                     </button>
-                    <button
-                      onClick={() => setShowCreateEventModal(true)}
-                      className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base font-medium"
-                    >
-                      <span>➕</span>
-                      <span className="hidden sm:inline">Create Event</span>
-                      <span className="sm:hidden">Create</span>
-                    </button>
+                  <button
+                    onClick={() => setShowCreateEventModal(true)}
+                    className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base font-medium"
+                  >
+                    <span>➕</span>
+                    <span className="hidden sm:inline">Create Event</span>
+                    <span className="sm:hidden">Create</span>
+                  </button>
                   </div>
                 </div>
               </div>
@@ -1211,7 +1211,7 @@ export default function AdminDashboard() {
                                 {event.performanceType === 'Group' && '👥 '}
                                 {event.performanceType}
                               </span>
-                              <div className="text-xs sm:text-sm text-gray-700">{event.ageCategory}</div>
+                            <div className="text-xs sm:text-sm text-gray-700">{event.ageCategory}</div>
                             </div>
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900">
@@ -2413,7 +2413,7 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
-            
+
             <form onSubmit={handleCreateBulkEvents} className="p-6">
               <div className="mb-6 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
                 <h3 className="text-sm font-semibold text-emerald-800 mb-2">💡 How Bulk Creation Works:</h3>
@@ -2459,7 +2459,7 @@ export default function AdminDashboard() {
                       <option key={region} value={region}>{region}</option>
                     ))}
                   </select>
-                </div>
+              </div>
 
                 <div className="lg:col-span-1">
                   <label className="block text-sm font-semibold text-gray-700 mb-3">Age Category</label>
@@ -2610,7 +2610,7 @@ export default function AdminDashboard() {
               )}
 
               <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
-                <button
+                  <button
                   type="button"
                   onClick={() => setShowBulkEventModal(false)}
                   className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
@@ -2629,17 +2629,17 @@ export default function AdminDashboard() {
                         <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
                       </div>
                       <span>Creating {bulkCreationProgress.current}/{bulkCreationProgress.total}...</span>
-                    </>
-                  ) : (
-                    <>
+                      </>
+                    ) : (
+                      <>
                       <span>✨</span>
                       <span>Create {bulkEventTemplate.selectedPerformanceTypes.length} Events</span>
-                    </>
-                  )}
-                </button>
-              </div>
+                      </>
+                    )}
+                  </button>
+                </div>
             </form>
-          </div>
+              </div>
         </div>
       )}
 
@@ -2654,15 +2654,15 @@ export default function AdminDashboard() {
                     <span className="text-white text-lg">📧</span>
                   </div>
                   <h2 className="text-xl font-bold text-gray-900">Email Test</h2>
-                </div>
+                  </div>
                 <button
                   onClick={() => setShowEmailTestModal(false)}
                   className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100/50 transition-colors"
                 >
                   <span className="text-2xl">×</span>
                 </button>
-              </div>
-            </div>
+                  </div>
+                  </div>
             
             <form onSubmit={handleTestEmailConnection} className="p-6">
               <div className="mb-6 p-4 bg-indigo-50 rounded-xl border border-indigo-200">
@@ -2673,7 +2673,7 @@ export default function AdminDashboard() {
               <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-800 mb-2">🔍 Test Results:</h3>
                 <p className="text-sm text-gray-700">{emailTestResults}</p>
-              </div>
+                  </div>
 
               <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
                 <button
@@ -2692,7 +2692,7 @@ export default function AdminDashboard() {
                     <>
                       <div className="relative w-5 h-5">
                         <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
-                      </div>
+              </div>
                       <span>Testing...</span>
                     </>
                   ) : (
@@ -2702,7 +2702,7 @@ export default function AdminDashboard() {
                     </>
                   )}
                 </button>
-              </div>
+            </div>
             </form>
           </div>
         </div>

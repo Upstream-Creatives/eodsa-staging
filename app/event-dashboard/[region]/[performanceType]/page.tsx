@@ -565,6 +565,36 @@ export default function PerformanceTypeEntryPage() {
     return TIME_LIMITS[capitalizedType as keyof typeof TIME_LIMITS] || 0;
   };
 
+  // Helper function to check if a dancer's age matches the event's age category
+  const checkAgeEligibility = (dancerAge: number, ageCategory: string): boolean => {
+    switch (ageCategory) {
+      case '4 & Under':
+        return dancerAge <= 4;
+      case '6 & Under':
+        return dancerAge <= 6;
+      case '7-9':
+        return dancerAge >= 7 && dancerAge <= 9;
+      case '10-12':
+        return dancerAge >= 10 && dancerAge <= 12;
+      case '13-14':
+        return dancerAge >= 13 && dancerAge <= 14;
+      case '15-17':
+        return dancerAge >= 15 && dancerAge <= 17;
+      case '18-24':
+        return dancerAge >= 18 && dancerAge <= 24;
+      case '25-39':
+        return dancerAge >= 25 && dancerAge <= 39;
+      case '40+':
+        return dancerAge >= 40 && dancerAge < 60;
+      case '60+':
+        return dancerAge >= 60;
+      default:
+        // If age category is not recognized, allow entry (backward compatibility)
+        console.warn(`Unknown age category: ${ageCategory}`);
+        return true;
+    }
+  };
+
   const validateDuration = (duration: string): boolean => {
     if (!duration) return true; // Optional field
     const durationMinutes = convertDurationToMinutes(duration);
@@ -590,6 +620,28 @@ export default function PerformanceTypeEntryPage() {
         showAlert(`${performanceType} performances must be ${maxTimeDisplay} minutes or less`, 'warning');
         setIsSubmitting(false);
         return;
+      }
+
+      // NEW: Validate age eligibility for selected event
+      if (selectedEvent && contestant?.dancers) {
+        const ineligibleDancers = [];
+        
+        for (const participantId of formData.participantIds) {
+          const dancer = contestant.dancers.find(d => d.id === participantId);
+          if (dancer && !checkAgeEligibility(dancer.age, selectedEvent.ageCategory)) {
+            ineligibleDancers.push(`${dancer.name} (age ${dancer.age})`);
+          }
+        }
+        
+        if (ineligibleDancers.length > 0) {
+          const message = ineligibleDancers.length === 1 
+            ? `❌ ${ineligibleDancers[0]} is not eligible for the "${selectedEvent.ageCategory}" age category. Please select a different event or remove this dancer.`
+            : `❌ The following dancers are not eligible for the "${selectedEvent.ageCategory}" age category: ${ineligibleDancers.join(', ')}. Please select a different event or remove these dancers.`;
+          
+          showAlert(message, 'error');
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       // Calculate EODSA fee correctly
@@ -995,6 +1047,8 @@ export default function PerformanceTypeEntryPage() {
                       placeholder={`Search and select dancers for your ${performanceType.toLowerCase()}...`}
                       maxSelections={getParticipantLimits().max}
                       minSelections={getParticipantLimits().min}
+                      ageCategory={selectedEvent?.ageCategory}
+                      checkAgeEligibility={checkAgeEligibility}
                       className="mb-4"
                     />
                   </div>

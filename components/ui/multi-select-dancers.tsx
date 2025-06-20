@@ -20,6 +20,8 @@ interface MultiSelectDancersProps {
   minSelections?: number;
   className?: string;
   disabled?: boolean;
+  ageCategory?: string;
+  checkAgeEligibility?: (age: number, ageCategory: string) => boolean;
 }
 
 export function MultiSelectDancers({
@@ -30,7 +32,9 @@ export function MultiSelectDancers({
   maxSelections,
   minSelections = 0,
   className = "",
-  disabled = false
+  disabled = false,
+  ageCategory,
+  checkAgeEligibility
 }: MultiSelectDancersProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,30 +131,43 @@ export function MultiSelectDancers({
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {selectedDancers.map((dancer) => (
-              <div
-                key={dancer.id}
-                className="flex items-center space-x-2 bg-purple-600/80 text-white px-3 py-2 rounded-lg text-sm"
-              >
-                <div className="w-6 h-6 bg-purple-700 rounded-full flex items-center justify-center text-xs font-bold">
-                  {dancer.name.charAt(0)}
-                </div>
-                <div>
-                  <div className="font-medium">{dancer.name}</div>
-                  <div className="text-xs text-purple-200">
-                    Age {dancer.age} • {dancer.studioName || 'Private'}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleRemoveDancer(dancer.id)}
-                  className="text-purple-200 hover:text-white ml-1"
+            {selectedDancers.map((dancer) => {
+              const isEligible = !ageCategory || !checkAgeEligibility || checkAgeEligibility(dancer.age, ageCategory);
+              
+              return (
+                <div
+                  key={dancer.id}
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
+                    isEligible 
+                      ? 'bg-purple-600/80 text-white' 
+                      : 'bg-red-600/80 text-white border-2 border-red-400'
+                  }`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                    isEligible ? 'bg-purple-700' : 'bg-red-700'
+                  }`}>
+                    {isEligible ? dancer.name.charAt(0) : '⚠️'}
+                  </div>
+                  <div>
+                    <div className="font-medium">{dancer.name}</div>
+                    <div className={`text-xs ${isEligible ? 'text-purple-200' : 'text-red-200'}`}>
+                      Age {dancer.age} • {dancer.studioName || 'Private'}
+                      {!isEligible && ageCategory && (
+                        <span className="block font-bold">Not eligible for {ageCategory}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveDancer(dancer.id)}
+                    className={`hover:text-white ml-1 ${isEligible ? 'text-purple-200' : 'text-red-200'}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -221,6 +238,7 @@ export function MultiSelectDancers({
             ) : (
               searchResults.map((dancer) => {
                 const isMaxReached = maxSelections && selectedDancers.length >= maxSelections;
+                const isEligible = !ageCategory || !checkAgeEligibility || checkAgeEligibility(dancer.age, ageCategory);
                 
                 return (
                   <div
@@ -229,28 +247,39 @@ export function MultiSelectDancers({
                       px-4 py-3 border-b border-gray-700/50 last:border-b-0 transition-colors
                       ${isMaxReached 
                         ? 'text-gray-500 cursor-not-allowed' 
-                        : 'cursor-pointer hover:bg-gray-700/50 text-white'
+                        : isEligible
+                          ? 'cursor-pointer hover:bg-gray-700/50 text-white'
+                          : 'cursor-pointer hover:bg-red-900/20 text-white border-l-4 border-red-500'
                       }
                     `}
                     onClick={() => !isMaxReached && handleAddDancer(dancer)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                          {dancer.name.charAt(0)}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          isEligible ? 'bg-purple-600' : 'bg-red-600'
+                        }`}>
+                          {isEligible ? dancer.name.charAt(0) : '⚠️'}
                         </div>
                         <div>
                           <div className="font-medium">{dancer.name}</div>
-                          <div className="text-sm text-gray-400">
+                          <div className={`text-sm ${isEligible ? 'text-gray-400' : 'text-red-400'}`}>
                             {dancer.eodsaId && `${dancer.eodsaId} • `}
                             Age {dancer.age} • {dancer.studioName || 'Private'}
+                            {!isEligible && ageCategory && (
+                              <span className="block font-bold text-red-400">Not eligible for {ageCategory}</span>
+                            )}
                           </div>
                         </div>
                       </div>
                       
                       {!isMaxReached && (
-                        <button className="px-3 py-1 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors">
-                          Add
+                        <button className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                          isEligible 
+                            ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                            : 'bg-red-600 text-white hover:bg-red-700'
+                        }`}>
+                          {isEligible ? 'Add' : 'Add Anyway'}
                         </button>
                       )}
                     </div>

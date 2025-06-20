@@ -2,6 +2,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, initializeDatabase, unifiedDb } from '@/lib/database';
 import { emailService } from '@/lib/email';
 
+// Helper function to check if a dancer's age matches the event's age category
+function checkAgeEligibility(dancerAge: number, ageCategory: string): boolean {
+  switch (ageCategory) {
+    case '4 & Under':
+      return dancerAge <= 4;
+    case '6 & Under':
+      return dancerAge <= 6;
+    case '7-9':
+      return dancerAge >= 7 && dancerAge <= 9;
+    case '10-12':
+      return dancerAge >= 10 && dancerAge <= 12;
+    case '13-14':
+      return dancerAge >= 13 && dancerAge <= 14;
+    case '15-17':
+      return dancerAge >= 15 && dancerAge <= 17;
+    case '18-24':
+      return dancerAge >= 18 && dancerAge <= 24;
+    case '25-39':
+      return dancerAge >= 25 && dancerAge <= 39;
+    case '40+':
+      return dancerAge >= 40 && dancerAge < 60;
+    case '60+':
+      return dancerAge >= 60;
+    default:
+      // If age category is not recognized, allow entry (backward compatibility)
+      console.warn(`Unknown age category: ${ageCategory}`);
+      return true;
+  }
+}
+
 // Initialize database on first request
 let dbInitialized = false;
 
@@ -36,53 +66,47 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureDbInitialized();
+    await initializeDatabase();
     const body = await request.json();
     
     // Validate required fields
-    const requiredFields = [
-      'eventId', 'contestantId', 'eodsaId', 
-      'participantIds', 'calculatedFee', 'paymentMethod',
-      'itemName', 'choreographer', 'mastery', 'itemStyle', 'estimatedDuration'
-    ];
-    
-    for (const field of requiredFields) {
-      if (!body[field] && body[field] !== 0) { // Allow 0 for estimatedDuration
-        return NextResponse.json(
-          { error: `Missing required field: ${field}` },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Validate participant IDs array
-    if (!Array.isArray(body.participantIds) || body.participantIds.length === 0) {
+    if (!body.eventId || !body.contestantId || !body.eodsaId || !body.participantIds || !Array.isArray(body.participantIds) || body.participantIds.length === 0) {
       return NextResponse.json(
-        { error: 'At least one participant is required' },
+        { error: 'Missing required fields: eventId, contestantId, eodsaId, participantIds' },
         { status: 400 }
       );
     }
 
-    // Get event details to validate participant limits
+    // Get event details
     const event = await db.getEventById(body.eventId);
     if (!event) {
       return NextResponse.json(
         { error: 'Event not found' },
-        { status: 400 }
+        { status: 404 }
       );
     }
 
-    // NEW: Check if registration is still allowed
-    const registrationCheck = await db.canRegisterForEvent(body.eventId);
-    if (!registrationCheck.canRegister) {
+    // Check if event is still accepting registrations
+    const now = new Date();
+    const registrationDeadline = new Date(event.registrationDeadline);
+    const eventDate = new Date(event.eventDate);
+    
+    if (now > eventDate) {
       return NextResponse.json(
-        { error: registrationCheck.reason },
+        { error: 'This event has already completed. Registration is no longer possible.' },
+        { status: 400 }
+      );
+    }
+    
+    if (now > registrationDeadline) {
+      return NextResponse.json(
+        { error: 'Registration deadline has passed for this event' },
         { status: 400 }
       );
     }
 
     // UNIFIED SYSTEM VALIDATION: Check dancer eligibility
-    // Validate each participant has proper approvals
+    // Validate each participant has proper approvals and age requirements
     for (const participantId of body.participantIds) {
       // Check if this is a unified system dancer
       const dancer = await unifiedDb.getDancerById(participantId);
@@ -97,6 +121,24 @@ export async function POST(request: NextRequest) {
               dancerId: participantId
             },
             { status: 403 }
+          );
+        }
+
+        // NEW: Check age eligibility for the event
+        const dancerAge = dancer.age;
+        const eventAgeCategory = event.ageCategory;
+        
+        if (!checkAgeEligibility(dancerAge, eventAgeCategory)) {
+          return NextResponse.json(
+            { 
+              error: `Dancer ${dancer.name} (age ${dancerAge}) is not eligible for the "${eventAgeCategory}" age category. Please select an appropriate event for this dancer's age.`,
+              ageIneligible: true,
+              dancerId: participantId,
+              dancerName: dancer.name,
+              dancerAge: dancerAge,
+              eventAgeCategory: eventAgeCategory
+            },
+            { status: 400 }
           );
         }
 
@@ -128,6 +170,27 @@ export async function POST(request: NextRequest) {
             { error: `Participant ${participantId} not found in contestant record` },
             { status: 400 }
           );
+        }
+
+        // NEW: Check age eligibility for old system dancers
+        const participant = contestant.dancers?.find((d: any) => d.id === participantId);
+        if (participant) {
+          const participantAge = participant.age;
+          const eventAgeCategory = event.ageCategory;
+          
+          if (!checkAgeEligibility(participantAge, eventAgeCategory)) {
+            return NextResponse.json(
+              { 
+                error: `Dancer ${participant.name} (age ${participantAge}) is not eligible for the "${eventAgeCategory}" age category. Please select an appropriate event for this dancer's age.`,
+                ageIneligible: true,
+                dancerId: participantId,
+                dancerName: participant.name,
+                dancerAge: participantAge,
+                eventAgeCategory: eventAgeCategory
+              },
+              { status: 400 }
+            );
+          }
         }
       }
     }
