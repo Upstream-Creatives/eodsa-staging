@@ -10,26 +10,14 @@ export async function POST(request: NextRequest) {
     await initializeDatabase();
     
     const body = await request.json();
-    const { name, dateOfBirth, nationalId, email, phone, guardianName, guardianEmail, guardianPhone, recaptchaToken } = body;
+    const { name, dateOfBirth, nationalId, email, phone, guardianName, guardianEmail, guardianPhone, studioId, recaptchaToken } = body;
     
-    // Get client IP for rate limiting
+    // Rate limiting removed for bulk studio registrations
+    
+    // Get client IP for reCAPTCHA verification
     const clientIP = getClientIP(request);
     
-    // Check rate limit (3 registrations per IP per hour)
-    const rateLimitCheck = checkRateLimit(clientIP);
-    if (!rateLimitCheck.allowed) {
-      const resetTime = new Date(rateLimitCheck.resetTime!);
-      return NextResponse.json(
-        { 
-          error: `Rate limit exceeded. You can only register 3 accounts per hour. Try again after ${resetTime.toLocaleTimeString()}.`,
-          rateLimited: true,
-          resetTime: rateLimitCheck.resetTime
-        },
-        { status: 429 }
-      );
-    }
-    
-        // Verify reCAPTCHA token
+    // Verify reCAPTCHA token
     if (!recaptchaToken) {
       return NextResponse.json(
         { error: 'reCAPTCHA verification is required' },
@@ -88,6 +76,30 @@ export async function POST(request: NextRequest) {
       guardianPhone
           });
 
+    // If studioId is provided, automatically add the dancer to the studio
+    if (studioId) {
+      try {
+        await unifiedDb.addDancerToStudioByEodsaId(studioId, result.eodsaId, studioId);
+      } catch (error) {
+        console.error('Failed to auto-assign dancer to studio:', error);
+        // Don't fail the registration if studio assignment fails
+        // Return success but mention the assignment issue
+        return NextResponse.json({
+          success: true,
+          message: 'Dancer registered successfully, but failed to add to studio. Please add manually.',
+          eodsaId: result.eodsaId,
+          dancer: {
+            id: result.id,
+            eodsaId: result.eodsaId,
+            name,
+            age,
+            approved: true
+          },
+          studioAssignmentError: true
+        });
+      }
+    }
+
     // Email system disabled for Phase 1
     // if (email) {
     //   try {
@@ -101,7 +113,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Dancer registered successfully. Your account is now active!',
+      message: studioId ? 'Dancer registered successfully and added to your studio!' : 'Dancer registered successfully. Your account is now active!',
+      eodsaId: result.eodsaId,
       dancer: {
         id: result.id,
         eodsaId: result.eodsaId,
