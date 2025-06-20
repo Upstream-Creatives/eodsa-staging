@@ -68,6 +68,7 @@ export async function POST(request: Request) {
       ageCategory: body.ageCategory,
       performanceType: body.performanceType,
       eventDate: body.eventDate,
+      eventEndDate: body.eventEndDate,
       registrationDeadline: body.registrationDeadline,
       venue: body.venue,
       status: initialStatus,

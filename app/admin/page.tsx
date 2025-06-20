@@ -15,6 +15,7 @@ interface Event {
   ageCategory: string;
   performanceType: string;
   eventDate: string;
+  eventEndDate?: string;
   registrationDeadline: string;
   venue: string;
   status: string;
@@ -117,6 +118,7 @@ export default function AdminDashboard() {
     ageCategory: 'All',
     performanceType: 'Solo',
     eventDate: '',
+    eventEndDate: '',
     registrationDeadline: '',
     venue: '',
     maxParticipants: '',
@@ -124,6 +126,28 @@ export default function AdminDashboard() {
   });
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [createEventMessage, setCreateEventMessage] = useState('');
+
+  // Bulk event creation state
+  const [showBulkEventModal, setShowBulkEventModal] = useState(false);
+  const [bulkEventTemplate, setBulkEventTemplate] = useState({
+    baseName: '',
+    description: '',
+    region: '',
+    ageCategory: '',
+    eventDate: '',
+    eventEndDate: '',
+    registrationDeadline: '',
+    venue: '',
+    selectedPerformanceTypes: [] as string[],
+    entryFees: {
+      Solo: '300',
+      Duet: '400',
+      Trio: '600',
+      Group: '720'
+    } as Record<string, string>
+  });
+  const [isCreatingBulkEvents, setIsCreatingBulkEvents] = useState(false);
+  const [bulkCreationProgress, setBulkCreationProgress] = useState({ current: 0, total: 0 });
 
   // Judge creation state
   const [newJudge, setNewJudge] = useState({
@@ -273,6 +297,7 @@ export default function AdminDashboard() {
           ageCategory: 'All',
           performanceType: 'Solo',
           eventDate: '',
+          eventEndDate: '',
           registrationDeadline: '',
           venue: '',
           maxParticipants: '',
@@ -289,6 +314,107 @@ export default function AdminDashboard() {
       setCreateEventMessage('Error creating event. Please check your connection and try again.');
     } finally {
       setIsCreatingEvent(false);
+    }
+  };
+
+  const handleCreateBulkEvents = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isCreatingBulkEvents) {
+      return;
+    }
+
+    if (bulkEventTemplate.selectedPerformanceTypes.length === 0) {
+      showAlert('Please select at least one performance type', 'warning');
+      return;
+    }
+
+    setIsCreatingBulkEvents(true);
+    setBulkCreationProgress({ current: 0, total: bulkEventTemplate.selectedPerformanceTypes.length });
+
+    try {
+      const session = localStorage.getItem('adminSession');
+      if (!session) {
+        showAlert('Session expired. Please log in again.', 'error');
+        return;
+      }
+
+      const adminData = JSON.parse(session);
+      const results = [];
+
+      for (let i = 0; i < bulkEventTemplate.selectedPerformanceTypes.length; i++) {
+        const performanceType = bulkEventTemplate.selectedPerformanceTypes[i];
+        setBulkCreationProgress({ current: i + 1, total: bulkEventTemplate.selectedPerformanceTypes.length });
+
+        const eventName = `${bulkEventTemplate.baseName} - ${performanceType}`;
+        const entryFee = parseFloat(bulkEventTemplate.entryFees[performanceType] || '0');
+
+        try {
+          const response = await fetch('/api/events', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: eventName,
+              description: bulkEventTemplate.description,
+              region: bulkEventTemplate.region,
+              ageCategory: bulkEventTemplate.ageCategory,
+              performanceType: performanceType,
+              eventDate: bulkEventTemplate.eventDate,
+              registrationDeadline: bulkEventTemplate.registrationDeadline,
+              venue: bulkEventTemplate.venue,
+              maxParticipants: null,
+              entryFee: entryFee,
+              createdBy: adminData.id,
+              status: 'upcoming'
+            }),
+          });
+
+          const data = await response.json();
+          results.push({ performanceType, success: data.success, error: data.error });
+        } catch (error) {
+          results.push({ performanceType, success: false, error: 'Network error' });
+        }
+      }
+
+      // Show results
+      const successCount = results.filter(r => r.success).length;
+      const failedResults = results.filter(r => !r.success);
+
+      if (successCount === results.length) {
+        showAlert(`Successfully created ${successCount} events!`, 'success');
+        setShowBulkEventModal(false);
+        setBulkEventTemplate({
+          baseName: '',
+          description: '',
+          region: '',
+          ageCategory: '',
+          eventDate: '',
+          registrationDeadline: '',
+          venue: '',
+          selectedPerformanceTypes: [],
+          entryFees: {
+            Solo: '300',
+            Duet: '400',
+            Trio: '600',
+            Group: '720'
+          }
+        });
+        fetchData();
+      } else {
+        let errorMessage = `Created ${successCount} out of ${results.length} events.\n\nFailed events:\n`;
+        failedResults.forEach(r => {
+          errorMessage += `- ${r.performanceType}: ${r.error || 'Unknown error'}\n`;
+        });
+        showAlert(errorMessage, 'warning');
+      }
+    } catch (error) {
+      console.error('Error creating bulk events:', error);
+      showAlert('Error creating events. Please check your connection and try again.', 'error');
+    } finally {
+      setIsCreatingBulkEvents(false);
+      setBulkCreationProgress({ current: 0, total: 0 });
     }
   };
 
@@ -1007,14 +1133,24 @@ export default function AdminDashboard() {
                       {events.length} events
                   </div>
                   </div>
-                  <button
-                    onClick={() => setShowCreateEventModal(true)}
-                    className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base font-medium"
-                  >
-                    <span>➕</span>
-                    <span className="hidden sm:inline">Create Event</span>
-                    <span className="sm:hidden">Create</span>
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setShowBulkEventModal(true)}
+                      className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg sm:rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base font-medium"
+                    >
+                      <span>📦</span>
+                      <span className="hidden sm:inline">Bulk Create</span>
+                      <span className="sm:hidden">Bulk</span>
+                    </button>
+                    <button
+                      onClick={() => setShowCreateEventModal(true)}
+                      className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base font-medium"
+                    >
+                      <span>➕</span>
+                      <span className="hidden sm:inline">Create Event</span>
+                      <span className="sm:hidden">Create</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1060,8 +1196,22 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 hidden sm:table-cell">{event.region}</td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{event.performanceType}</div>
-                            <div className="text-xs sm:text-sm text-gray-700">{event.ageCategory}</div>
+                            <div className="space-y-1">
+                              <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border ${
+                                event.performanceType === 'Solo' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                event.performanceType === 'Duet' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                event.performanceType === 'Trio' ? 'bg-green-50 text-green-700 border-green-200' :
+                                event.performanceType === 'Group' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                'bg-gray-50 text-gray-700 border-gray-200'
+                              }`}>
+                                {event.performanceType === 'Solo' && '👤 '}
+                                {event.performanceType === 'Duet' && '👥 '}
+                                {event.performanceType === 'Trio' && '👥 '}
+                                {event.performanceType === 'Group' && '👥 '}
+                                {event.performanceType}
+                              </span>
+                              <div className="text-xs sm:text-sm text-gray-700">{event.ageCategory}</div>
+                            </div>
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900">
                             <div className="hidden sm:block">
@@ -1924,6 +2074,17 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="lg:col-span-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">End Date</label>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.eventEndDate}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, eventEndDate: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
+                    required
+                  />
+                </div>
+
+                <div className="lg:col-span-1">
                   <label className="block text-sm font-semibold text-gray-700 mb-3">Registration Deadline</label>
                   <input
                     type="datetime-local"
@@ -2231,17 +2392,267 @@ export default function AdminDashboard() {
         </div>
       )}
 
-              {/* Email Test Modal - Disabled for Phase 1 */}
-        {false && showEmailTestModal && (
+      {/* Bulk Event Creation Modal */}
+      {showBulkEventModal && (
         <div className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
             <div className="p-6 border-b border-gray-200/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                    <span className="text-white text-lg">📦</span>
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">Bulk Create Events</h2>
+                </div>
+                <button
+                  onClick={() => setShowBulkEventModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100/50 transition-colors"
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+            </div>
+            
+            <form onSubmit={handleCreateBulkEvents} className="p-6">
+              <div className="mb-6 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                <h3 className="text-sm font-semibold text-emerald-800 mb-2">💡 How Bulk Creation Works:</h3>
+                <p className="text-sm text-emerald-700">Create multiple events at once, one for each performance type you select. Perfect for setting up competitions with separate Solo, Duet, Trio, and Group categories.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Base Event Name</label>
+                  <input
+                    type="text"
+                    value={bulkEventTemplate.baseName}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, baseName: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
+                    required
+                    placeholder="e.g. EODSA Gauteng Regionals 2024"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Performance type will be appended automatically (e.g. "EODSA Gauteng Regionals 2024 - Solo")</p>
+                </div>
+
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Description</label>
+                  <textarea
+                    value={bulkEventTemplate.description}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
+                    rows={3}
+                    required
+                    placeholder="Describe the event..."
+                  />
+                </div>
+
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Region</label>
+                  <select
+                    value={bulkEventTemplate.region}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, region: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900"
+                    required
+                  >
+                    <option value="">Select Region</option>
+                    {REGIONS.map(region => (
+                      <option key={region} value={region}>{region}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Age Category</label>
+                  <select
+                    value={bulkEventTemplate.ageCategory}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, ageCategory: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900"
+                    required
+                  >
+                    <option value="">Select Age Category</option>
+                    {AGE_CATEGORIES.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Event Date</label>
+                  <input
+                    type="datetime-local"
+                    value={bulkEventTemplate.eventDate}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, eventDate: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900"
+                    required
+                  />
+                </div>
+
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Event End Date</label>
+                  <input
+                    type="datetime-local"
+                    value={bulkEventTemplate.eventEndDate}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, eventEndDate: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900"
+                    placeholder="Optional - for multi-day events"
+                  />
+                </div>
+
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Registration Deadline</label>
+                  <input
+                    type="datetime-local"
+                    value={bulkEventTemplate.registrationDeadline}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, registrationDeadline: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900"
+                    required
+                  />
+                </div>
+
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Venue</label>
+                  <input
+                    type="text"
+                    value={bulkEventTemplate.venue}
+                    onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, venue: e.target.value }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
+                    required
+                    placeholder="e.g. Johannesburg Theatre"
+                  />
+                </div>
+
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Select Performance Types to Create</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {['Solo', 'Duet', 'Trio', 'Group'].map(type => (
+                      <div key={type} className="relative">
+                        <input
+                          type="checkbox"
+                          id={`bulk-${type}`}
+                          checked={bulkEventTemplate.selectedPerformanceTypes.includes(type)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setBulkEventTemplate(prev => ({
+                                ...prev,
+                                selectedPerformanceTypes: [...prev.selectedPerformanceTypes, type]
+                              }));
+                            } else {
+                              setBulkEventTemplate(prev => ({
+                                ...prev,
+                                selectedPerformanceTypes: prev.selectedPerformanceTypes.filter(t => t !== type)
+                              }));
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                        <label
+                          htmlFor={`bulk-${type}`}
+                          className={`block p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 text-center ${
+                            bulkEventTemplate.selectedPerformanceTypes.includes(type)
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                              : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                          }`}
+                        >
+                          <span className="text-2xl mb-1 block">
+                            {type === 'Solo' && '👤'}
+                            {type === 'Duet' && '👥'}
+                            {type === 'Trio' && '👥'}
+                            {type === 'Group' && '👥'}
+                          </span>
+                          <span className="font-semibold">{type}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Entry Fees by Performance Type</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {['Solo', 'Duet', 'Trio', 'Group'].map(type => (
+                      <div key={type} className={`${!bulkEventTemplate.selectedPerformanceTypes.includes(type) ? 'opacity-50' : ''}`}>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{type}</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">R</span>
+                          <input
+                            type="number"
+                            value={bulkEventTemplate.entryFees[type]}
+                            onChange={(e) => setBulkEventTemplate(prev => ({
+                              ...prev,
+                              entryFees: { ...prev.entryFees, [type]: e.target.value }
+                            }))}
+                            disabled={!bulkEventTemplate.selectedPerformanceTypes.includes(type)}
+                            className="w-full pl-8 pr-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-sm font-medium text-gray-900 disabled:bg-gray-100"
+                            min="0"
+                            step="10"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">💡 Standard fees: Solo R300, Duet R400, Trio R600, Group R720</p>
+                </div>
+              </div>
+
+              {isCreatingBulkEvents && bulkCreationProgress.total > 0 && (
+                <div className="mt-6 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-emerald-800">Creating events...</span>
+                    <span className="text-sm text-emerald-700">{bulkCreationProgress.current} / {bulkCreationProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-emerald-200 rounded-full h-2">
+                    <div 
+                      className="bg-emerald-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(bulkCreationProgress.current / bulkCreationProgress.total) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkEventModal(false)}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                  disabled={isCreatingBulkEvents}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingBulkEvents || bulkEventTemplate.selectedPerformanceTypes.length === 0}
+                  className="inline-flex items-center space-x-3 px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg font-semibold"
+                >
+                  {isCreatingBulkEvents ? (
+                    <>
+                      <div className="relative w-5 h-5">
+                        <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
+                      </div>
+                      <span>Creating {bulkCreationProgress.current}/{bulkCreationProgress.total}...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>✨</span>
+                      <span>Create {bulkEventTemplate.selectedPerformanceTypes.length} Events</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Email Test Modal - Disabled for Phase 1 */}
+      {false && showEmailTestModal && (
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
+            <div className="p-6 border-b border-gray-200/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
                     <span className="text-white text-lg">📧</span>
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900">Email System Test</h2>
+                  <h2 className="text-xl font-bold text-gray-900">Email Test</h2>
                 </div>
                 <button
                   onClick={() => setShowEmailTestModal(false)}
@@ -2251,111 +2662,47 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
+            
+            <form onSubmit={handleTestEmailConnection} className="p-6">
+              <div className="mb-6 p-4 bg-indigo-50 rounded-xl border border-indigo-200">
+                <h3 className="text-sm font-semibold text-indigo-800 mb-2">💡 Test Email Connection:</h3>
+                <p className="text-sm text-indigo-700">Enter your email address to test the SMTP connection.</p>
+              </div>
 
-            <div className="p-6 space-y-6">
-              {/* SMTP Connection Test */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">SMTP Connection Test</h3>
-                <p className="text-gray-600 mb-4">Test the connection to your email server (mail.upstreamcreatives.co.za)</p>
+              <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">🔍 Test Results:</h3>
+                <p className="text-sm text-gray-700">{emailTestResults}</p>
+              </div>
+
+              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
                 <button
-                  onClick={handleTestEmailConnection}
+                  type="button"
+                  onClick={() => setShowEmailTestModal(false)}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
                   disabled={isTestingEmail}
-                  className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+                  className="inline-flex items-center space-x-3 px-8 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg font-semibold"
                 >
                   {isTestingEmail ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <div className="relative w-5 h-5">
+                        <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
+                      </div>
                       <span>Testing...</span>
                     </>
                   ) : (
                     <>
-                      <span>🔗</span>
+                      <span>✨</span>
                       <span>Test Connection</span>
                     </>
                   )}
                 </button>
               </div>
-
-              {/* Send Test Email */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Send Test Email</h3>
-                <p className="text-gray-600 mb-4">Send a test registration email to verify email delivery</p>
-                <div className="flex space-x-3">
-                  <input
-                    type="email"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    placeholder="Enter email address to test"
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                  />
-                  <button
-                    onClick={handleSendTestEmail}
-                    disabled={isTestingEmail || !testEmail}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
-                  >
-                    {isTestingEmail ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        <span>Sending...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>📤</span>
-                        <span>Send Test</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Email Configuration Info */}
-              <div className="bg-blue-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-blue-900 mb-3">Current Email Configuration</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-blue-700 font-medium">SMTP Host:</span>
-                    <span className="text-blue-900">mail.upstreamcreatives.co.za</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-700 font-medium">Port:</span>
-                    <span className="text-blue-900">587 (STARTTLS)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-700 font-medium">From Address:</span>
-                    <span className="text-blue-900">devops@upstreamcreatives.co.za</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-700 font-medium">Security:</span>
-                    <span className="text-blue-900">STARTTLS</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Test Results */}
-              {emailTestResults && (
-                <div className={`p-4 rounded-xl font-medium animate-slideIn ${
-                  emailTestResults.includes('✅') 
-                    ? 'bg-green-50 text-green-700 border border-green-200' 
-                    : 'bg-red-50 text-red-700 border border-red-200'
-                }`}>
-                  <div className="flex items-start space-x-2">
-                    <span className="text-lg mt-0.5">
-                      {emailTestResults.includes('✅') ? '✅' : '❌'}
-                    </span>
-                    <span className="flex-1">{emailTestResults}</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
-                <button
-                  onClick={() => setShowEmailTestModal(false)}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

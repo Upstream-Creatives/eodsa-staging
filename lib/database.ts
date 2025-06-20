@@ -195,6 +195,24 @@ export const initializeDatabase = async () => {
           { name: 'studio_registration_number', type: 'TEXT' }
         ];
 
+        // Check if event_end_date column exists in events table, add if not
+        const eventEndDateCheck = await sqlClient`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'events' 
+          AND column_name = 'event_end_date'
+        ` as any[];
+        
+        if (eventEndDateCheck.length === 0) {
+          await sqlClient`
+            ALTER TABLE events 
+            ADD COLUMN event_end_date TEXT
+          `;
+          console.log('✅ Added event_end_date column to events table');
+        } else {
+          console.log('✅ event_end_date column already exists in events table');
+        }
+
         for (const column of contestantsColumns) {
           const columnCheck = await sqlClient`
             SELECT column_name 
@@ -437,8 +455,9 @@ export const initializeDatabase = async () => {
         description TEXT NOT NULL,
         region TEXT CHECK(region IN ('Gauteng', 'Free State', 'Mpumalanga', 'Western Cape', 'Eastern Cape', 'Northern Cape', 'North West', 'Limpopo', 'KwaZulu-Natal')) NOT NULL,
         age_category TEXT NOT NULL,
-        performance_type TEXT CHECK(performance_type IN ('Solo', 'Duet', 'Trio', 'Group')) NOT NULL,
+        performance_type TEXT CHECK(performance_type IN ('Solo', 'Duet', 'Trio', 'Group', 'All')) NOT NULL,
         event_date TEXT NOT NULL,
+        event_end_date TEXT,
         registration_deadline TEXT NOT NULL,
         venue TEXT NOT NULL,
         status TEXT CHECK(status IN ('upcoming', 'registration_open', 'registration_closed', 'in_progress', 'completed')) DEFAULT 'upcoming',
@@ -1545,12 +1564,33 @@ export const db = {
   // NEW: Event management methods
   async createEvent(event: Omit<Event, 'id' | 'createdAt'>) {
     const sqlClient = getSql();
+    
+    // Ensure event_end_date column exists (migration check)
+    try {
+      const columnCheck = await sqlClient`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'events' 
+        AND column_name = 'event_end_date'
+      ` as any[];
+      
+      if (columnCheck.length === 0) {
+        await sqlClient`
+          ALTER TABLE events 
+          ADD COLUMN event_end_date TEXT
+        `;
+        console.log('✅ Added event_end_date column to events table');
+      }
+    } catch (migrationError) {
+      console.error('Migration error for event_end_date:', migrationError);
+    }
+    
     const id = `event-${Date.now()}`;
     const createdAt = new Date().toISOString();
     
     await sqlClient`
-      INSERT INTO events (id, name, description, region, age_category, performance_type, event_date, registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at)
-      VALUES (${id}, ${event.name}, ${event.description}, ${event.region}, ${event.ageCategory}, ${event.performanceType}, ${event.eventDate}, ${event.registrationDeadline}, ${event.venue}, ${event.status}, ${event.maxParticipants || null}, ${event.entryFee}, ${event.createdBy}, ${createdAt})
+      INSERT INTO events (id, name, description, region, age_category, performance_type, event_date, event_end_date, registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at)
+      VALUES (${id}, ${event.name}, ${event.description}, ${event.region}, ${event.ageCategory}, ${event.performanceType}, ${event.eventDate}, ${event.eventEndDate || null}, ${event.registrationDeadline}, ${event.venue}, ${event.status}, ${event.maxParticipants || null}, ${event.entryFee}, ${event.createdBy}, ${createdAt})
     `;
     
     return { ...event, id, createdAt };
@@ -1567,6 +1607,7 @@ export const db = {
       ageCategory: row.age_category,
       performanceType: row.performance_type,
       eventDate: row.event_date,
+      eventEndDate: row.event_end_date,
       registrationDeadline: row.registration_deadline,
       venue: row.venue,
       status: row.status,
@@ -1591,6 +1632,7 @@ export const db = {
       ageCategory: row.age_category,
       performanceType: row.performance_type,
       eventDate: row.event_date,
+      eventEndDate: row.event_end_date,
       registrationDeadline: row.registration_deadline,
       venue: row.venue,
       status: row.status,

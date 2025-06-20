@@ -64,8 +64,9 @@ export interface Event {
   description: string;
   region: 'Gauteng' | 'Free State' | 'Mpumalanga';
   ageCategory: string;
-  performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group';
+  performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group' | 'All';
   eventDate: string;
+  eventEndDate?: string; // NEW: For multi-day events
   registrationDeadline: string;
   venue: string;
   status: 'upcoming' | 'registration_open' | 'registration_closed' | 'in_progress' | 'completed';
@@ -193,12 +194,7 @@ export const REGIONS = [
   'Mpumalanga'
 ];
 
-export const PERFORMANCE_TYPES = [
-  'Solo',
-  'Duet',
-  'Trio',
-  'Group'
-];
+export const PERFORMANCE_TYPES = ['Solo', 'Duet', 'Trio', 'Group', 'All'] as const;
 
 // UPDATED: Dance styles to match approved list
 export const DANCE_STYLES = [
