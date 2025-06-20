@@ -166,6 +166,12 @@ export default function AdminDashboard() {
   // Password modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedStudioPassword, setSelectedStudioPassword] = useState({ name: '', password: '' });
+  
+  // Studio cleanup state
+  const [isCleaningStudios, setIsCleaningStudios] = useState(false);
+  const [cleanStudiosMessage, setCleanStudiosMessage] = useState('');
+  
+
 
 
 
@@ -777,11 +783,44 @@ export default function AdminDashboard() {
     setCleanDatabaseMessage('');
     setVerificationMessage('');
     setEmailTestResults('');
+    setCleanStudiosMessage('');
     setShowCreateEventModal(false);
     setShowCreateJudgeModal(false);
     setShowAssignJudgeModal(false);
     setShowEmailTestModal(false);
   };
+
+  const handleCleanStudios = async () => {
+    if (!confirm('⚠️ This will DELETE ALL studio data permanently. This cannot be undone! Continue?')) {
+      return;
+    }
+    
+    setIsCleaningStudios(true);
+    setCleanStudiosMessage('');
+    
+    try {
+      const response = await fetch('/api/admin/clean-studios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setCleanStudiosMessage(`✅ ${data.message}\n\n🗑️ Deleted studios:\n${data.deletedStudios.map((s: any) => `- ${s.name} (${s.email})`).join('\n')}`);
+        // Refresh the data to show empty studios list
+        fetchData();
+      } else {
+        setCleanStudiosMessage(`❌ ${data.error}: ${data.details || ''}`);
+      }
+    } catch (error) {
+      setCleanStudiosMessage('❌ Failed to clean studio data');
+    } finally {
+      setIsCleaningStudios(false);
+    }
+  };
+
+
 
   // Email testing functions
   const handleTestEmailConnection = async () => {
@@ -1538,14 +1577,43 @@ export default function AdminDashboard() {
               <div className="mx-6 mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <div className="flex items-start space-x-3">
                   <span className="text-amber-500 text-lg">🔐</span>
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-semibold text-amber-900 mb-1">Password Recovery Access</h3>
-                    <p className="text-amber-800 text-sm">
+                    <p className="text-amber-800 text-sm mb-3">
                       Studio passwords are visible for admin password recovery assistance. Click any password to copy it to clipboard.
                     </p>
+{/* Hidden for now - uncomment when needed
+                    <button
+                      onClick={handleCleanStudios}
+                      disabled={isCleaningStudios}
+                      className="inline-flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                    >
+                      {isCleaningStudios ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>Deleting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🗑️</span>
+                          <span>Delete All Studios</span>
+                        </>
+                      )}
+                    </button>
+                    */}
                   </div>
                 </div>
               </div>
+
+{/* Hidden for now - uncomment when needed
+              {cleanStudiosMessage && (
+                <div className="mx-6 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <pre className="text-blue-800 text-sm whitespace-pre-wrap font-mono">
+                    {cleanStudiosMessage}
+                  </pre>
+                </div>
+              )}
+              */}
 
               {(() => {
                 // Filter and sort studios

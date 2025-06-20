@@ -249,7 +249,7 @@ export default function StudioDashboardPage() {
       setIsRegisteringDancer(true);
       setError('');
 
-      // First register the dancer
+      // Register the dancer and automatically assign to studio
       const registerResponse = await fetch('/api/dancers/register', {
         method: 'POST',
         headers: {
@@ -264,7 +264,7 @@ export default function StudioDashboardPage() {
           guardianName: registerDancerData.guardianName || null,
           guardianEmail: registerDancerData.guardianEmail || null,
           guardianPhone: registerDancerData.guardianPhone || null,
-          studioId: studioSession.id, // Register directly to studio
+          studioId: studioSession.id, // This will trigger automatic studio assignment
           recaptchaToken: recaptchaToken
         }),
       });
@@ -272,43 +272,31 @@ export default function StudioDashboardPage() {
       const registerData = await registerResponse.json();
 
       if (registerData.success) {
-        // Add the newly registered dancer to the studio
-        const addResponse = await fetch('/api/studios/add-dancer', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            studioId: studioSession.id,
-            eodsaId: registerData.eodsaId,
-            addedBy: studioSession.id
-          }),
+        setShowRegisterDancerModal(false);
+        setRegisterDancerData({
+          name: '',
+          dateOfBirth: '',
+          nationalId: '',
+          email: '',
+          phone: '',
+          guardianName: '',
+          guardianEmail: '',
+          guardianPhone: ''
         });
-
-        const addData = await addResponse.json();
-
-        if (addData.success) {
-          setShowRegisterDancerModal(false);
-          setRegisterDancerData({
-            name: '',
-            dateOfBirth: '',
-            nationalId: '',
-            email: '',
-            phone: '',
-            guardianName: '',
-            guardianEmail: '',
-            guardianPhone: ''
-          });
-          setRecaptchaToken('');
-          setSuccessMessage(`Dancer ${registerDancerData.name} has been successfully registered with EODSA ID ${registerData.eodsaId} and added to your studio!`);
-          // Reload data to reflect changes
-          loadData(studioSession.id);
-          
-          // Clear success message after 5 seconds
-          setTimeout(() => setSuccessMessage(''), 5000);
+        setRecaptchaToken('');
+        
+        // Check if there was a studio assignment error
+        if (registerData.studioAssignmentError) {
+          setSuccessMessage(`Dancer ${registerDancerData.name} has been registered with EODSA ID ${registerData.eodsaId}, but there was an issue adding them to your studio. Please add them manually using their EODSA ID.`);
         } else {
-          setError(`Dancer registered but failed to add to studio: ${addData.error}`);
+          setSuccessMessage(`Dancer ${registerDancerData.name} has been successfully registered with EODSA ID ${registerData.eodsaId} and added to your studio!`);
         }
+        
+        // Reload data to reflect changes
+        loadData(studioSession.id);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(''), 5000);
       } else {
         setError(registerData.error || 'Failed to register dancer');
         // Handle reCAPTCHA specific errors
