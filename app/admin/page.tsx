@@ -2115,7 +2115,7 @@ export default function AdminDashboard() {
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   >
-                    {PERFORMANCE_TYPES.map(type => (
+                    {Object.keys(PERFORMANCE_TYPES).map(type => (
                       <option key={type} value={type}>{type}</option>
                     ))}
                   </select>

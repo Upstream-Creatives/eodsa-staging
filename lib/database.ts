@@ -53,7 +53,7 @@ export const initializeDatabase = async () => {
     // Return the database object for use in API routes
     return db; 
     
-  } catch (error) {
+    } catch (error) {
     console.error('❌ Database initialization failed:', error);
     throw error; // Re-throw to fail the API request if db init fails
   }
@@ -260,13 +260,13 @@ export const db = {
             const newContestant = await unifiedDb.getDancerById(eventEntry.contestantId);
 
             if (newContestant) {
-              // Now try to insert the event entry again
-              await sqlClient`
-                INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
-                VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
-              `;
-              
-              console.log(`✅ Event entry ${id} created successfully after creating contestant record`);
+            // Now try to insert the event entry again
+            await sqlClient`
+              INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
+              VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
+            `;
+            
+            console.log(`✅ Event entry ${id} created successfully after creating contestant record`);
             } else {
                 throw new Error(`Failed to create or find contestant record for dancer ID: ${eventEntry.contestantId}`);
             }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import React from 'react';
 
 interface CountdownTimerProps {
   deadline: string;
@@ -40,7 +41,7 @@ const CountdownTimer = ({ deadline }: CountdownTimerProps) => {
     return () => clearTimeout(timer);
   });
 
-  const timerComponents: JSX.Element[] = [];
+  const timerComponents: React.ReactElement[] = [];
 
   (Object.keys(timeLeft) as Array<keyof TimeLeft>).forEach((interval) => {
     if (!timeLeft[interval]) {

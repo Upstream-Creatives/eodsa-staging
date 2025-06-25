@@ -71,27 +71,20 @@ export async function POST(request: Request) {
       judge: judgeResponse,
       message: 'Judge account created successfully'
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating judge:', error);
     
-    // Handle specific database errors with user-friendly messages
-    if (error.message) {
+    if (error instanceof Error && error.message) {
       if (error.message.includes('already exists') || error.message.includes('duplicate key') || error.message.includes('UNIQUE constraint')) {
         return NextResponse.json(
-          { success: false, error: 'A judge with this email address already exists' },
+          { success: false, error: 'A judge with this email already exists' },
           { status: 409 }
         );
       }
-      
-      // Return the specific error message from the database layer
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 400 }
-      );
     }
     
     return NextResponse.json(
-      { success: false, error: 'Failed to create judge account' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to create judge' },
       { status: 500 }
     );
   }

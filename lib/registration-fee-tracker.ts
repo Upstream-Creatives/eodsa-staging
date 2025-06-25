@@ -60,10 +60,11 @@ export const markGroupRegistrationFeePaid = async (
   const results = [];
   for (const dancerId of dancerIds) {
     try {
-      const result = await unifiedDb.markRegistrationFeePaid(dancerId, masteryLevel);
+      await unifiedDb.markRegistrationFeePaid(dancerId, masteryLevel);
       results.push({ dancerId, success: true });
     } catch (error) {
-      results.push({ dancerId, success: false, error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      results.push({ dancerId, success: false, error: errorMessage });
     }
   }
   return results;
