@@ -328,13 +328,24 @@ export const calculateEODSAFee = (
   let registrationBreakdown = '';
   
   if (includeRegistration && participantDancers.length > 0) {
+    const masteryFeeMap = EODSA_FEES.REGISTRATION;
+    
     // Check each dancer's registration status
-    const unpaidDancers = participantDancers.filter(dancer => 
-      !dancer.registrationFeePaid || 
-      (dancer.registrationFeeMasteryLevel && dancer.registrationFeeMasteryLevel !== masteryLevel)
-    );
+    const unpaidDancers = participantDancers.filter(dancer => {
+      if (!dancer.registrationFeePaid || !dancer.registrationFeeMasteryLevel) {
+        return true; // Not paid at all or mastery level at time of payment is unknown
+      }
+      
+      const paidFee = masteryFeeMap[dancer.registrationFeeMasteryLevel as keyof typeof masteryFeeMap] || 0;
+      const currentFee = masteryFeeMap[masteryLevel as keyof typeof masteryFeeMap] || 0;
+      
+      // Charge if current fee is higher than what they paid
+      return currentFee > paidFee;
+    });
     
     if (unpaidDancers.length > 0) {
+      // For upgrades, we could charge the difference, but for simplicity, we'll charge the full new fee
+      // as the system doesn't yet support partial payments on registration.
       const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
       registrationFee = registrationFeePerPerson * unpaidDancers.length;
       
@@ -349,7 +360,7 @@ export const calculateEODSAFee = (
     }
   } else if (includeRegistration) {
     // Fallback to old calculation if no dancer data provided
-    const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
+  const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
     registrationFee = registrationFeePerPerson * numberOfParticipants;
     registrationBreakdown = `Registration fee for ${numberOfParticipants} dancer${numberOfParticipants > 1 ? 's' : ''}`;
   }

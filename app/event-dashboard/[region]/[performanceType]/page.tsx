@@ -58,6 +58,14 @@ interface EventEntryForm {
   estimatedDuration: string;
 }
 
+interface FeeBreakdown {
+  registrationFee: number;
+  performanceFee: number;
+  totalFee: number;
+  breakdown: string;
+  registrationBreakdown?: string;
+}
+
 export default function PerformanceTypeEntryPage() {
   const searchParams = useSearchParams();
   const params = useParams();
@@ -94,7 +102,7 @@ export default function PerformanceTypeEntryPage() {
     itemStyle: '',
     estimatedDuration: ''
   });
-  const [calculatedFee, setCalculatedFee] = useState(0);
+  const [feeBreakdown, setFeeBreakdown] = useState<FeeBreakdown | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -105,6 +113,9 @@ export default function PerformanceTypeEntryPage() {
 
   // Check if this is studio mode
   const isStudioMode = !!studioId;
+
+  // Create a dynamic query parameter for authentication
+  const authQueryParam = isStudioMode ? `studioId=${studioId}` : `eodsaId=${eodsaId}`;
 
   // Skip validation entirely if studio mode, otherwise require eodsaId or allowEmptyStart
   if (!region || !performanceType || (!eodsaId && !studioId && !allowEmptyStart)) {
@@ -136,10 +147,10 @@ export default function PerformanceTypeEntryPage() {
         await loadMatchingEvents();
         
         // Then load contestant/studio data
-        if (eodsaId) {
+    if (eodsaId) {
           setIsDancersLoading(true);
           await loadContestant(eodsaId);
-        } else if (studioId) {
+    } else if (studioId) {
           setIsDancersLoading(true);
           await loadStudioData(studioId);
         }
@@ -161,7 +172,8 @@ export default function PerformanceTypeEntryPage() {
       const selectedEvent = events.find(e => e.id === formData.eventId);
       if (selectedEvent) {
         setSelectedEvent(selectedEvent);
-        setCalculatedFee(selectedEvent.entryFee);
+        // Reset fee breakdown when event changes
+        setFeeBreakdown(null);
         setFormData(prev => ({
           ...prev,
           ageCategory: selectedEvent.ageCategory
@@ -206,36 +218,36 @@ export default function PerformanceTypeEntryPage() {
         const { dancers } = await response.json();
         
         // Use EODSA fee calculation with dancer data for smart registration fee handling
-        const feeBreakdown = calculateEODSAFee(
-          formData.mastery,
-          getCapitalizedPerformanceType(performanceType),
-          formData.participantIds.length,
-          {
+      const feeBreakdownResult = calculateEODSAFee(
+        formData.mastery,
+        getCapitalizedPerformanceType(performanceType),
+        formData.participantIds.length,
+        {
             soloCount: 1,
             includeRegistration: true,
             participantDancers: dancers
           }
         );
         
-        setCalculatedFee(feeBreakdown.totalFee);
-        console.log('💰 Smart Fee Calculation:', feeBreakdown);
+        setFeeBreakdown(feeBreakdownResult);
+        console.log('💰 Smart Fee Calculation:', feeBreakdownResult);
       } else {
         // Fallback to simple calculation if API fails
-        const feeBreakdown = calculateEODSAFee(
+        const feeBreakdownResult = calculateEODSAFee(
           formData.mastery,
           getCapitalizedPerformanceType(performanceType),
           formData.participantIds.length,
           {
             soloCount: 1,
-            includeRegistration: true
-          }
-        );
-        setCalculatedFee(feeBreakdown.totalFee);
-      }
+          includeRegistration: true
+        }
+      );
+      setFeeBreakdown(feeBreakdownResult);
+    }
     } catch (error) {
       console.error('Fee calculation error:', error);
       // Fallback to simple calculation
-      const feeBreakdown = calculateEODSAFee(
+      const feeBreakdownResult = calculateEODSAFee(
         formData.mastery,
         getCapitalizedPerformanceType(performanceType),
         formData.participantIds.length,
@@ -244,7 +256,7 @@ export default function PerformanceTypeEntryPage() {
           includeRegistration: true
         }
       );
-      setCalculatedFee(feeBreakdown.totalFee);
+      setFeeBreakdown(feeBreakdownResult);
     }
   };
 
@@ -741,7 +753,7 @@ export default function PerformanceTypeEntryPage() {
       }
 
       // Calculate EODSA fee correctly
-      const feeBreakdown = calculateEODSAFee(
+      const feeBreakdownResult = calculateEODSAFee(
         formData.mastery,
         getCapitalizedPerformanceType(performanceType),
         formData.participantIds.length,
@@ -785,7 +797,7 @@ export default function PerformanceTypeEntryPage() {
         contestantId: finalContestantId,
         eodsaId: finalEodsaId,
         participantIds: formData.participantIds,
-        calculatedFee: feeBreakdown.totalFee,
+        calculatedFee: feeBreakdownResult.totalFee,
         paymentStatus: 'pending',
         paymentMethod: 'invoice', // Phase 1: Invoice-based payment
         approved: false,
@@ -872,7 +884,7 @@ export default function PerformanceTypeEntryPage() {
     // If we're at step 2 and there's only one event (meaning we skipped step 1), 
     // go back to the region selection page
     if (step === 2 && events.length === 1) {
-      router.push(`/event-dashboard/${region}?eodsaId=${eodsaId}`);
+      router.push(`/event-dashboard/${region}?${authQueryParam}`);
       return;
     }
     setStep(prev => Math.max(prev - 1, 1));
@@ -889,42 +901,28 @@ export default function PerformanceTypeEntryPage() {
           </p>
           
           {/* Fee Summary in Success */}
-          {formData.mastery && formData.participantIds.length > 0 && (() => {
-            const feeBreakdown = calculateEODSAFee(
-              formData.mastery,
-              getCapitalizedPerformanceType(performanceType),
-              formData.participantIds.length,
-              {
-                soloCount: 1,
-                includeRegistration: true
-              }
-            );
-            
-            console.log('💰 Success Page Fee Result:', feeBreakdown);
-            
-            return (
-              <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-2 border-green-500/40 rounded-2xl p-6 mb-6">
-                <p className="text-lg font-bold text-green-300 mb-4">📧 Expect an Email Invoice for:</p>
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-green-200">
-                    <span>Registration Fee ({formData.participantIds.length} dancer{formData.participantIds.length > 1 ? 's' : ''})</span>
-                    <span>R{feeBreakdown.registrationFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-green-200">
-                    <span>Performance Fee ({feeBreakdown.breakdown})</span>
-                    <span>R{feeBreakdown.performanceFee.toFixed(2)}</span>
-                  </div>
-                  <div className="border-t border-green-400/30 pt-2">
-                    <div className="flex justify-between">
-                      <span className="text-lg font-bold text-green-100">Total Amount:</span>
-                      <span className="text-2xl font-bold text-green-100">R{feeBreakdown.totalFee.toFixed(2)}</span>
-                    </div>
+          {feeBreakdown && (
+            <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-2 border-green-500/40 rounded-2xl p-6 mb-6">
+              <p className="text-lg font-bold text-green-300 mb-4">📧 Expect an Email Invoice for:</p>
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-green-200">
+                  <span>{feeBreakdown.registrationBreakdown || `Registration Fee (${formData.participantIds.length} dancers)`}</span>
+                  <span>R{feeBreakdown.registrationFee.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-green-200">
+                  <span>Performance Fee ({feeBreakdown.breakdown})</span>
+                  <span>R{feeBreakdown.performanceFee.toFixed(2)}</span>
+                </div>
+                <div className="border-t border-green-400/30 pt-2">
+                  <div className="flex justify-between">
+                    <span className="text-lg font-bold text-green-100">Total Amount:</span>
+                    <span className="text-2xl font-bold text-green-100">R{feeBreakdown.totalFee.toFixed(2)}</span>
                   </div>
                 </div>
-                <p className="text-sm text-green-400">Gabriel's team will send payment instructions via email</p>
               </div>
-            );
-          })()}
+              <p className="text-sm text-green-400">Gabriel's team will send payment instructions via email</p>
+            </div>
+          )}
           
           <div className="bg-blue-900/30 border border-blue-500/40 rounded-xl p-4 mb-6">
             <p className="text-sm font-medium text-blue-300 mb-2">Payment Instructions</p>
@@ -948,18 +946,18 @@ export default function PerformanceTypeEntryPage() {
               </>
             ) : (
               <>
-                <Link 
-                  href={`/event-dashboard?eodsaId=${eodsaId}`}
-                  className="block w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
-                >
-                  Enter Another Event
-                </Link>
-                <Link 
-                  href="/"
-                  className="block w-full px-6 py-3 border-2 border-gray-600 text-gray-300 rounded-xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold"
-                >
-                  Back to Home
-                </Link>
+            <Link 
+              href={`/event-dashboard?${authQueryParam}`}
+              className="block w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
+            >
+              Enter Another Event
+            </Link>
+            <Link 
+              href="/"
+              className="block w-full px-6 py-3 border-2 border-gray-600 text-gray-300 rounded-xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold"
+            >
+              Back to Home
+            </Link>
               </>
             )}
           </div>
@@ -1014,7 +1012,7 @@ export default function PerformanceTypeEntryPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <Link 
-            href={`/event-dashboard/${region}?eodsaId=${eodsaId}`} 
+            href={`/event-dashboard/${region}?${authQueryParam}`} 
             className="inline-flex items-center text-purple-400 hover:text-purple-300 mb-4 transition-colors"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1175,9 +1173,9 @@ export default function PerformanceTypeEntryPage() {
 
                 
                 {/* Participant Selection - Enhanced Multi-Select */}
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">Select Participants</h3>
-                  
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-white mb-4">Select Participants</h3>
+                    
                   {isDancersLoading ? (
                     <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600">
                       <div className="flex items-center justify-center space-x-3 text-gray-400">
@@ -1220,8 +1218,8 @@ export default function PerformanceTypeEntryPage() {
                         <p>No dancer information available</p>
                         <p className="text-sm mt-1">Please refresh the page or contact support</p>
                       </div>
-                    </div>
-                  )}
+                  </div>
+                )}
                 </div>
 
                 {/* Performance Information */}
@@ -1371,35 +1369,14 @@ export default function PerformanceTypeEntryPage() {
                 
                 <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6 mb-6">
                   <h3 className="text-xl font-bold text-purple-300 mb-4">💰 EODSA Fee Breakdown</h3>
-                  {formData.mastery && formData.participantIds.length > 0 ? (() => {
-                    console.log('💰 Fee Calculation Debug:', {
-                      mastery: formData.mastery,
-                      performanceType,
-                      performanceTypeCapitalized: getCapitalizedPerformanceType(performanceType),
-                      participantCount: formData.participantIds.length,
-                      options: { soloCount: 1, includeRegistration: true }
-                    });
-                    
-                    const feeBreakdown = calculateEODSAFee(
-                      formData.mastery,
-                      getCapitalizedPerformanceType(performanceType),
-                      formData.participantIds.length,
-                      {
-                        soloCount: 1,
-                        includeRegistration: true
-                      }
-                    );
-                    
-                    console.log('💰 Fee Result:', feeBreakdown);
-                    
-                    return (
+                  {feeBreakdown ? (
                       <div className="space-y-3">
                         <div className="flex justify-between items-center text-purple-200 text-lg">
-                          <span>Registration Fee ({formData.participantIds.length} participant{formData.participantIds.length > 1 ? 's' : ''})</span>
+                          <span>{feeBreakdown.registrationBreakdown || `Registration Fee (${formData.participantIds.length} dancers)`}</span>
                           <span className="font-semibold">R{feeBreakdown.registrationFee.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between items-center text-purple-200 text-lg">
-                          <span>Performance Fee ({feeBreakdown.breakdown})</span>
+                          <span>{`Performance Fee (${feeBreakdown.breakdown})`}</span>
                           <span className="font-semibold">R{feeBreakdown.performanceFee.toFixed(2)}</span>
                         </div>
                         <div className="border-t border-purple-400/30 pt-3">
@@ -1415,8 +1392,7 @@ export default function PerformanceTypeEntryPage() {
                           </div>
                         </div>
                       </div>
-                    );
-                  })() : (
+                    ) : (
                     <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
                       <div className="flex items-center text-yellow-300">
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1492,35 +1468,14 @@ export default function PerformanceTypeEntryPage() {
                   {/* Fee Summary */}
                   <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-xl p-6">
                     <h3 className="text-xl font-bold text-purple-300 mb-4">💰 Fee Summary</h3>
-                    {formData.mastery && formData.participantIds.length > 0 ? (() => {
-                      console.log('💰 Fee Calculation Debug:', {
-                        mastery: formData.mastery,
-                        performanceType,
-                        performanceTypeCapitalized: getCapitalizedPerformanceType(performanceType),
-                        participantCount: formData.participantIds.length,
-                        options: { soloCount: 1, includeRegistration: true }
-                      });
-                      
-                      const feeBreakdown = calculateEODSAFee(
-                        formData.mastery,
-                        getCapitalizedPerformanceType(performanceType),
-                        formData.participantIds.length,
-                        {
-                          soloCount: 1,
-                          includeRegistration: true
-                        }
-                      );
-                      
-                      console.log('💰 Final Fee Result:', feeBreakdown);
-                      
-                      return (
+                    {feeBreakdown ? (
                         <div className="space-y-3">
                           <div className="flex justify-between text-purple-200 text-lg">
-                            <span>Registration Fee ({formData.participantIds.length} participant{formData.participantIds.length > 1 ? 's' : ''})</span>
+                            <span>{feeBreakdown.registrationBreakdown || `Registration Fee (${formData.participantIds.length} dancers)`}</span>
                             <span className="font-semibold">R{feeBreakdown.registrationFee.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-purple-200 text-lg">
-                            <span>Performance Fee ({feeBreakdown.breakdown})</span>
+                            <span>{`Performance Fee (${feeBreakdown.breakdown})`}</span>
                             <span className="font-semibold">R{feeBreakdown.performanceFee.toFixed(2)}</span>
                           </div>
                           <div className="border-t border-purple-400/30 pt-3 mt-4">
@@ -1530,8 +1485,7 @@ export default function PerformanceTypeEntryPage() {
                             </div>
                           </div>
                         </div>
-                      );
-                    })() : (
+                      ) : (
                       <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
                         <div className="flex items-center text-red-300">
                           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

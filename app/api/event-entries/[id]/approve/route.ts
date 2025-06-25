@@ -6,8 +6,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Temporarily enable initialization to ensure schema migrations are applied
-    await initializeDatabase();
+    // Before doing anything, ensure the necessary columns exist.
+    // This is a more robust way to handle migrations at runtime.
+    await db.addRegistrationFeeColumns();
     
     const { id } = await params;
     const entryId = id;
@@ -39,7 +40,16 @@ export async function PATCH(
         for (const participantId of entry.participantIds) {
           // Get the entry to find the mastery level
           const mastery = entry.mastery || 'Eisteddfod';
-          await unifiedDb.markRegistrationFeePaid(participantId, mastery);
+          
+          // CRITICAL FIX: Look up the dancer by their primary ID (which should be the EODSA ID)
+          // The participantId from the entry might be a temporary or non-EODSA ID.
+          const dancer = await unifiedDb.getDancerById(participantId);
+
+          if (dancer) {
+            await unifiedDb.markRegistrationFeePaid(dancer.id, mastery);
+          } else {
+            console.warn(`Could not find dancer with ID: ${participantId} to mark registration fee as paid.`);
+          }
         }
         console.log('✅ Registration fees marked as paid for approved entry participants');
       } catch (error) {

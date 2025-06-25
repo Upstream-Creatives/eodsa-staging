@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { PERFORMANCE_TYPES } from '@/lib/types';
+import { PERFORMANCE_TYPES, EODSA_FEES } from '@/lib/types';
 
 interface Event {
   id: string;
@@ -193,6 +193,20 @@ export default function RegionalEventsPage() {
     }
   };
 
+  const getStartingFee = (performanceType: string) => {
+    const fees = EODSA_FEES.PERFORMANCE['Earth (Eisteddfod)'];
+    const key = performanceType as keyof typeof fees;
+
+    if (fees && fees[key]) {
+      return fees[key];
+    }
+    // Fallback for Duet/Trio/Group if not explicitly defined
+    if (performanceType === 'Duet' || performanceType === 'Trio' || performanceType === 'Group') {
+      return fees['Group'];
+    }
+    return 0; // Default case
+  };
+
   if (!region || (!eodsaId && !studioId)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
@@ -343,7 +357,7 @@ export default function RegionalEventsPage() {
                               </div>
                               <div>
                                 <div className="text-xs text-gray-400 uppercase tracking-wide">Entry Fee</div>
-                                <div className="text-sm text-purple-400 font-bold">R{event.entryFee}</div>
+                                <div className="text-sm text-purple-400 font-bold">R{getStartingFee(event.performanceType)}</div>
                               </div>
                             </div>
                             
