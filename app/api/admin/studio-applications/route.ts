@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Get all studio applications for admin overview
 export async function GET() {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const applications = await unifiedDb.getAllStudioApplications();
 

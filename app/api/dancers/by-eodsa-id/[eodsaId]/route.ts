@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ eodsaId: string }> }
 ) {
   try {
-    await initializeDatabase();
+    // await initializeDatabase(); // Commented out for performance - initialization happens once on server start
     
     const { eodsaId } = await params;
 

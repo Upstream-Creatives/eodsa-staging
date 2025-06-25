@@ -7,7 +7,7 @@ import { emailService } from '@/lib/email';
 export async function POST(request: NextRequest) {
   try {
     // Initialize database tables if they don't exist
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const body = await request.json();
     
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Initialize database tables if they don't exist
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { searchParams } = new URL(request.url);
     const studioId = searchParams.get('id');
@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Initialize database tables if they don't exist
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const body = await request.json();
     const { studioId, ...updates } = body;

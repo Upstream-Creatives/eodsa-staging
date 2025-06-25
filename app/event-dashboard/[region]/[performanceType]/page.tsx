@@ -76,7 +76,6 @@ export default function PerformanceTypeEntryPage() {
   const [contestant, setContestant] = useState<Contestant | null>(null);
   const [studioInfo, setStudioInfo] = useState<StudioSession | null>(null);
   const [availableDancers, setAvailableDancers] = useState<any[]>([]);
-  const [isStudioMode, setIsStudioMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -100,30 +99,62 @@ export default function PerformanceTypeEntryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [step, setStep] = useState(1); // 1: Event Selection, 2: Details, 3: Payment, 4: Review
+  const [isDancersLoading, setIsDancersLoading] = useState(false);
+  const [isEventsLoading, setIsEventsLoading] = useState(false);
   const { showAlert } = useAlert();
 
+  // Check if this is studio mode
+  const isStudioMode = !!studioId;
+
+  // Skip validation entirely if studio mode, otherwise require eodsaId or allowEmptyStart
+  if (!region || !performanceType || (!eodsaId && !studioId && !allowEmptyStart)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-8 text-center">
+          <div className="text-6xl mb-6">❌</div>
+          <h2 className="text-2xl font-bold text-white mb-4">Missing Information</h2>
+          <p className="text-gray-300 mb-6">Required parameters not provided.</p>
+          <Link 
+            href="/"
+            className="block w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
+          >
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Load data on mount
   useEffect(() => {
-    if (eodsaId) {
-      setIsStudioMode(false);
-      loadContestant(eodsaId);
-    } else if (studioId) {
-      setIsStudioMode(true);
-      loadStudioData(studioId);
-    } else if (allowEmptyStart) {
-      // For group/duet/trio entries, we can start without an EODSA ID
-      setContestant({
-        id: 'temp-group-entry',
-        eodsaId: '',
-        name: 'Group Entry',
-        email: '',
-        phone: '',
-        type: 'private',
-        dancers: [] // Start with empty participants
-      });
-      setShowParticipantSearch(true);
+    async function initializeData() {
+      setIsLoading(true);
+      setIsEventsLoading(true);
+      
+      try {
+        // Load events first
+        await loadMatchingEvents();
+        
+        // Then load contestant/studio data
+        if (eodsaId) {
+          setIsDancersLoading(true);
+          await loadContestant(eodsaId);
+        } else if (studioId) {
+          setIsDancersLoading(true);
+          await loadStudioData(studioId);
+        }
+      } catch (error) {
+        console.error('Failed to initialize data:', error);
+        showAlert('Failed to load data. Please refresh the page.', 'error');
+      } finally {
+        setIsLoading(false);
+        setIsEventsLoading(false);
+        setIsDancersLoading(false);
+      }
     }
-    loadMatchingEvents();
-  }, [region, performanceType, eodsaId, studioId, allowEmptyStart]);
+
+    initializeData();
+  }, [eodsaId, studioId, region, performanceType]);
 
   useEffect(() => {
     if (formData.eventId) {
@@ -155,19 +186,67 @@ export default function PerformanceTypeEntryPage() {
 
   useEffect(() => {
     if (formData.eventId && formData.mastery && formData.participantIds.length > 0) {
-      // Use EODSA fee calculation with proper options
+      // Use smart fee calculation with dancer registration status
+      calculateSmartFee();
+    }
+  }, [formData.eventId, formData.mastery, formData.participantIds.length, performanceType]);
+
+  const calculateSmartFee = async () => {
+    if (!formData.mastery || formData.participantIds.length === 0) return;
+
+    try {
+      // Get dancer registration status for smart fee calculation
+      const response = await fetch('/api/dancers/registration-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dancerIds: formData.participantIds })
+      });
+
+      if (response.ok) {
+        const { dancers } = await response.json();
+        
+        // Use EODSA fee calculation with dancer data for smart registration fee handling
+        const feeBreakdown = calculateEODSAFee(
+          formData.mastery,
+          getCapitalizedPerformanceType(performanceType),
+          formData.participantIds.length,
+          {
+            soloCount: 1,
+            includeRegistration: true,
+            participantDancers: dancers
+          }
+        );
+        
+        setCalculatedFee(feeBreakdown.totalFee);
+        console.log('💰 Smart Fee Calculation:', feeBreakdown);
+      } else {
+        // Fallback to simple calculation if API fails
+        const feeBreakdown = calculateEODSAFee(
+          formData.mastery,
+          getCapitalizedPerformanceType(performanceType),
+          formData.participantIds.length,
+          {
+            soloCount: 1,
+            includeRegistration: true
+          }
+        );
+        setCalculatedFee(feeBreakdown.totalFee);
+      }
+    } catch (error) {
+      console.error('Fee calculation error:', error);
+      // Fallback to simple calculation
       const feeBreakdown = calculateEODSAFee(
         formData.mastery,
         getCapitalizedPerformanceType(performanceType),
         formData.participantIds.length,
         {
-          soloCount: 1, // Default to 1 solo per entry (can be enhanced later for multiple solos)
+          soloCount: 1,
           includeRegistration: true
         }
       );
       setCalculatedFee(feeBreakdown.totalFee);
     }
-  }, [formData.eventId, formData.mastery, formData.participantIds.length, performanceType]);
+  };
 
   // Sync multi-select state with form data
   useEffect(() => {
@@ -193,6 +272,8 @@ export default function PerformanceTypeEntryPage() {
 
   const loadContestant = async (id: string) => {
     try {
+      console.log(`🔍 Loading contestant data for: ${id}`);
+      
       // Try unified system first (new dancers)
       const unifiedResponse = await fetch(`/api/dancers/by-eodsa-id/${id}`);
       if (unifiedResponse.ok) {
@@ -218,6 +299,8 @@ export default function PerformanceTypeEntryPage() {
               nationalId: dancer.nationalId
             }]
           };
+          
+          console.log(`✅ Loaded unified dancer: ${dancer.name}`);
           setContestant(transformedContestant);
           
           // Auto-select participants for private users
@@ -238,6 +321,7 @@ export default function PerformanceTypeEntryPage() {
       const legacyResponse = await fetch(`/api/contestants/by-eodsa-id/${id}`);
       if (legacyResponse.ok) {
         const legacyData = await legacyResponse.json();
+        console.log(`✅ Loaded legacy contestant: ${legacyData.name}`);
         setContestant(legacyData);
         
         // Auto-select participants for private users
@@ -250,14 +334,20 @@ export default function PerformanceTypeEntryPage() {
             }));
           }
         }
+      } else {
+        throw new Error('Contestant not found');
       }
     } catch (error) {
-      console.error('Failed to load contestant data:', error);
+      console.error('❌ Failed to load contestant data:', error);
+      showAlert('Failed to load dancer information. Please refresh the page.', 'error');
+      throw error;
     }
   };
 
   const loadStudioData = async (id: string) => {
     try {
+      console.log(`🏢 Loading studio data for: ${id}`);
+      
       // Verify studio session
       const studioSession = localStorage.getItem('studioSession');
       if (!studioSession) {
@@ -278,6 +368,8 @@ export default function PerformanceTypeEntryPage() {
       const data = await response.json();
       
       if (data.success) {
+        console.log(`✅ Loaded ${data.dancers.length} dancers for studio: ${parsedSession.name}`);
+        
         setStudioInfo(parsedSession);
         setAvailableDancers(data.dancers);
         
@@ -301,9 +393,13 @@ export default function PerformanceTypeEntryPage() {
 
         // Enable participant search for studios (they can select from their dancers)
         setShowParticipantSearch(true);
+      } else {
+        throw new Error('Failed to load studio dancers');
       }
     } catch (error) {
-      console.error('Failed to load studio data:', error);
+      console.error('❌ Failed to load studio data:', error);
+      showAlert('Failed to load studio information. Please refresh the page.', 'error');
+      throw error;
     }
   };
 
@@ -709,6 +805,8 @@ export default function PerformanceTypeEntryPage() {
       });
 
       if (response.ok) {
+        // Entry successful - registration fees will be marked as paid by admin after verification
+        console.log('✅ Event entry submitted successfully - awaiting admin approval for payment processing');
         setSubmitted(true);
       } else {
         const error = await response.json();
@@ -833,25 +931,44 @@ export default function PerformanceTypeEntryPage() {
             <p className="text-blue-200 text-sm">Check your email for Yoco card payment link or EFT details</p>
           </div>
           <div className="space-y-3">
-            <Link 
-              href={`/event-dashboard?eodsaId=${eodsaId}`}
-              className="block w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
-            >
-              Enter Another Event
-            </Link>
-            <Link 
-              href="/"
-              className="block w-full px-6 py-3 border-2 border-gray-600 text-gray-300 rounded-xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold"
-            >
-              Back to Home
-            </Link>
+            {isStudioMode ? (
+              <>
+                <Link 
+                  href={`/studio-dashboard?studioId=${studioId}`}
+                  className="block w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
+                >
+                  Back to Studio Dashboard
+                </Link>
+                <Link 
+                  href={`/event-dashboard?studioId=${studioId}`}
+                  className="block w-full px-6 py-3 border-2 border-purple-500 text-purple-300 rounded-xl hover:bg-purple-900/30 hover:border-purple-400 transition-all duration-300 font-semibold"
+                >
+                  Enter Another Event
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link 
+                  href={`/event-dashboard?eodsaId=${eodsaId}`}
+                  className="block w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
+                >
+                  Enter Another Event
+                </Link>
+                <Link 
+                  href="/"
+                  className="block w-full px-6 py-3 border-2 border-gray-600 text-gray-300 rounded-xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold"
+                >
+                  Back to Home
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
     );
   }
 
-  if (!region || !performanceType || (!eodsaId && !allowEmptyStart)) {
+  if (!region || !performanceType || (!eodsaId && !studioId && !allowEmptyStart)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-8 text-center">
@@ -864,6 +981,28 @@ export default function PerformanceTypeEntryPage() {
           >
             Back to Home
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Show global loading overlay during initial data loading
+  if (isLoading && step === 1 && !contestant && events.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-6"></div>
+          <h2 className="text-2xl font-bold text-white mb-4">Loading Entry System</h2>
+          <p className="text-gray-300 mb-2">Please wait while we prepare your entry form...</p>
+          <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">
+            <span className={isEventsLoading ? 'text-purple-400' : 'text-green-400'}>
+              {isEventsLoading ? '⏳' : '✅'} Loading events
+            </span>
+            <span>•</span>
+            <span className={isDancersLoading ? 'text-purple-400' : 'text-green-400'}>
+              {isDancersLoading ? '⏳' : '✅'} Loading dancers
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -1036,10 +1175,31 @@ export default function PerformanceTypeEntryPage() {
 
                 
                 {/* Participant Selection - Enhanced Multi-Select */}
-                {contestant && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Select Participants</h3>
-                    
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-white mb-4">Select Participants</h3>
+                  
+                  {isDancersLoading ? (
+                    <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600">
+                      <div className="flex items-center justify-center space-x-3 text-gray-400">
+                        <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+                        <p>Loading dancers...</p>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {/* Skeleton loading for participant cards */}
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="bg-gray-600/30 rounded-lg p-3 animate-pulse">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-gray-500/50 rounded-full"></div>
+                              <div className="flex-1">
+                                <div className="h-4 bg-gray-500/50 rounded w-24 mb-1"></div>
+                                <div className="h-3 bg-gray-500/30 rounded w-16"></div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : contestant ? (
                     <MultiSelectDancers
                       selectedDancers={selectedDancersForMultiSelect}
                       onSelectionChange={handleDancerSelectionChange}
@@ -1051,8 +1211,18 @@ export default function PerformanceTypeEntryPage() {
                       checkAgeEligibility={checkAgeEligibility}
                       className="mb-4"
                     />
-                  </div>
-                )}
+                  ) : (
+                    <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600 text-center">
+                      <div className="text-gray-400">
+                        <svg className="w-12 h-12 mx-auto mb-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.196-2.121M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.196-2.121M7 20v-2c0-.656.126-1.283.356-1.857M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        <p>No dancer information available</p>
+                        <p className="text-sm mt-1">Please refresh the page or contact support</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Performance Information */}
                 <div className="space-y-4">

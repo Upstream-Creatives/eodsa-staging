@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Get accounts created within the last 48 hours for verification
 export async function GET(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const fortEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     

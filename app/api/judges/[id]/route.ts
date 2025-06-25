@@ -49,7 +49,7 @@ export async function DELETE(
 ) {
   try {
     // Initialize database tables if they don't exist
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { id } = await params;
     const judgeId = id;

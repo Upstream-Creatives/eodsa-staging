@@ -5,7 +5,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 export async function GET(request: NextRequest) {
   try {
     // Initialize database tables if they don't exist
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { searchParams } = new URL(request.url);
     const dancerId = searchParams.get('dancerId');

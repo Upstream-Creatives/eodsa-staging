@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Remove dancer from studio
 export async function DELETE(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { studioId, dancerId } = await request.json();
 

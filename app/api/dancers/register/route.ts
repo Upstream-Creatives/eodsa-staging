@@ -7,7 +7,7 @@ import { verifyRecaptcha, checkRateLimit, getClientIP } from '@/lib/recaptcha';
 export async function POST(request: NextRequest) {
   try {
     // Initialize database tables if they don't exist
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const body = await request.json();
     const { name, dateOfBirth, nationalId, email, phone, guardianName, guardianEmail, guardianPhone, studioId, recaptchaToken } = body;

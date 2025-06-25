@@ -3,7 +3,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 
 export async function POST(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { eodsaId, nationalId } = await request.json();
 

@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Reject (disable) spam accounts
 export async function POST(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const body = await request.json();
     const { accountId, accountType, reason, adminId } = body;

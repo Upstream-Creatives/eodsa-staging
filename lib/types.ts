@@ -27,6 +27,10 @@ export interface Dancer {
   rejectionReason?: string; // NEW: Reason if rejected
   waiver?: ParentGuardianWaiver; // NEW: Waiver for minors under 18
   created_at?: string;
+  // Registration fee tracking
+  registrationFeePaid?: boolean; // NEW: Track if registration fee has been paid
+  registrationFeePaidAt?: string; // NEW: When registration fee was paid
+  registrationFeeMasteryLevel?: string; // NEW: Mastery level they paid registration for
 }
 
 export interface GuardianInfo {
@@ -313,14 +317,42 @@ export const calculateEODSAFee = (
     isMultipleSolos?: boolean;
     soloCount?: number;
     includeRegistration?: boolean; // New option to control registration fee inclusion
+    participantDancers?: Dancer[]; // NEW: Array of dancer objects to check registration status
   }
-): { registrationFee: number; performanceFee: number; totalFee: number; breakdown: string } => {
+): { registrationFee: number; performanceFee: number; totalFee: number; breakdown: string; registrationBreakdown?: string } => {
   
-  const { isMultipleSolos = false, soloCount = 1, includeRegistration = true } = options || {};
+  const { isMultipleSolos = false, soloCount = 1, includeRegistration = true, participantDancers = [] } = options || {};
   
-  // Registration fee per person (flat once-off charge per dancer)
-  const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
-  const registrationFee = includeRegistration ? (registrationFeePerPerson * numberOfParticipants) : 0;
+  // Calculate registration fee intelligently based on dancer payment status
+  let registrationFee = 0;
+  let registrationBreakdown = '';
+  
+  if (includeRegistration && participantDancers.length > 0) {
+    // Check each dancer's registration status
+    const unpaidDancers = participantDancers.filter(dancer => 
+      !dancer.registrationFeePaid || 
+      (dancer.registrationFeeMasteryLevel && dancer.registrationFeeMasteryLevel !== masteryLevel)
+    );
+    
+    if (unpaidDancers.length > 0) {
+      const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
+      registrationFee = registrationFeePerPerson * unpaidDancers.length;
+      
+      if (unpaidDancers.length === participantDancers.length) {
+        registrationBreakdown = `Registration fee for ${unpaidDancers.length} dancer${unpaidDancers.length > 1 ? 's' : ''}`;
+      } else {
+        const paidCount = participantDancers.length - unpaidDancers.length;
+        registrationBreakdown = `Registration fee for ${unpaidDancers.length} dancer${unpaidDancers.length > 1 ? 's' : ''} (${paidCount} already paid)`;
+      }
+    } else {
+      registrationBreakdown = 'All dancers have already paid registration fee';
+    }
+  } else if (includeRegistration) {
+    // Fallback to old calculation if no dancer data provided
+    const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
+    registrationFee = registrationFeePerPerson * numberOfParticipants;
+    registrationBreakdown = `Registration fee for ${numberOfParticipants} dancer${numberOfParticipants > 1 ? 's' : ''}`;
+  }
   
   let performanceFee = 0;
   let breakdown = '';
@@ -363,7 +395,8 @@ export const calculateEODSAFee = (
     registrationFee,
     performanceFee,
     totalFee: registrationFee + performanceFee,
-    breakdown
+    breakdown,
+    registrationBreakdown
   };
 };
 

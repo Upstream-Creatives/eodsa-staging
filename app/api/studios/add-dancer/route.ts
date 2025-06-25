@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Add a registered dancer directly to a studio by EODSA ID
 export async function POST(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { studioId, eodsaId, addedBy } = await request.json();
 

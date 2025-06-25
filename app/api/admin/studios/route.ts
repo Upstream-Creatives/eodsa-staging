@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Get all studios for admin management
 export async function GET() {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const studios = await unifiedDb.getAllStudios();
 
@@ -24,7 +24,7 @@ export async function GET() {
 // Approve or reject studio
 export async function POST(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { studioId, action, adminId, rejectionReason } = await request.json();
 

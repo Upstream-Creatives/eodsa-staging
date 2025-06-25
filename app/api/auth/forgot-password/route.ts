@@ -4,7 +4,7 @@ import { emailService } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { email, userType } = await request.json();
 

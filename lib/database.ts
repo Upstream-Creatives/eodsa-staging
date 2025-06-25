@@ -4,6 +4,8 @@ import type { Contestant, Performance, Judge, Score, Dancer, EventEntry, Ranking
 // Create database connection using Neon serverless driver
 // Only initialize if we have a DATABASE_URL (server-side only)
 let sql: ReturnType<typeof neon> | null = null;
+let isInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 
 const getSql = () => {
   if (!sql) {
@@ -30,10 +32,25 @@ export const generateStudioRegistrationId = () => {
   return `${letter}${digits}`;
 };
 
-// Initialize database tables for Phase 1
+// Initialize database tables for Phase 1 - only runs once per server instance
 export const initializeDatabase = async () => {
-  try {
-    const sqlClient = getSql();
+  // If already initialized, return immediately
+  if (isInitialized) {
+    return;
+  }
+
+  // If initialization is in progress, wait for it
+  if (initializationPromise) {
+    return initializationPromise;
+  }
+
+  // Start initialization
+  initializationPromise = (async () => {
+    if (isInitialized) return; // Double-check in case of race condition
+
+    try {
+      console.log('🚀 Starting one-time database initialization...');
+      const sqlClient = getSql();
     
     // First, try to ensure all tables exist with proper schema
     console.log('🔄 Checking and fixing database schema...');
@@ -211,6 +228,30 @@ export const initializeDatabase = async () => {
           console.log('✅ Added event_end_date column to events table');
         } else {
           console.log('✅ event_end_date column already exists in events table');
+        }
+
+        // Add registration fee tracking columns to dancers table
+        const registrationFeeColumns = [
+          { name: 'registration_fee_paid', type: 'BOOLEAN DEFAULT FALSE' },
+          { name: 'registration_fee_paid_at', type: 'TEXT' },
+          { name: 'registration_fee_mastery_level', type: 'TEXT' }
+        ];
+
+        for (const column of registrationFeeColumns) {
+          const columnCheck = await sqlClient`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'dancers' 
+            AND column_name = ${column.name}
+          ` as any[];
+          
+          if (columnCheck.length === 0) {
+            const alterSQL = `ALTER TABLE dancers ADD COLUMN ${column.name} ${column.type}`;
+            await sqlClient.unsafe(alterSQL);
+            console.log(`✅ Added ${column.name} column to dancers table`);
+          } else {
+            console.log(`✅ ${column.name} column already exists in dancers table`);
+          }
         }
 
         for (const column of contestantsColumns) {
@@ -660,11 +701,16 @@ export const initializeDatabase = async () => {
       console.log('  - judge5@competition.com / judge123 (Judge)');
     }
 
-    console.log('✅ Database initialized successfully - Ready for unified dancer-studio system');
-  } catch (error) {
-    console.error('Error initializing database:', error);
-    throw error;
-  }
+      console.log('✅ Database initialized successfully - Ready for unified dancer-studio system');
+      isInitialized = true;
+      console.log('🎯 Database initialization complete - will not run again');
+    } catch (error) {
+      console.error('Error initializing database:', error);
+      throw error;
+    }
+  })();
+
+  return initializationPromise;
 };
 
 // Clean database while preserving admin and essential data
@@ -2022,6 +2068,94 @@ export const db = {
       approvedByName: row.approved_by_name,
       createdAt: row.created_at
     }));
+  },
+
+  calculateAge(dateOfBirth: string): number {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  },
+
+  // Registration fee tracking functions
+  async markRegistrationFeePaid(dancerId: string, masteryLevel: string) {
+    const sqlClient = getSql();
+    const paidAt = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET registration_fee_paid = TRUE, 
+          registration_fee_paid_at = ${paidAt}, 
+          registration_fee_mastery_level = ${masteryLevel}
+      WHERE id = ${dancerId}
+    `;
+    
+    return { success: true };
+  },
+
+  async getDancerRegistrationStatus(dancerId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT registration_fee_paid, registration_fee_paid_at, registration_fee_mastery_level
+      FROM dancers 
+      WHERE id = ${dancerId}
+    ` as any[];
+    
+    if (result.length === 0) {
+      throw new Error('Dancer not found');
+    }
+    
+    return {
+      registrationFeePaid: result[0].registration_fee_paid || false,
+      registrationFeePaidAt: result[0].registration_fee_paid_at,
+      registrationFeeMasteryLevel: result[0].registration_fee_mastery_level
+    };
+  },
+
+  async getDancersWithRegistrationStatus(dancerIds: string[]) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT id, name, age, date_of_birth, national_id, eodsa_id,
+             registration_fee_paid, registration_fee_paid_at, registration_fee_mastery_level
+      FROM dancers 
+      WHERE id = ANY(${dancerIds})
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      eodsaId: row.eodsa_id,
+      registrationFeePaid: row.registration_fee_paid || false,
+      registrationFeePaidAt: row.registration_fee_paid_at,
+      registrationFeeMasteryLevel: row.registration_fee_mastery_level,
+      style: '', // For compatibility
+      approved: true // For compatibility
+    }));
+  },
+
+  // Database migration to add registration fee tracking columns
+  async addRegistrationFeeColumns() {
+    const sqlClient = getSql();
+    
+    try {
+      // Add registration fee tracking columns if they don't exist
+      await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`;
+      await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid_at TEXT`;
+      await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_mastery_level TEXT`;
+      
+      console.log('✅ Added registration fee tracking columns to dancers table');
+    } catch (error) {
+      console.log('Registration fee columns may already exist:', error);
+    }
   }
 };
 
@@ -2669,19 +2803,27 @@ export const unifiedDb = {
     // First get all dancers belonging to the studio
     const studioDancers = await this.getStudioDancers(studioId);
     const dancerEodsaIds = studioDancers.map(d => d.eodsaId);
+    const dancerIds = studioDancers.map(d => d.id);
     
     if (dancerEodsaIds.length === 0) {
       return [];
     }
     
-    // Get all event entries for these dancers
+    // Get all event entries for these dancers (handles both old and new unified system)
     const result = await sqlClient`
       SELECT ee.*, e.name as event_name, e.region, e.event_date, e.venue, e.performance_type,
-             c.name as contestant_name, c.type as contestant_type
+             COALESCE(c.name, d.name) as contestant_name, 
+             CASE 
+               WHEN c.type IS NOT NULL THEN c.type 
+               ELSE 'studio' 
+             END as contestant_type
       FROM event_entries ee
       JOIN events e ON ee.event_id = e.id
-      JOIN contestants c ON ee.contestant_id = c.id
-      WHERE ee.eodsa_id = ANY(${dancerEodsaIds})
+      LEFT JOIN contestants c ON ee.contestant_id = c.id
+      LEFT JOIN dancers d ON ee.contestant_id = d.id
+      WHERE ee.eodsa_id = ANY(${dancerEodsaIds}) 
+         OR ee.contestant_id = ANY(${dancerIds})
+         OR ee.participant_ids::text LIKE ANY(${dancerIds.map(id => `%"${id}"%`)})
       ORDER BY ee.submitted_at DESC
     ` as any[];
     
@@ -2689,11 +2831,21 @@ export const unifiedDb = {
     const enhancedEntries = await Promise.all(
       result.map(async (row: any) => {
         try {
-          const contestant = await db.getContestantById(row.contestant_id);
-          const participantNames = JSON.parse(row.participant_ids).map((id: string) => {
-            const dancer = contestant?.dancers.find(d => d.id === id);
-            return dancer?.name || 'Unknown Dancer';
-          });
+          let participantNames = [];
+          
+          // Try to get participant names from unified system first
+          const participantIds = JSON.parse(row.participant_ids);
+          for (const participantId of participantIds) {
+            const dancer = await this.getDancerById(participantId);
+            if (dancer) {
+              participantNames.push(dancer.name);
+            } else {
+              // Fallback to old system
+              const contestant = await db.getContestantById(row.contestant_id);
+              const contestantDancer = contestant?.dancers.find(d => d.id === participantId);
+              participantNames.push(contestantDancer?.name || 'Unknown Dancer');
+            }
+          }
           
           return {
             id: row.id,
@@ -3228,9 +3380,11 @@ export const unifiedDb = {
     const birthDate = new Date(dateOfBirth);
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
+    
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
+    
     return age;
   },
 
@@ -3320,6 +3474,81 @@ export const unifiedDb = {
       `;
     } else {
       throw new Error('Invalid user type');
+    }
+  },
+
+  // Registration fee tracking functions
+  async markRegistrationFeePaid(dancerId: string, masteryLevel: string) {
+    const sqlClient = getSql();
+    const paidAt = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE dancers 
+      SET registration_fee_paid = TRUE, 
+          registration_fee_paid_at = ${paidAt}, 
+          registration_fee_mastery_level = ${masteryLevel}
+      WHERE id = ${dancerId}
+    `;
+    
+    return { success: true };
+  },
+
+  async getDancerRegistrationStatus(dancerId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT registration_fee_paid, registration_fee_paid_at, registration_fee_mastery_level
+      FROM dancers 
+      WHERE id = ${dancerId}
+    ` as any[];
+    
+    if (result.length === 0) {
+      throw new Error('Dancer not found');
+    }
+    
+    return {
+      registrationFeePaid: result[0].registration_fee_paid || false,
+      registrationFeePaidAt: result[0].registration_fee_paid_at,
+      registrationFeeMasteryLevel: result[0].registration_fee_mastery_level
+    };
+  },
+
+  async getDancersWithRegistrationStatus(dancerIds: string[]) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT id, name, age, date_of_birth, national_id, eodsa_id,
+             registration_fee_paid, registration_fee_paid_at, registration_fee_mastery_level
+      FROM dancers 
+      WHERE id = ANY(${dancerIds})
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      eodsaId: row.eodsa_id,
+      registrationFeePaid: row.registration_fee_paid || false,
+      registrationFeePaidAt: row.registration_fee_paid_at,
+      registrationFeeMasteryLevel: row.registration_fee_mastery_level,
+      style: '', // For compatibility
+      approved: true // For compatibility
+    }));
+  },
+
+  // Database migration to add registration fee tracking columns
+  async addRegistrationFeeColumns() {
+    const sqlClient = getSql();
+    
+    try {
+      // Add registration fee tracking columns if they don't exist
+      await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`;
+      await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid_at TEXT`;
+      await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_mastery_level TEXT`;
+      
+      console.log('✅ Added registration fee tracking columns to dancers table');
+    } catch (error) {
+      console.log('Registration fee columns may already exist:', error);
     }
   }
 };

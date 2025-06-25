@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/database';
+import { db, unifiedDb, initializeDatabase } from '@/lib/database';
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Temporarily enable initialization to ensure schema migrations are applied
+    await initializeDatabase();
+    
     const { id } = await params;
     const entryId = id;
     
@@ -29,6 +32,21 @@ export async function PATCH(
     };
 
     await db.updateEventEntry(entryId, updatedEntry);
+
+    // Mark registration fees as paid for all participants after admin approval
+    if (entry.participantIds && entry.participantIds.length > 0) {
+      try {
+        for (const participantId of entry.participantIds) {
+          // Get the entry to find the mastery level
+          const mastery = entry.mastery || 'Eisteddfod';
+          await unifiedDb.markRegistrationFeePaid(participantId, mastery);
+        }
+        console.log('✅ Registration fees marked as paid for approved entry participants');
+      } catch (error) {
+        console.warn('Failed to update registration status after approval:', error);
+        // Don't fail the approval if registration status update fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Get applications for a studio
 export async function GET(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { searchParams } = new URL(request.url);
     const studioId = searchParams.get('studioId');
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 // Respond to an application (accept/reject)
 export async function POST(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const { applicationId, action, respondedBy, rejectionReason } = await request.json();
 

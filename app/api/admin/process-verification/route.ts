@@ -4,7 +4,7 @@ import { unifiedDb, db, initializeDatabase } from '@/lib/database';
 // Process accounts that have passed the 48-hour verification window
 export async function POST(request: NextRequest) {
   try {
-    await initializeDatabase();
+    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const body = await request.json();
     const { adminId } = body;

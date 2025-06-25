@@ -4,7 +4,7 @@ import { unifiedDb, initializeDatabase } from '@/lib/database';
 // Get all accepted dancers for a studio in the new unified system
 export async function GET(request: NextRequest) {
   try {
-    await initializeDatabase();
+    await initializeDatabase(); // Temporarily enabled to run schema migrations - will disable after columns are added
     
     const { searchParams } = new URL(request.url);
     const studioId = searchParams.get('studioId');
