@@ -76,6 +76,7 @@ export default function EventParticipantsPage() {
   const [editingItemNumber, setEditingItemNumber] = useState<string | null>(null);
   const [tempItemNumber, setTempItemNumber] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
+  const [deletingEntries, setDeletingEntries] = useState<Set<string>>(new Set());
   const { showAlert } = useAlert();
 
   useEffect(() => {
@@ -267,6 +268,56 @@ export default function EventParticipantsPage() {
   const handleItemNumberCancel = () => {
     setEditingItemNumber(null);
     setTempItemNumber('');
+  };
+
+  const deleteEntry = async (entryId: string, itemName: string) => {
+    if (deletingEntries.has(entryId)) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete the entry "${itemName}"?\n\nThis will remove the entry and all associated performance data. This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    setDeletingEntries(prev => new Set(prev).add(entryId));
+    
+    try {
+      const session = localStorage.getItem('adminSession');
+      if (!session) {
+        showAlert('Session expired. Please log in again.', 'error');
+        return;
+      }
+      
+      const adminData = JSON.parse(session);
+      
+      const response = await fetch(`/api/admin/entries/${entryId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adminId: adminData.id
+        }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        showAlert(result.message, 'success');
+        loadEventData(); // Reload data
+      } else {
+        const error = await response.json();
+        showAlert(`Failed to delete entry: ${error.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      showAlert('Failed to delete entry. Please try again.', 'error');
+    } finally {
+      setDeletingEntries(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entryId);
+        return newSet;
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -617,6 +668,13 @@ export default function EventParticipantsPage() {
                               }
                             </button>
                           )}
+                          <button
+                            onClick={() => deleteEntry(entry.id, entry.itemName)}
+                            disabled={deletingEntries.has(entry.id)}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50 font-medium"
+                          >
+                            {deletingEntries.has(entry.id) ? 'Deleting...' : '🗑️ Delete Entry'}
+                          </button>
                         </div>
                       </td>
                     </tr>

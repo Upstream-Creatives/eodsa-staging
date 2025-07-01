@@ -100,12 +100,9 @@ export default function JudgeDashboard() {
   }, [router]);
 
   useEffect(() => {
-    if (selectedEventId) {
-      filterAndLoadPerformances();
-    } else {
-      setFilteredPerformances([]);
-    }
-  }, [selectedEventId, performances, filterStatus, searchTerm, itemNumberSearch]);
+    // Filter performances when any filter changes
+    filterAndLoadPerformances();
+  }, [performances, filterStatus, searchTerm, itemNumberSearch]);
 
   const loadJudgeData = async (judgeId: string) => {
     setIsLoading(true);
@@ -116,7 +113,7 @@ export default function JudgeDashboard() {
         const assignmentsData = await assignmentsResponse.json();
         setAssignments(assignmentsData.assignments || []);
         
-        // Load performances for all assigned events with score status
+        // Load ALL performances for all assigned events - MERGED LIST (Gabriel's requirement)
         const allPerformances: PerformanceWithScore[] = [];
         for (const assignment of assignmentsData.assignments || []) {
           const performancesResponse = await fetch(`/api/events/${assignment.eventId}/performances`);
@@ -143,7 +140,22 @@ export default function JudgeDashboard() {
             }
           }
         }
+        
+        // Sort by item number for program order (Gabriel's requirement)
+        allPerformances.sort((a, b) => {
+          if (a.itemNumber && b.itemNumber) {
+            return a.itemNumber - b.itemNumber;
+          } else if (a.itemNumber && !b.itemNumber) {
+            return -1;
+          } else if (!a.itemNumber && b.itemNumber) {
+            return 1;
+          } else {
+            return a.title.localeCompare(b.title);
+          }
+        });
+        
         setPerformances(allPerformances);
+        setFilteredPerformances(allPerformances); // Show all by default
       }
     } catch (error) {
       console.error('Error loading judge data:', error);
@@ -154,7 +166,8 @@ export default function JudgeDashboard() {
   };
 
   const filterAndLoadPerformances = () => {
-    let filtered = performances.filter(p => p.eventId === selectedEventId);
+    // Start with ALL performances (merged list)
+    let filtered = [...performances];
     
     // Apply status filter
     if (filterStatus === 'scored') {
@@ -181,27 +194,13 @@ export default function JudgeDashboard() {
       }
     }
 
-    // Sort by item number ascending (putting performances without item numbers at the end)
-    filtered.sort((a, b) => {
-      if (a.itemNumber && b.itemNumber) {
-        return a.itemNumber - b.itemNumber;
-      } else if (a.itemNumber && !b.itemNumber) {
-        return -1;
-      } else if (!a.itemNumber && b.itemNumber) {
-        return 1;
-      } else {
-        return a.title.localeCompare(b.title);
-      }
-    });
-    
+    // Already sorted by item number in loadJudgeData - maintain program order
     setFilteredPerformances(filtered);
     setCurrentPage(1); // Reset to first page when filtering
   };
 
   const loadPerformanceByItemNumber = (itemNumber: number) => {
-    const performance = performances.find(p => 
-      p.eventId === selectedEventId && p.itemNumber === itemNumber
-    );
+    const performance = performances.find(p => p.itemNumber === itemNumber);
     if (performance) {
       handleStartScoring(performance);
     } else {
@@ -307,9 +306,8 @@ export default function JudgeDashboard() {
   const totalPages = Math.ceil(filteredPerformances.length / performancesPerPage);
 
   const getCompletionStats = () => {
-    const eventPerformances = performances.filter(p => p.eventId === selectedEventId);
-    const scored = eventPerformances.filter(p => p.hasScore).length;
-    const total = eventPerformances.length;
+    const scored = performances.filter(p => p.hasScore).length;
+    const total = performances.length;
     return { scored, total, percentage: total > 0 ? Math.round((scored / total) * 100) : 0 };
   };
 
@@ -588,38 +586,35 @@ export default function JudgeDashboard() {
           </div>
         )}
 
-        {/* Event Selection */}
+        {/* Regional Assignment Overview */}
         <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-8 border border-purple-100">
           <div className="flex items-center space-x-3 mb-6">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white">🎯</span>
+              <span className="text-white">🏆</span>
             </div>
-            <h2 className="text-xl font-bold text-gray-900">Select Event to Judge</h2>
+            <h2 className="text-xl font-bold text-gray-900">Your Regional Assignment</h2>
           </div>
 
-              <select
-                value={selectedEventId}
-                onChange={(e) => setSelectedEventId(e.target.value)}
-                className="w-full bg-white px-4 py-3 border-2 border-gray-400 hover:border-purple-400 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-lg font-semibold text-gray-900 shadow-sm"
-              >
-                <option value="">Choose an event to judge...</option>
-                {assignments.map((assignment) => (
-                  <option key={assignment.eventId} value={assignment.eventId}>
-                {assignment.event.name} - {new Date(assignment.event.eventDate).toLocaleDateString()} - {assignment.event.venue}
-                  </option>
-                ))}
-              </select>
-              
-              {assignments.length === 0 && (
-            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-              <p className="text-amber-800 font-medium">No events assigned yet.</p>
-              <p className="text-amber-700 text-sm">Please contact an administrator to get assigned to events.</p>
+          {assignments.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {assignments.map((assignment) => (
+                <div key={assignment.eventId} className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4">
+                  <h3 className="font-bold text-gray-900 mb-2">{assignment.event.name}</h3>
+                  <p className="text-sm text-gray-700 mb-1">📅 {new Date(assignment.event.eventDate).toLocaleDateString()}</p>
+                  <p className="text-sm text-gray-700">📍 {assignment.event.venue}</p>
+                </div>
+              ))}
             </div>
-              )}
+          ) : (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-amber-800 font-medium">No regional assignments yet.</p>
+              <p className="text-amber-700 text-sm">Please contact an administrator to get assigned to a region.</p>
             </div>
+          )}
+        </div>
             
         {/* Performances to Judge */}
-        {selectedEventId && (
+        {assignments.length > 0 && (
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-purple-100">
             <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 px-6 py-4 border-b border-purple-100">
               <div className="flex justify-between items-center">
@@ -628,12 +623,12 @@ export default function JudgeDashboard() {
                     <span className="text-white">🎭</span>
                   </div>
                             <div>
-                    <h2 className="text-xl font-bold text-gray-900">Performances Ready for Judging</h2>
+                    <h2 className="text-xl font-bold text-gray-900">Competition Program - All Performances</h2>
                     {(() => {
                       const stats = getCompletionStats();
                       return (
                         <p className="text-sm text-gray-700 font-medium">
-                          Progress: {stats.scored}/{stats.total} completed ({stats.percentage}%)
+                          Progress: {stats.scored}/{stats.total} completed ({stats.percentage}%) • Mixed list in program order
                         </p>
                       );
                     })()}
@@ -681,7 +676,7 @@ export default function JudgeDashboard() {
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    Not Scored ({performances.filter(p => p.eventId === selectedEventId && !p.hasScore).length})
+                    Not Scored ({performances.filter(p => !p.hasScore).length})
                   </button>
                   <button
                     onClick={() => setFilterStatus('scored')}
@@ -691,7 +686,7 @@ export default function JudgeDashboard() {
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    Fully Scored ({performances.filter(p => p.eventId === selectedEventId && p.isFullyScored).length})
+                    Fully Scored ({performances.filter(p => p.isFullyScored).length})
                   </button>
                 </div>
 
@@ -787,6 +782,11 @@ export default function JudgeDashboard() {
                               <div><strong>Duration:</strong> {performance.duration} minutes</div>
                               <div><strong>Style:</strong> {performance.itemStyle || 'Not specified'}</div>
                               <div><strong>Mastery:</strong> {performance.mastery || 'Not specified'}</div>
+                            </div>
+                            <div className="mb-3">
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                                🎪 {assignments.find(a => a.eventId === performance.eventId)?.event.name || 'Event'}
+                              </span>
                             </div>
                             <div className="text-sm text-gray-600">
                               <strong>Participants:</strong> {performance.participantNames?.join(', ') || 'Loading...'}

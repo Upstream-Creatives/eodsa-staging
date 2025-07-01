@@ -113,7 +113,7 @@ export default function StudioDashboardPage() {
     choreographer: '',
     mastery: '',
     itemStyle: '',
-    estimatedDuration: 0
+    estimatedDuration: 1 // Default to 1 minute minimum
   });
   const [isEditingEntry, setIsEditingEntry] = useState(false);
   
@@ -426,11 +426,10 @@ export default function StudioDashboardPage() {
     setShowEditEntryModal(true);
   };
 
-  const handleUpdateEntry = async () => {
+  const handleSaveEntryEdit = async () => {
     if (!studioSession || !editingEntry) return;
 
     try {
-      setIsEditingEntry(true);
       setError('');
 
       const response = await fetch(`/api/studios/entries/${editingEntry.id}`, {
@@ -447,9 +446,16 @@ export default function StudioDashboardPage() {
       const data = await response.json();
 
       if (data.success) {
+        setSuccessMessage(`Entry "${editEntryData.itemName}" updated successfully.`);
         setShowEditEntryModal(false);
         setEditingEntry(null);
-        setSuccessMessage(`Entry "${editEntryData.itemName}" has been successfully updated!`);
+        setEditEntryData({
+          itemName: '',
+          choreographer: '',
+          mastery: '',
+          itemStyle: '',
+          estimatedDuration: 1 // Default to 1 minute minimum
+        });
         // Reload data to reflect changes
         loadData(studioSession.id);
         
@@ -461,48 +467,6 @@ export default function StudioDashboardPage() {
     } catch (error) {
       console.error('Update entry error:', error);
       setError('Failed to update entry');
-    } finally {
-      setIsEditingEntry(false);
-    }
-  };
-
-  const handleDeleteEntry = async (entry: CompetitionEntry) => {
-    if (!studioSession) return;
-
-    const confirmed = window.confirm(
-      `Are you sure you want to withdraw the entry "${entry.itemName}" for ${entry.eventName}? This action cannot be undone.`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      setError('');
-
-      const response = await fetch(`/api/studios/entries/${entry.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          studioId: studioSession.id
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setSuccessMessage(`Entry "${entry.itemName}" has been withdrawn successfully.`);
-        // Reload data to reflect changes
-        loadData(studioSession.id);
-        
-        // Clear success message after 5 seconds
-        setTimeout(() => setSuccessMessage(''), 5000);
-      } else {
-        setError(data.error || 'Failed to withdraw entry');
-      }
-    } catch (error) {
-      console.error('Delete entry error:', error);
-      setError('Failed to withdraw entry');
     }
   };
 
@@ -1179,19 +1143,16 @@ export default function StudioDashboardPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2 ml-4">
+                      <div className="flex flex-col items-end space-y-2 ml-4">
                         <button
                           onClick={() => handleEditEntry(entry)}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                         >
-                          Edit
+                          Edit Entry
                         </button>
-                        <button
-                          onClick={() => handleDeleteEntry(entry)}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                        >
-                          Delete
-                        </button>
+                        <div className="px-3 py-1 text-xs text-gray-400 italic bg-gray-800/50 rounded-lg border border-gray-700">
+                          💡 Only admins can remove entries
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1523,22 +1484,30 @@ export default function StudioDashboardPage() {
               </div>
               
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">Estimated Duration (minutes) *</label>
+                <label className="block text-gray-300 text-sm font-medium mb-1">
+                  Estimated Duration (minutes) *
+                  <span className="text-xs text-gray-400 block mt-1">Minimum: 30 seconds (0.5 minutes)</span>
+                </label>
                 <input
                   type="number"
                   value={editEntryData.estimatedDuration}
-                  onChange={(e) => setEditEntryData({...editEntryData, estimatedDuration: parseInt(e.target.value) || 0})}
-                  min="1"
-                  max="30"
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0.5;
+                    setEditEntryData({...editEntryData, estimatedDuration: Math.max(0.5, value)});
+                  }}
+                  min="0.5"
+                  max="3.5"
+                  step="0.5"
                   className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   required
+                  title="Minimum 30 seconds (0.5 minutes), maximum 3.5 minutes"
                 />
               </div>
             </div>
             
             <div className="flex space-x-3 mt-6">
               <button
-                onClick={handleUpdateEntry}
+                                        onClick={handleSaveEntryEdit}
                 disabled={isEditingEntry}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >

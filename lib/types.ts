@@ -180,6 +180,7 @@ export interface Ranking {
 
 // UPDATED: Age categories to match EODSA requirements exactly
 export const AGE_CATEGORIES = [
+  'All Ages',
   '4 & Under',
   '6 & Under', 
   '7-9',

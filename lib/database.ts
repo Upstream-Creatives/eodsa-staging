@@ -1090,7 +1090,7 @@ export const db = {
   async getAllJudgeAssignments() {
     const sqlClient = getSql();
     const result = await sqlClient`
-      SELECT jea.*, j.name as judge_name, j.email as judge_email, e.name as event_name
+      SELECT jea.*, j.name as judge_name, j.email as judge_email, e.name as event_name, e.region
       FROM judge_event_assignments jea
       JOIN judges j ON jea.judge_id = j.id
       JOIN events e ON jea.event_id = e.id
@@ -1107,7 +1107,37 @@ export const db = {
       status: row.status,
       judgeName: row.judge_name,
       judgeEmail: row.judge_email,
-      eventName: row.event_name
+      eventName: row.event_name,
+      region: row.region
+    }));
+  },
+
+  // NEW: Get judge assignments grouped by region
+  async getJudgeAssignmentsByRegion() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT 
+        j.id as judge_id,
+        j.name as judge_name, 
+        j.email as judge_email,
+        e.region,
+        COUNT(jea.id) as event_count
+      FROM judge_event_assignments jea
+      JOIN judges j ON jea.judge_id = j.id
+      JOIN events e ON jea.event_id = e.id
+      WHERE jea.status = 'active'
+      GROUP BY j.id, j.name, j.email, e.region
+      ORDER BY e.region, j.name
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: `${row.judge_id}-${row.region}`,
+      judgeId: row.judge_id,
+      region: row.region,
+      judgeName: row.judge_name,
+      judgeEmail: row.judge_email,
+      regionName: row.region,
+      eventCount: parseInt(row.event_count)
     }));
   },
 
@@ -1509,6 +1539,104 @@ export const db = {
     } catch (error) {
       console.log('Registration fee columns may already exist:', error);
     }
+  },
+
+  // Update a competition entry (studio verification)
+  async updateStudioEntry(studioId: string, entryId: string, updates: {
+    itemName?: string;
+    choreographer?: string;
+    mastery?: string;
+    itemStyle?: string;
+    estimatedDuration?: number;
+    participantIds?: string[];
+  }) {
+    const sqlClient = getSql();
+    
+    // First verify this entry belongs to a dancer from this studio
+    const entry = await sqlClient`
+      SELECT ee.*, sa.studio_id
+      FROM event_entries ee
+      JOIN dancers d ON ee.eodsa_id = d.eodsa_id
+      JOIN studio_applications sa ON d.id = sa.dancer_id
+      WHERE ee.id = ${entryId} AND sa.studio_id = ${studioId} AND sa.status = 'accepted'
+      LIMIT 1
+    ` as any[];
+    
+    if (entry.length === 0) {
+      throw new Error('Entry not found or not owned by this studio');
+    }
+    
+    // Check if entry is still editable (not approved or event hasn't passed)
+    const eventResult = await sqlClient`
+      SELECT registration_deadline, event_date 
+      FROM events 
+      WHERE id = ${entry[0].event_id}
+    ` as any[];
+    
+    if (eventResult.length > 0) {
+      const deadline = new Date(eventResult[0].registration_deadline);
+      const now = new Date();
+      
+      if (now > deadline) {
+        throw new Error('Registration deadline has passed for this event');
+      }
+    }
+
+    // Use separate queries for each field to avoid unsafe parameter usage
+    if (updates.itemName !== undefined) {
+      await sqlClient`UPDATE event_entries SET item_name = ${updates.itemName} WHERE id = ${entryId}`;
+    }
+    if (updates.choreographer !== undefined) {
+      await sqlClient`UPDATE event_entries SET choreographer = ${updates.choreographer} WHERE id = ${entryId}`;
+    }
+    if (updates.mastery !== undefined) {
+      await sqlClient`UPDATE event_entries SET mastery = ${updates.mastery} WHERE id = ${entryId}`;
+    }
+    if (updates.itemStyle !== undefined) {
+      await sqlClient`UPDATE event_entries SET item_style = ${updates.itemStyle} WHERE id = ${entryId}`;
+    }
+    if (updates.estimatedDuration !== undefined) {
+      await sqlClient`UPDATE event_entries SET estimated_duration = ${updates.estimatedDuration} WHERE id = ${entryId}`;
+    }
+    if (updates.participantIds !== undefined) {
+      await sqlClient`UPDATE event_entries SET participant_ids = ${JSON.stringify(updates.participantIds)} WHERE id = ${entryId}`;
+    }
+    
+    return { success: true, message: 'Entry updated successfully' };
+  },
+
+  // Admin-only entry deletion
+  async deleteEntryAsAdmin(adminId: string, entryId: string) {
+    const sqlClient = getSql();
+    
+    // Verify admin exists and has admin privileges
+    const admin = await sqlClient`
+      SELECT id, is_admin FROM judges WHERE id = ${adminId} AND is_admin = true
+    ` as any[];
+    
+    if (admin.length === 0) {
+      throw new Error('Admin privileges required to delete entries');
+    }
+    
+    // Check if entry exists
+    const entry = await sqlClient`
+      SELECT id FROM event_entries WHERE id = ${entryId}
+    ` as any[];
+    
+    if (entry.length === 0) {
+      throw new Error('Entry not found');
+    }
+    
+    // Delete the entry and any associated performances/scores
+    await sqlClient`DELETE FROM scores WHERE performance_id IN (
+      SELECT id FROM performances WHERE event_entry_id = ${entryId}
+    )`;
+    
+    await sqlClient`DELETE FROM performances WHERE event_entry_id = ${entryId}`;
+    
+    await sqlClient`DELETE FROM event_entries WHERE id = ${entryId}`;
+    
+    return { success: true, message: 'Entry deleted successfully by admin' };
   }
 };
 
@@ -2278,7 +2406,7 @@ export const unifiedDb = {
         throw new Error('Registration deadline has passed for this event');
       }
     }
-    
+
     // Build update query dynamically
     const updateFields = [];
     const updateValues = [];
@@ -2308,34 +2436,7 @@ export const unifiedDb = {
       updateValues.push(JSON.stringify(updates.participantIds));
     }
     
-    if (updateFields.length === 0) {
-      throw new Error('No valid updates provided');
-    }
-    
-    // Build the update query using postgres.js syntax
-    let updateQuery = 'UPDATE event_entries SET ';
-    const updateParts = [];
-    
-    if (updates.itemName !== undefined) {
-      updateParts.push(sqlClient`item_name = ${updates.itemName}`);
-    }
-    if (updates.choreographer !== undefined) {
-      updateParts.push(sqlClient`choreographer = ${updates.choreographer}`);
-    }
-    if (updates.mastery !== undefined) {
-      updateParts.push(sqlClient`mastery = ${updates.mastery}`);
-    }
-    if (updates.itemStyle !== undefined) {
-      updateParts.push(sqlClient`item_style = ${updates.itemStyle}`);
-    }
-    if (updates.estimatedDuration !== undefined) {
-      updateParts.push(sqlClient`estimated_duration = ${updates.estimatedDuration}`);
-    }
-    if (updates.participantIds !== undefined) {
-      updateParts.push(sqlClient`participant_ids = ${JSON.stringify(updates.participantIds)}`);
-    }
-    
-    // Execute the update
+    // Use separate queries for each field to avoid unsafe parameter usage
     if (updates.itemName !== undefined) {
       await sqlClient`UPDATE event_entries SET item_name = ${updates.itemName} WHERE id = ${entryId}`;
     }
@@ -2355,49 +2456,32 @@ export const unifiedDb = {
       await sqlClient`UPDATE event_entries SET participant_ids = ${JSON.stringify(updates.participantIds)} WHERE id = ${entryId}`;
     }
     
-    // Return updated entry
-    const updatedResult = await sqlClient`
-      SELECT * FROM event_entries WHERE id = ${entryId}
-    ` as any[];
-    
-    return updatedResult[0];
+    return { success: true, message: 'Entry updated successfully' };
   },
 
-  // Delete/withdraw a competition entry (studio verification)
-  async deleteStudioEntry(studioId: string, entryId: string) {
+  // Admin-only entry deletion
+  async deleteEntryAsAdmin(adminId: string, entryId: string) {
     const sqlClient = getSql();
     
-    // First verify this entry belongs to a dancer from this studio
+    // Verify admin exists and has admin privileges
+    const admin = await sqlClient`
+      SELECT id, is_admin FROM judges WHERE id = ${adminId} AND is_admin = true
+    ` as any[];
+    
+    if (admin.length === 0) {
+      throw new Error('Admin privileges required to delete entries');
+    }
+    
+    // Check if entry exists
     const entry = await sqlClient`
-      SELECT ee.*, sa.studio_id
-      FROM event_entries ee
-      JOIN dancers d ON ee.eodsa_id = d.eodsa_id
-      JOIN studio_applications sa ON d.id = sa.dancer_id
-      WHERE ee.id = ${entryId} AND sa.studio_id = ${studioId} AND sa.status = 'accepted'
-      LIMIT 1
+      SELECT id FROM event_entries WHERE id = ${entryId}
     ` as any[];
     
     if (entry.length === 0) {
-      throw new Error('Entry not found or not owned by this studio');
+      throw new Error('Entry not found');
     }
     
-    // Check if entry is still editable (not approved or event hasn't passed)
-    const eventResult = await sqlClient`
-      SELECT registration_deadline, event_date 
-      FROM events 
-      WHERE id = ${entry[0].event_id}
-    ` as any[];
-    
-    if (eventResult.length > 0) {
-      const deadline = new Date(eventResult[0].registration_deadline);
-      const now = new Date();
-      
-      if (now > deadline) {
-        throw new Error('Registration deadline has passed for this event');
-      }
-    }
-    
-    // Delete the entry and any associated performances
+    // Delete the entry and any associated performances/scores
     await sqlClient`DELETE FROM scores WHERE performance_id IN (
       SELECT id FROM performances WHERE event_entry_id = ${entryId}
     )`;
@@ -2406,7 +2490,7 @@ export const unifiedDb = {
     
     await sqlClient`DELETE FROM event_entries WHERE id = ${entryId}`;
     
-    return { success: true, message: 'Entry withdrawn successfully' };
+    return { success: true, message: 'Entry deleted successfully by admin' };
   },
 
   // Get available studios for dancer applications

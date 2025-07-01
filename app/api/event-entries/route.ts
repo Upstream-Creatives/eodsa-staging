@@ -5,6 +5,8 @@ import { emailService } from '@/lib/email';
 // Helper function to check if a dancer's age matches the event's age category
 function checkAgeEligibility(dancerAge: number, ageCategory: string): boolean {
   switch (ageCategory) {
+    case 'All Ages':
+      return true; // All ages are welcome
     case '4 & Under':
       return dancerAge <= 4;
     case '6 & Under':
@@ -223,7 +225,14 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Validate time limit
+    // Validate time limit (minimum and maximum)
+    if (estimatedDurationMinutes > 0 && estimatedDurationMinutes < 0.5) {
+      return NextResponse.json(
+        { error: `Performance duration cannot be less than 30 seconds (0.5 minutes). Your estimated duration is ${estimatedDurationMinutes} minutes.` },
+        { status: 400 }
+      );
+    }
+    
     if (estimatedDurationMinutes > limit.maxTimeMinutes) {
       const maxTimeDisplay = limit.maxTimeMinutes === 3.5 ? '3:30' : `${limit.maxTimeMinutes}:00`;
       return NextResponse.json(

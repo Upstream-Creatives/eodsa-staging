@@ -74,51 +74,5 @@ export async function PUT(
   }
 }
 
-// Delete/withdraw a specific competition entry for a studio
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
-    
-    const { id } = await params;
-    const body = await request.json();
-    const { studioId } = body;
-
-    if (!studioId) {
-      return NextResponse.json(
-        { error: 'Studio ID is required' },
-        { status: 400 }
-      );
-    }
-
-    const result = await unifiedDb.deleteStudioEntry(studioId, id);
-
-    return NextResponse.json({
-      success: true,
-      message: result.message
-    });
-  } catch (error: any) {
-    console.error('Error deleting studio entry:', error);
-    
-    if (error.message.includes('not found') || error.message.includes('not owned')) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 404 }
-      );
-    }
-    
-    if (error.message.includes('deadline')) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      );
-    }
-    
-    return NextResponse.json(
-      { error: 'Failed to delete entry' },
-      { status: 500 }
-    );
-  }
-} 
+// REMOVED: DELETE endpoint - only admins can delete entries now
+// Studios can edit their entries but cannot delete them per Gabriel's requirements 

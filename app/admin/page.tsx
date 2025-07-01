@@ -37,10 +37,11 @@ interface Judge {
 interface JudgeAssignment {
   id: string;
   judgeId: string;
-  eventId: string;
+  region: string;
   judgeName: string;
   judgeEmail: string;
-  eventName: string;
+  regionName: string;
+  eventCount?: number;
 }
 
 interface Dancer {
@@ -162,10 +163,11 @@ export default function AdminDashboard() {
   // Assignment state
   const [assignment, setAssignment] = useState({
     judgeId: '',
-    eventId: ''
+    region: ''
   });
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignmentMessage, setAssignmentMessage] = useState('');
+  const [reassigningJudges, setReassigningJudges] = useState<Set<string>>(new Set());
 
   // Database cleaning state
   const [isCleaningDatabase, setIsCleaningDatabase] = useState(false);
@@ -220,7 +222,7 @@ export default function AdminDashboard() {
       const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes, verificationRes] = await Promise.all([
         fetch('/api/events'),
         fetch('/api/judges'),
-        fetch('/api/judge-assignments'),
+        fetch('/api/judge-assignments/regional-view'),
         fetch('/api/admin/dancers'),
         fetch('/api/admin/studios'),
         fetch('/api/admin/studio-applications'),
@@ -483,13 +485,15 @@ export default function AdminDashboard() {
 
       const adminData = JSON.parse(session);
 
-      const response = await fetch('/api/judge-assignments', {
+      // Assign judge to all events in the selected region
+      const response = await fetch('/api/judge-assignments/regional', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...assignment,
+          judgeId: assignment.judgeId,
+          region: assignment.region,
           assignedBy: adminData.id
         }),
       });
@@ -497,10 +501,10 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        setAssignmentMessage('Judge assigned successfully!');
+        setAssignmentMessage(`Judge assigned to ${assignment.region} successfully! Assigned to ${data.assignedCount || 0} events.`);
         setAssignment({
           judgeId: '',
-          eventId: ''
+          region: ''
         });
         fetchData();
         setShowAssignJudgeModal(false);
@@ -513,6 +517,58 @@ export default function AdminDashboard() {
       setAssignmentMessage('Error assigning judge. Please check your connection and try again.');
     } finally {
       setIsAssigning(false);
+    }
+  };
+
+  const handleReassignJudge = async (assignment: JudgeAssignment) => {
+    const reassignKey = `${assignment.judgeId}-${assignment.region}`;
+    
+    if (reassigningJudges.has(reassignKey)) {
+      return; // Already reassigning
+    }
+
+    setReassigningJudges(prev => new Set([...prev, reassignKey]));
+
+    try {
+      const session = localStorage.getItem('adminSession');
+      if (!session) {
+        setAssignmentMessage('Error: Session expired. Please log in again.');
+        return;
+      }
+
+      const adminData = JSON.parse(session);
+
+      // Reassign judge to all events in their current region (picks up new events)
+      const response = await fetch('/api/judge-assignments/regional', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          judgeId: assignment.judgeId,
+          region: assignment.region,
+          assignedBy: adminData.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setAssignmentMessage(`✅ ${assignment.judgeName} reassigned to ${assignment.region}! Now assigned to ${data.assignedCount || 0} new events.`);
+        fetchData(); // Refresh the assignments table
+        setTimeout(() => setAssignmentMessage(''), 5000);
+      } else {
+        setAssignmentMessage(`❌ Reassignment failed: ${data.error || 'Unknown error occurred'}`);
+      }
+    } catch (error) {
+      console.error('Error reassigning judge:', error);
+      setAssignmentMessage('❌ Error reassigning judge. Please check your connection and try again.');
+    } finally {
+      setReassigningJudges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(reassignKey);
+        return newSet;
+      });
     }
   };
 
@@ -1400,8 +1456,9 @@ export default function AdminDashboard() {
                     <thead className="bg-gray-50/80">
                       <tr>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Judge</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Event</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Region</th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Email</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                     <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -1413,8 +1470,26 @@ export default function AdminDashboard() {
                               <div className="text-sm text-gray-700 font-medium sm:hidden">{assignment.judgeEmail}</div>
                             </div>
                         </td>
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{assignment.eventName}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                            {assignment.regionName}
+                            <div className="text-xs text-gray-500 mt-1">{assignment.eventCount || 0} events</div>
+                          </td>
                           <td className="px-6 py-4 text-sm font-medium text-gray-600 hidden sm:table-cell">{assignment.judgeEmail}</td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => handleReassignJudge(assignment)}
+                              disabled={reassigningJudges.has(`${assignment.judgeId}-${assignment.region}`)}
+                              className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-medium rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Reassign judge to pick up new events in this region"
+                            >
+                              <span className="mr-1">
+                                {reassigningJudges.has(`${assignment.judgeId}-${assignment.region}`) ? '⏳' : '🔄'}
+                              </span>
+                              <span className="hidden sm:inline">
+                                {reassigningJudges.has(`${assignment.judgeId}-${assignment.region}`) ? 'Reassigning...' : 'Reassign'}
+                              </span>
+                            </button>
+                          </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2303,7 +2378,7 @@ export default function AdminDashboard() {
                   <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center">
                     <span className="text-white text-lg">🔗</span>
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900">Assign Judge to Event</h2>
+                  <h2 className="text-xl font-bold text-gray-900">Assign Judge to Region</h2>
                 </div>
                 <button
                   onClick={() => setShowAssignJudgeModal(false)}
@@ -2332,17 +2407,17 @@ export default function AdminDashboard() {
                 </div>
                 
                 <div className="lg:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Select Event</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Select Region</label>
                   <select
-                    value={assignment.eventId}
-                    onChange={(e) => setAssignment(prev => ({ ...prev, eventId: e.target.value }))}
+                    value={assignment.region}
+                    onChange={(e) => setAssignment(prev => ({ ...prev, region: e.target.value }))}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 text-base font-medium text-gray-900"
                     required
                   >
-                    <option value="">Choose an event</option>
-                    {events.map(event => (
-                      <option key={event.id} value={event.id}>{event.name}</option>
-                    ))}
+                    <option value="">Choose a region</option>
+                    <option value="Gauteng">Gauteng</option>
+                    <option value="Free State">Free State</option>
+                    <option value="Mpumalanga">Mpumalanga</option>
                   </select>
                 </div>
               </div>

@@ -676,6 +676,8 @@ export default function PerformanceTypeEntryPage() {
   // Helper function to check if a dancer's age matches the event's age category
   const checkAgeEligibility = (dancerAge: number, ageCategory: string): boolean => {
     switch (ageCategory) {
+      case 'All Ages':
+        return true; // All ages are welcome
       case '4 & Under':
         return dancerAge <= 4;
       case '6 & Under':
@@ -707,6 +709,12 @@ export default function PerformanceTypeEntryPage() {
     if (!duration) return true; // Optional field
     const durationMinutes = convertDurationToMinutes(duration);
     const maxDuration = getTimeLimit();
+    
+    // Minimum duration: 30 seconds (0.5 minutes)
+    if (durationMinutes > 0 && durationMinutes < 0.5) {
+      return false;
+    }
+    
     return maxDuration > 0 ? durationMinutes <= maxDuration : true;
   };
 
@@ -872,9 +880,15 @@ export default function PerformanceTypeEntryPage() {
       return;
     }
     if (step === 2 && formData.estimatedDuration && !validateDuration(formData.estimatedDuration)) {
+      const durationMinutes = convertDurationToMinutes(formData.estimatedDuration);
       const maxTime = getTimeLimit();
       const maxTimeDisplay = maxTime === 3.5 ? '3:30' : `${maxTime}:00`;
-      showAlert(`⏰ Duration too long! ${performanceType} performances must be ${maxTimeDisplay} or less. Current: ${formData.estimatedDuration}.`, 'warning');
+      
+      if (durationMinutes < 0.5) {
+        showAlert(`⏰ Duration too short! Performances must be at least 30 seconds (0:30). Current: ${formData.estimatedDuration}.`, 'warning');
+      } else {
+        showAlert(`⏰ Duration too long! ${performanceType} performances must be ${maxTimeDisplay} or less. Current: ${formData.estimatedDuration}.`, 'warning');
+      }
       return;
     }
     setStep(prev => Math.min(prev + 1, 4));
@@ -1287,6 +1301,7 @@ export default function PerformanceTypeEntryPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Estimated Duration (Optional) - MM:SS format
+                      <span className="text-xs text-gray-400 block mt-1">Leave blank if unknown. Min: 30 seconds if provided.</span>
                     </label>
                     
                     {/* Time Limit Information */}
@@ -1323,14 +1338,14 @@ export default function PerformanceTypeEntryPage() {
                       name="estimatedDuration"
                       value={formData.estimatedDuration}
                       onChange={handleInputChange}
-                      placeholder={`e.g., 2:30 (Max: ${getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`})`}
+                      placeholder={`e.g., 2:30 (Min: 0:30, Max: ${getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`})`}
                       className={`w-full px-4 py-3 border rounded-xl focus:ring-2 text-white placeholder-gray-400 transition-all ${
                         validateDuration(formData.estimatedDuration) 
                           ? 'border-gray-600 bg-gray-700 focus:ring-purple-500 focus:border-purple-500' 
                           : 'border-red-500 bg-red-900/30 focus:ring-red-500 focus:border-red-500'
                       }`}
                       pattern="[0-9]{1,2}:[0-5][0-9]"
-                      title="Enter duration in MM:SS format (e.g., 2:30)"
+                      title="Enter duration in MM:SS format (e.g., 2:30) - Minimum 30 seconds"
                     />
                     
                     {/* Validation Messages */}
@@ -1340,12 +1355,12 @@ export default function PerformanceTypeEntryPage() {
                           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          Duration too long!
+                          {convertDurationToMinutes(formData.estimatedDuration) < 0.5 ? 'Duration too short!' : 'Duration too long!'}
                         </p>
-                                                 <p className="text-red-200 text-sm mt-1">
-                           <strong>{performanceType} performances</strong> cannot exceed <strong>{getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minutes</strong>.
-                           <br />Your current duration: <strong>{formData.estimatedDuration}</strong>
-                         </p>
+                        <p className="text-red-200 text-sm mt-1">
+                          <strong>{performanceType} performances</strong> must be between <strong>0:30</strong> and <strong>{getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minutes</strong>.
+                          <br />Your current duration: <strong>{formData.estimatedDuration}</strong>
+                        </p>
                       </div>
                     )}
                     
