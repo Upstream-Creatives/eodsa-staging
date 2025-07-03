@@ -48,6 +48,118 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE event_entries ADD COLUMN IF NOT EXISTS item_number INTEGER`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS event_end_date TEXT`;
 
+    // 🏆 NATIONALS TABLES
+    // Create nationals events table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS nationals_events (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        event_date TEXT NOT NULL,
+        event_end_date TEXT,
+        registration_deadline TEXT NOT NULL,
+        venue TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'upcoming',
+        max_participants INTEGER,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `;
+
+    // Create nationals event entries table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS nationals_event_entries (
+        id TEXT PRIMARY KEY,
+        nationals_event_id TEXT NOT NULL,
+        contestant_id TEXT NOT NULL,
+        eodsa_id TEXT NOT NULL,
+        participant_ids TEXT NOT NULL,
+        calculated_fee REAL NOT NULL,
+        payment_status TEXT NOT NULL DEFAULT 'pending',
+        payment_method TEXT,
+        submitted_at TEXT NOT NULL,
+        approved BOOLEAN NOT NULL DEFAULT FALSE,
+        qualified_for_nationals BOOLEAN DEFAULT FALSE,
+        item_number INTEGER,
+        item_name TEXT NOT NULL,
+        choreographer TEXT NOT NULL,
+        mastery TEXT NOT NULL,
+        item_style TEXT NOT NULL,
+        estimated_duration INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        performance_type TEXT NOT NULL,
+        age_category TEXT NOT NULL,
+        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
+        FOREIGN KEY (contestant_id) REFERENCES contestants(id)
+      )
+    `;
+
+    // Create nationals performances table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS nationals_performances (
+        id TEXT PRIMARY KEY,
+        nationals_event_id TEXT NOT NULL,
+        contestant_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        participant_names TEXT NOT NULL,
+        item_style TEXT NOT NULL,
+        duration INTEGER NOT NULL,
+        mastery TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        item_number INTEGER,
+        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
+        FOREIGN KEY (contestant_id) REFERENCES contestants(id)
+      )
+    `;
+
+    // Create nationals scores table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS nationals_scores (
+        id TEXT PRIMARY KEY,
+        performance_id TEXT NOT NULL,
+        judge_id TEXT NOT NULL,
+        technical_score REAL NOT NULL,
+        musical_score REAL NOT NULL,
+        performance_score REAL NOT NULL,
+        styling_score REAL NOT NULL,
+        overall_impression_score REAL NOT NULL,
+        comments TEXT,
+        submitted_at TEXT NOT NULL,
+        FOREIGN KEY (performance_id) REFERENCES nationals_performances(id),
+        FOREIGN KEY (judge_id) REFERENCES judges(id),
+        UNIQUE(performance_id, judge_id)
+      )
+    `;
+
+    // Create nationals judge assignments table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS nationals_judge_assignments (
+        id TEXT PRIMARY KEY,
+        judge_id TEXT NOT NULL,
+        nationals_event_id TEXT NOT NULL,
+        assigned_by TEXT NOT NULL,
+        assigned_at TEXT NOT NULL,
+        FOREIGN KEY (judge_id) REFERENCES judges(id),
+        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
+        UNIQUE(judge_id, nationals_event_id)
+      )
+    `;
+
+    // Create nationals rankings table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS nationals_rankings (
+        id TEXT PRIMARY KEY,
+        nationals_event_id TEXT NOT NULL,
+        performance_id TEXT NOT NULL,
+        total_score REAL NOT NULL,
+        average_score REAL NOT NULL,
+        rank INTEGER NOT NULL,
+        calculated_at TEXT NOT NULL,
+        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
+        FOREIGN KEY (performance_id) REFERENCES nationals_performances(id)
+      )
+    `;
+
     console.log('✅ Database schema is up to date.');
     
     // Return the database object for use in API routes
@@ -1535,7 +1647,11 @@ export const db = {
       await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid_at TEXT`;
       await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_mastery_level TEXT`;
       
+      // Add solo count column to nationals entries table
+      await sqlClient`ALTER TABLE nationals_event_entries ADD COLUMN IF NOT EXISTS solo_count INTEGER DEFAULT 0`;
+      
       console.log('✅ Added registration fee tracking columns to dancers table');
+      console.log('✅ Added solo_count column to nationals_event_entries table');
     } catch (error) {
       console.log('Registration fee columns may already exist:', error);
     }
@@ -1637,6 +1753,476 @@ export const db = {
     await sqlClient`DELETE FROM event_entries WHERE id = ${entryId}`;
     
     return { success: true, message: 'Entry deleted successfully by admin' };
+  },
+
+  // 🏆 NATIONALS DATABASE OPERATIONS
+  
+  // Create nationals event
+  async createNationalsEvent(event: {
+    name: string;
+    description?: string;
+    eventDate: string;
+    eventEndDate?: string;
+    registrationDeadline: string;
+    venue: string;
+    maxParticipants?: number;
+    createdBy: string;
+  }) {
+    const sqlClient = getSql();
+    const id = `nationals-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    
+    // Automatically set the correct initial status based on dates
+    const now = new Date();
+    const eventDate = new Date(event.eventDate);
+    const registrationDeadline = new Date(event.registrationDeadline);
+    
+    let initialStatus: 'upcoming' | 'registration_open' | 'registration_closed' | 'in_progress' | 'completed' = 'upcoming';
+    if (now < registrationDeadline) {
+      initialStatus = 'registration_open';
+    } else if (now >= registrationDeadline && now < eventDate) {
+      initialStatus = 'registration_closed';
+    } else if (now >= eventDate) {
+      initialStatus = 'completed';
+    }
+    
+    await sqlClient`
+      INSERT INTO nationals_events (
+        id, name, description, event_date, event_end_date, registration_deadline, 
+        venue, status, max_participants, created_by, created_at
+      ) VALUES (
+        ${id}, ${event.name}, ${event.description || null}, ${event.eventDate}, 
+        ${event.eventEndDate || null}, ${event.registrationDeadline}, ${event.venue}, 
+        ${initialStatus}, ${event.maxParticipants || null}, ${event.createdBy}, ${createdAt}
+      )
+    `;
+    
+    return {
+      id,
+      ...event,
+      status: initialStatus,
+      createdAt
+    };
+  },
+
+  // Get all nationals events
+  async getAllNationalsEvents() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT * FROM nationals_events 
+      ORDER BY event_date DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      eventDate: row.event_date,
+      eventEndDate: row.event_end_date,
+      registrationDeadline: row.registration_deadline,
+      venue: row.venue,
+      status: row.status,
+      maxParticipants: row.max_participants,
+      createdBy: row.created_by,
+      createdAt: row.created_at
+    }));
+  },
+
+  // Get nationals event by ID
+  async getNationalsEventById(eventId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT * FROM nationals_events WHERE id = ${eventId}
+    ` as any[];
+    
+    if (result.length === 0) return null;
+    
+    const row = result[0];
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      eventDate: row.event_date,
+      eventEndDate: row.event_end_date,
+      registrationDeadline: row.registration_deadline,
+      venue: row.venue,
+      status: row.status,
+      maxParticipants: row.max_participants,
+      createdBy: row.created_by,
+      createdAt: row.created_at
+    };
+  },
+
+  // Create nationals judge assignment
+  async createNationalsJudgeAssignment(assignment: {
+    judgeId: string;
+    nationalsEventId: string;
+    assignedBy: string;
+  }) {
+    const sqlClient = getSql();
+    
+    // Check if this judge is already assigned to this nationals event
+    const existingAssignment = await sqlClient`
+      SELECT id FROM nationals_judge_assignments 
+      WHERE judge_id = ${assignment.judgeId} 
+      AND nationals_event_id = ${assignment.nationalsEventId}
+    ` as any[];
+    
+    if (existingAssignment.length > 0) {
+      throw new Error('This judge is already assigned to this nationals event');
+    }
+    
+    // Check how many judges are already assigned to this nationals event
+    const judgeCount = await sqlClient`
+      SELECT COUNT(*) as count FROM nationals_judge_assignments 
+      WHERE nationals_event_id = ${assignment.nationalsEventId}
+    ` as any[];
+    
+    const currentJudgeCount = parseInt(judgeCount[0].count);
+    
+    if (currentJudgeCount >= 4) {
+      throw new Error('This nationals event already has the maximum of 4 judges assigned');
+    }
+    
+    const id = `nationals-judge-${Date.now()}`;
+    const assignedAt = new Date().toISOString();
+    
+    await sqlClient`
+      INSERT INTO nationals_judge_assignments (
+        id, judge_id, nationals_event_id, assigned_by, assigned_at
+      ) VALUES (
+        ${id}, ${assignment.judgeId}, ${assignment.nationalsEventId}, 
+        ${assignment.assignedBy}, ${assignedAt}
+      )
+    `;
+    
+    return {
+      id,
+      ...assignment,
+      assignedAt
+    };
+  },
+
+  // Get nationals judge assignments
+  async getNationalsJudgeAssignments(judgeId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT nja.*, ne.name as event_name, ne.event_date, ne.venue
+      FROM nationals_judge_assignments nja
+      JOIN nationals_events ne ON nja.nationals_event_id = ne.id
+      WHERE nja.judge_id = ${judgeId}
+      ORDER BY ne.event_date ASC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      judgeId: row.judge_id,
+      nationalsEventId: row.nationals_event_id,
+      assignedBy: row.assigned_by,
+      assignedAt: row.assigned_at,
+      event: {
+        id: row.nationals_event_id,
+        name: row.event_name,
+        eventDate: row.event_date,
+        venue: row.venue
+      }
+    }));
+  },
+
+  // Get all nationals judge assignments for an event
+  async getNationalsJudgeAssignmentsByEvent(eventId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT nja.*, j.name as judge_name, j.email as judge_email
+      FROM nationals_judge_assignments nja
+      JOIN judges j ON nja.judge_id = j.id
+      WHERE nja.nationals_event_id = ${eventId}
+      ORDER BY nja.assigned_at ASC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      judgeId: row.judge_id,
+      nationalsEventId: row.nationals_event_id,
+      assignedBy: row.assigned_by,
+      assignedAt: row.assigned_at,
+      judgeName: row.judge_name,
+      judgeEmail: row.judge_email
+    }));
+  },
+
+  // Get judge count for a nationals event
+  async getNationalsEventJudgeCount(eventId: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT COUNT(*) as count FROM nationals_judge_assignments 
+      WHERE nationals_event_id = ${eventId}
+    ` as any[];
+    
+    return parseInt(result[0].count);
+  },
+
+  // Remove a judge from a nationals event
+  async removeNationalsJudgeAssignment(assignmentId: string) {
+    const sqlClient = getSql();
+    
+    await sqlClient`
+      DELETE FROM nationals_judge_assignments 
+      WHERE id = ${assignmentId}
+    `;
+    
+    return { success: true };
+  },
+
+  // Calculate nationals fee based on performance type and number of solos
+  async calculateNationalsFee(performanceType: string, soloCount: number = 1, participantCount: number = 1, participantIds: string[] = []) {
+    const sqlClient = getSql();
+    let registrationFee = 0;
+    let performanceFee = 0;
+    
+    // Check registration fee status for participants
+    if (participantIds.length > 0) {
+      // For groups, check each participant's registration status
+      for (const participantId of participantIds) {
+        try {
+          const registrationStatus = await this.getDancerRegistrationStatus(participantId);
+          if (!registrationStatus.registrationFeePaid) {
+            registrationFee += 300; // R300 per dancer who hasn't paid
+          }
+        } catch (error) {
+          // If dancer not found or error, assume they need to pay registration
+          registrationFee += 300;
+        }
+      }
+    } else {
+      // For single participant (solo), assume they need to pay if not specified
+      registrationFee = 300;
+    }
+    
+    // Calculate performance fees based on type
+    if (performanceType === 'Solo') {
+      // Solo fee structure - exactly as specified
+      switch (soloCount) {
+        case 1:
+          performanceFee = 400;
+          break;
+        case 2:
+          performanceFee = 750;
+          break;
+        case 3:
+          performanceFee = 1000;
+          break;
+        case 4:
+          performanceFee = 1200;
+          break;
+        case 5:
+          performanceFee = 1200; // 5th solo is FREE
+          break;
+        default:
+          // More than 5 solos: 1200 + (additional solos * 100)
+          performanceFee = 1200 + ((soloCount - 5) * 100);
+      }
+    } else if (performanceType === 'Duet' || performanceType === 'Trio') {
+      // Duos/trios - R280 per person
+      performanceFee = 280 * participantCount;
+    } else if (performanceType === 'Small Group') {
+      // Small groups (4-9) - R220 per person
+      performanceFee = 220 * participantCount;
+    } else if (performanceType === 'Large Group') {
+      // Large groups (10+) - R190 per person
+      performanceFee = 190 * participantCount;
+    } else if (performanceType === 'Group') {
+      // Legacy Group support - determine pricing based on participant count
+      if (participantCount >= 10) {
+        performanceFee = 190 * participantCount; // Large group pricing
+      } else {
+        performanceFee = 220 * participantCount; // Small group pricing
+      }
+    }
+    
+    return {
+      registrationFee,
+      performanceFee,
+      totalFee: registrationFee + performanceFee,
+      participantsNeedingRegistration: registrationFee / 300 // Number of participants who need to pay registration
+    };
+  },
+
+  // Create nationals event entry
+  async createNationalsEventEntry(entry: {
+    nationalsEventId: string;
+    contestantId: string;
+    eodsaId: string;
+    participantIds: string[];
+    calculatedFee: number;
+    paymentStatus: string;
+    paymentMethod?: string;
+    approved: boolean;
+    qualifiedForNationals: boolean;
+    itemNumber?: number;
+    itemName: string;
+    choreographer: string;
+    mastery: string;
+    itemStyle: string;
+    estimatedDuration: number;
+    performanceType: string;
+    ageCategory: string;
+    soloCount?: number;
+    soloDetails?: any;
+    additionalNotes?: string;
+  }) {
+    const sqlClient = getSql();
+    const id = `nationals-entry-${Date.now()}`;
+    const submittedAt = new Date().toISOString();
+    const createdAt = new Date().toISOString();
+    
+    // Create solo_details and additional_notes columns if they don't exist
+    try {
+      await sqlClient`ALTER TABLE nationals_event_entries ADD COLUMN IF NOT EXISTS solo_details TEXT`;
+      await sqlClient`ALTER TABLE nationals_event_entries ADD COLUMN IF NOT EXISTS additional_notes TEXT`;
+    } catch (error) {
+      // Columns may already exist
+    }
+    
+    await sqlClient`
+      INSERT INTO nationals_event_entries (
+        id, nationals_event_id, contestant_id, eodsa_id, participant_ids, 
+        calculated_fee, payment_status, payment_method, submitted_at, approved, 
+        qualified_for_nationals, item_number, item_name, choreographer, mastery, 
+        item_style, estimated_duration, created_at, performance_type, age_category, 
+        solo_count, solo_details, additional_notes
+      ) VALUES (
+        ${id}, ${entry.nationalsEventId}, ${entry.contestantId}, ${entry.eodsaId}, 
+        ${JSON.stringify(entry.participantIds)}, ${entry.calculatedFee}, 
+        ${entry.paymentStatus}, ${entry.paymentMethod || null}, ${submittedAt}, 
+        ${entry.approved}, ${entry.qualifiedForNationals}, ${entry.itemNumber || null}, 
+        ${entry.itemName}, ${entry.choreographer}, ${entry.mastery}, ${entry.itemStyle}, 
+        ${entry.estimatedDuration}, ${createdAt}, ${entry.performanceType}, ${entry.ageCategory}, 
+        ${entry.soloCount || 0}, ${entry.soloDetails ? JSON.stringify(entry.soloDetails) : null}, 
+        ${entry.additionalNotes || null}
+      )
+    `;
+    
+    return {
+      id,
+      ...entry,
+      submittedAt,
+      createdAt
+    };
+  },
+
+  // Get nationals event entries
+  async getAllNationalsEventEntries() {
+    const sqlClient = getSql();
+    const result = await sqlClient`
+      SELECT nee.*, ne.name as event_name, ne.event_date, ne.venue, c.name as contestant_name
+      FROM nationals_event_entries nee
+      JOIN nationals_events ne ON nee.nationals_event_id = ne.id
+      JOIN contestants c ON nee.contestant_id = c.id
+      ORDER BY nee.submitted_at DESC
+    ` as any[];
+    
+    return result.map((row: any) => ({
+      id: row.id,
+      nationalsEventId: row.nationals_event_id,
+      contestantId: row.contestant_id,
+      eodsaId: row.eodsa_id,
+      participantIds: JSON.parse(row.participant_ids),
+      calculatedFee: parseFloat(row.calculated_fee),
+      paymentStatus: row.payment_status,
+      paymentMethod: row.payment_method,
+      submittedAt: row.submitted_at,
+      approved: row.approved,
+      qualifiedForNationals: row.qualified_for_nationals,
+      itemNumber: row.item_number,
+      itemName: row.item_name,
+      choreographer: row.choreographer,
+      mastery: row.mastery,
+      itemStyle: row.item_style,
+      estimatedDuration: row.estimated_duration,
+      performanceType: row.performance_type,
+      ageCategory: row.age_category,
+      soloCount: row.solo_count || 0,
+      soloDetails: row.solo_details ? JSON.parse(row.solo_details) : null,
+      additionalNotes: row.additional_notes,
+      createdAt: row.created_at,
+      event: {
+        name: row.event_name,
+        eventDate: row.event_date,
+        venue: row.venue
+      },
+      contestantName: row.contestant_name
+    }));
+  },
+
+  // Update nationals event entry
+  async updateNationalsEventEntry(entryId: string, updates: { approved?: boolean }) {
+    const sqlClient = getSql();
+    
+    if (updates.approved !== undefined) {
+      await sqlClient`
+        UPDATE nationals_event_entries 
+        SET approved = ${updates.approved}
+        WHERE id = ${entryId}
+      `;
+    }
+    
+    // Return the updated entry
+    const result = await sqlClient`
+      SELECT nee.*, ne.name as event_name, ne.event_date, ne.venue, c.name as contestant_name
+      FROM nationals_event_entries nee
+      JOIN nationals_events ne ON nee.nationals_event_id = ne.id
+      JOIN contestants c ON nee.contestant_id = c.id
+      WHERE nee.id = ${entryId}
+    ` as any[];
+    
+    if (result.length === 0) return null;
+    
+    const row = result[0];
+    return {
+      id: row.id,
+      nationalsEventId: row.nationals_event_id,
+      contestantId: row.contestant_id,
+      eodsaId: row.eodsa_id,
+      participantIds: JSON.parse(row.participant_ids),
+      calculatedFee: parseFloat(row.calculated_fee),
+      paymentStatus: row.payment_status,
+      paymentMethod: row.payment_method,
+      submittedAt: row.submitted_at,
+      approved: row.approved,
+      qualifiedForNationals: row.qualified_for_nationals,
+      itemNumber: row.item_number,
+      itemName: row.item_name,
+      choreographer: row.choreographer,
+      mastery: row.mastery,
+      itemStyle: row.item_style,
+      estimatedDuration: row.estimated_duration,
+      performanceType: row.performance_type,
+      ageCategory: row.age_category,
+      createdAt: row.created_at,
+      event: {
+        name: row.event_name,
+        eventDate: row.event_date,
+        venue: row.venue
+      },
+      contestantName: row.contestant_name
+    };
+  },
+
+  // Update nationals event statuses
+  async updateNationalsEventStatuses() {
+    const sqlClient = getSql();
+    const now = new Date().toISOString();
+    
+    await sqlClient`
+      UPDATE nationals_events 
+      SET status = CASE 
+        WHEN registration_deadline > ${now} THEN 'registration_open'
+        WHEN event_date > ${now} THEN 'registration_closed'
+        ELSE 'completed'
+      END
+      WHERE status != 'completed'
+    `;
   }
 };
 
@@ -2983,10 +3569,181 @@ export const unifiedDb = {
       await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid_at TEXT`;
       await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_mastery_level TEXT`;
       
+      // Add solo count column to nationals entries table
+      await sqlClient`ALTER TABLE nationals_event_entries ADD COLUMN IF NOT EXISTS solo_count INTEGER DEFAULT 0`;
+      
       console.log('✅ Added registration fee tracking columns to dancers table');
+      console.log('✅ Added solo_count column to nationals_event_entries table');
     } catch (error) {
       console.log('Registration fee columns may already exist:', error);
     }
+  },
+
+  // 🏆 NATIONALS FUNCTIONS
+  
+  // Create nationals event
+  async createNationalsEvent(event: {
+    name: string;
+    description?: string;
+    eventDate: string;
+    eventEndDate?: string;
+    registrationDeadline: string;
+    venue: string;
+    maxParticipants?: number;
+    createdBy: string;
+  }) {
+    return await db.createNationalsEvent(event);
+  },
+
+  // Get all nationals events
+  async getAllNationalsEvents() {
+    return await db.getAllNationalsEvents();
+  },
+
+  // Get nationals event by ID
+  async getNationalsEventById(eventId: string) {
+    return await db.getNationalsEventById(eventId);
+  },
+
+  // Create nationals judge assignment
+  async createNationalsJudgeAssignment(assignment: {
+    judgeId: string;
+    nationalsEventId: string;
+    assignedBy: string;
+  }) {
+    return await db.createNationalsJudgeAssignment(assignment);
+  },
+
+  // Get nationals judge assignments
+  async getNationalsJudgeAssignments(judgeId: string) {
+    return await db.getNationalsJudgeAssignments(judgeId);
+  },
+
+  // Calculate nationals fee
+  async calculateNationalsFee(performanceType: string, soloCount: number = 1, participantCount: number = 1, participantIds: string[] = []) {
+    const sqlClient = getSql();
+    let registrationFee = 0;
+    let performanceFee = 0;
+    
+    // Check registration fee status for participants
+    if (participantIds.length > 0) {
+      // For groups, check each participant's registration status
+      for (const participantId of participantIds) {
+        try {
+          const registrationStatus = await this.getDancerRegistrationStatus(participantId);
+          if (!registrationStatus.registrationFeePaid) {
+            registrationFee += 300; // R300 per dancer who hasn't paid
+          }
+        } catch (error) {
+          // If dancer not found or error, assume they need to pay registration
+          registrationFee += 300;
+        }
+      }
+    } else {
+      // For single participant (solo), assume they need to pay if not specified
+      registrationFee = 300;
+    }
+    
+    // Calculate performance fees based on type
+    if (performanceType === 'Solo') {
+      // Solo fee structure - exactly as specified
+      switch (soloCount) {
+        case 1:
+          performanceFee = 400;
+          break;
+        case 2:
+          performanceFee = 750;
+          break;
+        case 3:
+          performanceFee = 1000;
+          break;
+        case 4:
+          performanceFee = 1200;
+          break;
+        case 5:
+          performanceFee = 1200; // 5th solo is FREE
+          break;
+        default:
+          // More than 5 solos: 1200 + (additional solos * 100)
+          performanceFee = 1200 + ((soloCount - 5) * 100);
+      }
+    } else if (performanceType === 'Duet' || performanceType === 'Trio') {
+      // Duos/trios - R280 per person
+      performanceFee = 280 * participantCount;
+    } else if (performanceType === 'Small Group') {
+      // Small groups (4-9) - R220 per person
+      performanceFee = 220 * participantCount;
+    } else if (performanceType === 'Large Group') {
+      // Large groups (10+) - R190 per person
+      performanceFee = 190 * participantCount;
+    } else if (performanceType === 'Group') {
+      // Legacy Group support - determine pricing based on participant count
+      if (participantCount >= 10) {
+        performanceFee = 190 * participantCount; // Large group pricing
+      } else {
+        performanceFee = 220 * participantCount; // Small group pricing
+      }
+    }
+    
+    return {
+      registrationFee,
+      performanceFee,
+      totalFee: registrationFee + performanceFee,
+      participantsNeedingRegistration: registrationFee / 300 // Number of participants who need to pay registration
+    };
+  },
+
+  // Create nationals event entry
+  async createNationalsEventEntry(entry: {
+    nationalsEventId: string;
+    contestantId: string;
+    eodsaId: string;
+    participantIds: string[];
+    calculatedFee: number;
+    paymentStatus: string;
+    paymentMethod?: string;
+    approved: boolean;
+    qualifiedForNationals: boolean;
+    itemNumber?: number;
+    itemName: string;
+    choreographer: string;
+    mastery: string;
+    itemStyle: string;
+    estimatedDuration: number;
+    performanceType: string;
+    ageCategory: string;
+    soloCount?: number;
+    soloDetails?: any;
+    additionalNotes?: string;
+  }) {
+    return await db.createNationalsEventEntry(entry);
+  },
+
+  // Get all nationals event entries
+  async getAllNationalsEventEntries() {
+    return await db.getAllNationalsEventEntries();
+  },
+
+  // Update nationals event statuses
+  async updateNationalsEventStatuses() {
+    return await db.updateNationalsEventStatuses();
+  },
+
+  // 🏆 ADDITIONAL NATIONALS HELPER FUNCTIONS
+
+  // Get nationals judge assignments by event
+  async getNationalsJudgeAssignmentsByEvent(eventId: string) {
+    return await db.getNationalsJudgeAssignmentsByEvent(eventId);
+  },
+
+  // Get judge count for nationals event
+  async getNationalsEventJudgeCount(eventId: string) {
+    return await db.getNationalsEventJudgeCount(eventId);
+  },
+
+  // Remove judge assignment from nationals event
+  async removeNationalsJudgeAssignment(assignmentId: string) {
+    return await db.removeNationalsJudgeAssignment(assignmentId);
   }
 };
 

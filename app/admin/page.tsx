@@ -1115,6 +1115,13 @@ export default function AdminDashboard() {
                 <span className="text-sm sm:text-base">📊</span>
                 <span className="font-medium">Rankings</span>
               </Link>
+              <Link 
+                href="/admin/nationals"
+                className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg sm:rounded-xl hover:from-yellow-600 hover:to-orange-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
+              >
+                <span className="text-sm sm:text-base">🏆</span>
+                <span className="font-medium">Nationals</span>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-lg sm:rounded-xl hover:from-red-600 hover:to-pink-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
