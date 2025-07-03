@@ -206,21 +206,11 @@ export const db = {
     const id = Date.now().toString();
     const eodsaId = generateEODSAId();
     const registrationDate = new Date().toISOString();
-    const privacyPolicyAcceptedAt = contestant.privacyPolicyAccepted ? new Date().toISOString() : null;
     
     await sqlClient`
-      INSERT INTO contestants (id, eodsa_id, name, email, phone, type, date_of_birth, 
-                              guardian_name, guardian_email, guardian_cell, 
-                              privacy_policy_accepted, privacy_policy_accepted_at,
-                              studio_name, studio_address, studio_contact_person, 
-                              studio_registration_number, registration_date)
+      INSERT INTO contestants (id, eodsa_id, name, email, phone, type, date_of_birth, registration_date)
       VALUES (${id}, ${eodsaId}, ${contestant.name}, ${contestant.email}, ${contestant.phone}, 
-              ${contestant.type}, ${contestant.dateOfBirth},
-              ${contestant.guardianInfo?.name || null}, ${contestant.guardianInfo?.email || null}, 
-              ${contestant.guardianInfo?.cell || null}, ${contestant.privacyPolicyAccepted}, 
-              ${privacyPolicyAcceptedAt}, ${contestant.studioName || null}, 
-              ${contestant.studioInfo?.address || null}, ${contestant.studioInfo?.contactPerson || null},
-              ${contestant.studioInfo?.registrationNumber || null}, ${registrationDate})
+              ${contestant.type}, ${contestant.dateOfBirth}, ${registrationDate})
     `;
     
     // Insert dancers with date of birth
@@ -238,7 +228,7 @@ export const db = {
       eodsaId, 
       registrationDate, 
       eventEntries: [],
-      privacyPolicyAcceptedAt
+      privacyPolicyAcceptedAt: registrationDate
     };
   },
 
@@ -259,19 +249,63 @@ export const db = {
       phone: contestant.phone,
       type: contestant.type,
       dateOfBirth: contestant.date_of_birth,
-      guardianInfo: contestant.guardian_name ? {
-        name: contestant.guardian_name,
-        email: contestant.guardian_email,
-        cell: contestant.guardian_cell
-      } : undefined,
-      privacyPolicyAccepted: contestant.privacy_policy_accepted,
-      privacyPolicyAcceptedAt: contestant.privacy_policy_accepted_at,
-      studioName: contestant.studio_name,
-      studioInfo: contestant.studio_address ? {
-        address: contestant.studio_address,
-        contactPerson: contestant.studio_contact_person,
-        registrationNumber: contestant.studio_registration_number
-      } : undefined,
+      guardianInfo: undefined, // Guardian info not stored in contestants table
+      privacyPolicyAccepted: true, // Default to true for created contestants
+      privacyPolicyAcceptedAt: contestant.registration_date, // Use registration date
+      studioName: undefined, // Studio info not stored in contestants table
+      studioInfo: undefined, // Studio info not stored in contestants table
+      dancers: dancers.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        age: d.age,
+        dateOfBirth: d.date_of_birth,
+        style: d.national_id,
+        nationalId: d.national_id
+      })),
+      registrationDate: contestant.registration_date,
+      eventEntries: eventEntries.map((e: any) => ({
+        id: e.id,
+        eventId: e.event_id,
+        contestantId: e.contestant_id,
+        eodsaId: e.eodsa_id,
+        participantIds: JSON.parse(e.participant_ids),
+        calculatedFee: parseFloat(e.calculated_fee),
+        paymentStatus: e.payment_status,
+        paymentMethod: e.payment_method,
+        submittedAt: e.submitted_at,
+        approved: e.approved,
+        itemNumber: e.item_number,
+        itemName: e.item_name,
+        choreographer: e.choreographer,
+        mastery: e.mastery,
+        itemStyle: e.item_style,
+        estimatedDuration: e.estimated_duration
+      }))
+    } as Contestant;
+  },
+
+  async getContestantByEmail(email: string) {
+    const sqlClient = getSql();
+    const result = await sqlClient`SELECT * FROM contestants WHERE email = ${email}` as any[];
+    if (result.length === 0) return null;
+    
+    const contestant = result[0];
+    const dancers = await sqlClient`SELECT * FROM dancers WHERE eodsa_id = ${contestant.eodsa_id}` as any[];
+    const eventEntries = await sqlClient`SELECT * FROM event_entries WHERE contestant_id = ${contestant.id}` as any[];
+    
+    return {
+      id: contestant.id,
+      eodsaId: contestant.eodsa_id,
+      name: contestant.name,
+      email: contestant.email,
+      phone: contestant.phone,
+      type: contestant.type,
+      dateOfBirth: contestant.date_of_birth,
+      guardianInfo: undefined, // Guardian info not stored in contestants table
+      privacyPolicyAccepted: true, // Default to true for created contestants
+      privacyPolicyAcceptedAt: contestant.registration_date, // Use registration date
+      studioName: undefined, // Studio info not stored in contestants table
+      studioInfo: undefined, // Studio info not stored in contestants table
       dancers: dancers.map((d: any) => ({
         id: d.id,
         name: d.name,
@@ -313,19 +347,11 @@ export const db = {
       phone: row.phone,
       type: row.type,
       dateOfBirth: row.date_of_birth,
-      guardianInfo: row.guardian_name ? {
-        name: row.guardian_name,
-        email: row.guardian_email,
-        cell: row.guardian_cell
-      } : undefined,
-      privacyPolicyAccepted: row.privacy_policy_accepted,
-      privacyPolicyAcceptedAt: row.privacy_policy_accepted_at,
-      studioName: row.studio_name,
-      studioInfo: row.studio_address ? {
-        address: row.studio_address,
-        contactPerson: row.studio_contact_person,
-        registrationNumber: row.studio_registration_number
-      } : undefined,
+      guardianInfo: undefined, // Guardian info not stored in contestants table
+      privacyPolicyAccepted: true, // Default to true for created contestants
+      privacyPolicyAcceptedAt: row.registration_date, // Use registration date
+      studioName: undefined, // Studio info not stored in contestants table
+      studioInfo: undefined, // Studio info not stored in contestants table
       dancers: [], // Will be loaded separately if needed
       registrationDate: row.registration_date,
       eventEntries: []
@@ -2025,18 +2051,12 @@ export const db = {
     } else if (performanceType === 'Duet' || performanceType === 'Trio') {
       // Duos/trios - R280 per person
       performanceFee = 280 * participantCount;
-    } else if (performanceType === 'Small Group') {
-      // Small groups (4-9) - R220 per person
-      performanceFee = 220 * participantCount;
-    } else if (performanceType === 'Large Group') {
-      // Large groups (10+) - R190 per person
-      performanceFee = 190 * participantCount;
     } else if (performanceType === 'Group') {
-      // Legacy Group support - determine pricing based on participant count
+      // Group pricing - determine pricing based on participant count
       if (participantCount >= 10) {
-        performanceFee = 190 * participantCount; // Large group pricing
+        performanceFee = 190 * participantCount; // Large group pricing (10+)
       } else {
-        performanceFee = 220 * participantCount; // Small group pricing
+        performanceFee = 220 * participantCount; // Small group pricing (4-9)
       }
     }
     
@@ -2156,9 +2176,20 @@ export const db = {
   },
 
   // Update nationals event entry
-  async updateNationalsEventEntry(entryId: string, updates: { approved?: boolean }) {
+  async updateNationalsEventEntry(entryId: string, updates: { approved?: boolean; itemNumber?: number }) {
     const sqlClient = getSql();
     
+    // First verify the entry exists
+    const existingEntry = await sqlClient`
+      SELECT id FROM nationals_event_entries WHERE id = ${entryId}
+    ` as any[];
+    
+    if (existingEntry.length === 0) {
+      console.log(`⚠️  Nationals event entry ${entryId} not found`);
+      return null;
+    }
+
+    // Update the entry
     if (updates.approved !== undefined) {
       await sqlClient`
         UPDATE nationals_event_entries 
@@ -2167,49 +2198,85 @@ export const db = {
       `;
     }
     
-    // Return the updated entry
-    const result = await sqlClient`
-      SELECT nee.*, ne.name as event_name, ne.event_date, ne.venue, c.name as contestant_name
-      FROM nationals_event_entries nee
-      JOIN nationals_events ne ON nee.nationals_event_id = ne.id
-      JOIN contestants c ON nee.contestant_id = c.id
-      WHERE nee.id = ${entryId}
+    if (updates.itemNumber !== undefined) {
+      await sqlClient`
+        UPDATE nationals_event_entries 
+        SET item_number = ${updates.itemNumber}
+        WHERE id = ${entryId}
+      `;
+    }
+
+    // Get the updated entry
+    const updatedEntry = await sqlClient`
+      SELECT * FROM nationals_event_entries WHERE id = ${entryId}
     ` as any[];
     
-    if (result.length === 0) return null;
+    if (updatedEntry.length === 0) {
+      console.log(`⚠️  Failed to retrieve updated nationals event entry ${entryId}`);
+      return null;
+    }
     
-    const row = result[0];
+    const entry = updatedEntry[0];
+    console.log(`✅ Nationals event entry ${entryId} updated successfully`);
+    
     return {
-      id: row.id,
-      nationalsEventId: row.nationals_event_id,
-      contestantId: row.contestant_id,
-      eodsaId: row.eodsa_id,
-      participantIds: JSON.parse(row.participant_ids),
-      calculatedFee: parseFloat(row.calculated_fee),
-      paymentStatus: row.payment_status,
-      paymentMethod: row.payment_method,
-      submittedAt: row.submitted_at,
-      approved: row.approved,
-      qualifiedForNationals: row.qualified_for_nationals,
-      itemNumber: row.item_number,
-      itemName: row.item_name,
-      choreographer: row.choreographer,
-      mastery: row.mastery,
-      itemStyle: row.item_style,
-      estimatedDuration: row.estimated_duration,
-      performanceType: row.performance_type,
-      ageCategory: row.age_category,
-      createdAt: row.created_at,
-      event: {
-        name: row.event_name,
-        eventDate: row.event_date,
-        venue: row.venue
-      },
-      contestantName: row.contestant_name
+      id: entry.id,
+      nationalsEventId: entry.nationals_event_id,
+      contestantId: entry.contestant_id,
+      eodsaId: entry.eodsa_id,
+      approved: entry.approved,
+      itemNumber: entry.item_number,
+      calculatedFee: parseFloat(entry.calculated_fee),
+      paymentStatus: entry.payment_status,
+      submittedAt: entry.submitted_at
     };
   },
 
-  // Update nationals event statuses
+  async updateNationalsEventPayment(entryId: string, paymentStatus: string) {
+    const sqlClient = getSql();
+    
+    // First verify the entry exists
+    const existingEntry = await sqlClient`
+      SELECT id FROM nationals_event_entries WHERE id = ${entryId}
+    ` as any[];
+    
+    if (existingEntry.length === 0) {
+      console.log(`⚠️  Nationals event entry ${entryId} not found`);
+      return null;
+    }
+
+    // Update the payment status
+    await sqlClient`
+      UPDATE nationals_event_entries 
+      SET payment_status = ${paymentStatus}
+      WHERE id = ${entryId}
+    `;
+
+    // Get the updated entry
+    const updatedEntry = await sqlClient`
+      SELECT * FROM nationals_event_entries WHERE id = ${entryId}
+    ` as any[];
+
+    if (updatedEntry.length === 0) {
+      console.log(`⚠️  Failed to retrieve updated nationals event entry ${entryId}`);
+      return null;
+    }
+
+    const entry = updatedEntry[0];
+    console.log(`✅ Payment status for nationals event entry ${entryId} updated to ${paymentStatus}`);
+    
+    return {
+      id: entry.id,
+      nationalsEventId: entry.nationals_event_id,
+      contestantId: entry.contestant_id,
+      eodsaId: entry.eodsa_id,
+      approved: entry.approved,
+      calculatedFee: parseFloat(entry.calculated_fee),
+      paymentStatus: entry.payment_status,
+      submittedAt: entry.submitted_at
+    };
+  },
+
   async updateNationalsEventStatuses() {
     const sqlClient = getSql();
     const now = new Date().toISOString();
@@ -3670,18 +3737,12 @@ export const unifiedDb = {
     } else if (performanceType === 'Duet' || performanceType === 'Trio') {
       // Duos/trios - R280 per person
       performanceFee = 280 * participantCount;
-    } else if (performanceType === 'Small Group') {
-      // Small groups (4-9) - R220 per person
-      performanceFee = 220 * participantCount;
-    } else if (performanceType === 'Large Group') {
-      // Large groups (10+) - R190 per person
-      performanceFee = 190 * participantCount;
     } else if (performanceType === 'Group') {
-      // Legacy Group support - determine pricing based on participant count
+      // Group pricing - determine pricing based on participant count
       if (participantCount >= 10) {
-        performanceFee = 190 * participantCount; // Large group pricing
+        performanceFee = 190 * participantCount; // Large group pricing (10+)
       } else {
-        performanceFee = 220 * participantCount; // Small group pricing
+        performanceFee = 220 * participantCount; // Small group pricing (4-9)
       }
     }
     

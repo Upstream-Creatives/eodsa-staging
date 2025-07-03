@@ -58,7 +58,7 @@ export default function NationalsRegistration() {
   // For group performances (duet, trio, groups)
   const [participantEodsaIds, setParticipantEodsaIds] = useState<string[]>(['']);
   
-  // For Small Group and Large Group - allow user to specify exact count
+  // For Group - allow user to specify exact count
   const [groupMemberCount, setGroupMemberCount] = useState<number | null>(null);
 
   // For Solo performances - allow user to specify number of solos
@@ -246,7 +246,7 @@ export default function NationalsRegistration() {
   useEffect(() => {
     if (performanceType) {
       // Reset group member count when performance type changes
-      if (performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group') {
+      if (performanceType === 'Group') {
         setGroupMemberCount(null);
         setParticipantEodsaIds(['']); // Start with one empty field until count is selected
       } else {
@@ -266,7 +266,7 @@ export default function NationalsRegistration() {
 
   // Update participant EODSA IDs when group member count changes
   useEffect(() => {
-    if (groupMemberCount !== null && (performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group')) {
+    if (groupMemberCount !== null && performanceType === 'Group') {
       setParticipantEodsaIds(Array(groupMemberCount).fill(''));
     }
   }, [groupMemberCount, performanceType]);
@@ -327,20 +327,8 @@ export default function NationalsRegistration() {
       case 'Solo': return { min: 1, max: 1 };
       case 'Duet': return { min: 2, max: 2 };
       case 'Trio': return { min: 3, max: 3 };
-      case 'Small Group': 
-        // Use user-specified count if available, otherwise return range
-        if (groupMemberCount !== null) {
-          return { min: groupMemberCount, max: groupMemberCount };
-        }
-        return { min: 4, max: 9 };
-      case 'Large Group': 
-        // Use user-specified count if available, otherwise return range
-        if (groupMemberCount !== null) {
-          return { min: groupMemberCount, max: groupMemberCount };
-        }
-        return { min: 10, max: 50 };
       case 'Group': 
-        // Legacy support for old "Group" events - treat as variable size group
+        // Use user-specified count if available, otherwise return range
         if (groupMemberCount !== null) {
           return { min: groupMemberCount, max: groupMemberCount };
         }
@@ -438,7 +426,7 @@ export default function NationalsRegistration() {
       }
     } else {
       // Check if group member count is selected for groups
-      if ((performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group') && groupMemberCount === null) {
+      if (performanceType === 'Group' && groupMemberCount === null) {
         error(`Please select the number of members for your ${performanceType.toLowerCase()}.`);
         return;
       }
@@ -577,6 +565,80 @@ export default function NationalsRegistration() {
         }
       }
 
+      // Find or create the correct contestant record for the primary dancer
+      let contestantId = primaryDancer.id;
+      
+      // Try to find the contestant record by EODSA ID first
+      try {
+        const contestantResponse = await fetch(`/api/contestants/by-eodsa-id/${primaryDancer.eodsaId}`);
+        if (contestantResponse.ok) {
+          const contestantData = await contestantResponse.json();
+          if (contestantData && contestantData.id) {
+            contestantId = contestantData.id;
+            console.log('Found existing contestant by EODSA ID:', contestantId);
+          }
+        } else {
+          // EODSA ID not found, try by email
+          console.log('Contestant not found by EODSA ID, trying by email:', primaryDancer.email);
+          const emailResponse = await fetch(`/api/contestants/by-email/${encodeURIComponent(primaryDancer.email || '')}`);
+          if (emailResponse.ok) {
+            const emailData = await emailResponse.json();
+            if (emailData && emailData.id) {
+              contestantId = emailData.id;
+              console.log('Found existing contestant by email:', contestantId);
+            }
+          } else {
+            // No contestant found, create one for this dancer
+            console.log('Creating new contestant record for dancer:', primaryDancer.name);
+            
+            // Check if guardian info is required (dancer under 18)
+            const dancerAge = primaryDancer.age;
+            const guardianInfo = dancerAge < 18 && primaryDancer.guardianName ? {
+              name: primaryDancer.guardianName,
+              email: primaryDancer.guardianEmail || '',
+              cell: primaryDancer.guardianPhone || ''
+            } : undefined;
+            
+            const newContestantResponse = await fetch('/api/contestants', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name: primaryDancer.name,
+                email: primaryDancer.email || '',
+                phone: primaryDancer.phone || '',
+                type: 'private',
+                dateOfBirth: primaryDancer.dateOfBirth,
+                privacyPolicyAccepted: true,
+                guardianInfo: guardianInfo,
+                dancers: [{
+                  name: primaryDancer.name,
+                  age: primaryDancer.age,
+                  style: 'Dance',
+                  nationalId: primaryDancer.nationalId,
+                  dateOfBirth: primaryDancer.dateOfBirth
+                }]
+              }),
+            });
+            
+            if (newContestantResponse.ok) {
+              const newContestantData = await newContestantResponse.json();
+              contestantId = newContestantData.contestant.id;
+              console.log('Created new contestant with ID:', contestantId);
+            } else {
+              // Log the error details
+              const errorData = await newContestantResponse.json();
+              console.error('Failed to create contestant:', errorData);
+              throw new Error(`Failed to create contestant: ${errorData.error || 'Unknown error'}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error finding or creating contestant:', error);
+        throw new Error(`Could not find or create contestant record: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
       // Create the registration entry
       const registrationResponse = await fetch('/api/nationals/event-entries', {
         method: 'POST',
@@ -585,7 +647,7 @@ export default function NationalsRegistration() {
         },
         body: JSON.stringify({
           nationalsEventId: selectedEvent,
-          contestantId: primaryDancer.id,
+          contestantId: contestantId,
           eodsaId: registrationData.eodsaId,
           participantIds: allParticipantIds,
           calculatedFee: registrationFee + calculatedFee,
@@ -856,7 +918,7 @@ export default function NationalsRegistration() {
               ) : (
                 <div className="space-y-4">
                   {/* Group Member Count Selector */}
-                  {(performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group') && (
+                  {performanceType === 'Group' && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         How many members will be in your {performanceType.toLowerCase()}? *
@@ -868,16 +930,6 @@ export default function NationalsRegistration() {
                         required
                       >
                         <option value="">Select number of members</option>
-                        {performanceType === 'Small Group' && 
-                          Array.from({length: 6}, (_, i) => i + 4).map(num => (
-                            <option key={num} value={num}>{num} members</option>
-                          ))
-                        }
-                        {performanceType === 'Large Group' && 
-                          Array.from({length: 21}, (_, i) => i + 10).map(num => (
-                            <option key={num} value={num}>{num} members</option>
-                          ))
-                        }
                         {performanceType === 'Group' && 
                           Array.from({length: 47}, (_, i) => i + 4).map(num => (
                             <option key={num} value={num}>{num} members</option>
@@ -895,20 +947,20 @@ export default function NationalsRegistration() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">
                       Participants ({(() => {
-                        if (performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group') {
+                        if (performanceType === 'Group') {
                           return groupMemberCount ? participantEodsaIds.length : 0;
                         }
                         return participantEodsaIds.length;
                       })()}/{(() => {
                         const expectedCount = getExpectedParticipantCount(performanceType);
-                        if (performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group') {
+                        if (performanceType === 'Group') {
                           return groupMemberCount ? groupMemberCount : `${expectedCount.min}-${expectedCount.max}`;
                         }
                         return expectedCount.min === expectedCount.max ? expectedCount.min : `${expectedCount.min}-${expectedCount.max}`;
                       })()})
                     </h3>
                     {participantEodsaIds.length < getExpectedParticipantCount(performanceType).max && 
-                     !(performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group') && (
+                     performanceType !== 'Group' && (
                       <button
                         type="button"
                         onClick={addParticipant}
@@ -973,7 +1025,7 @@ export default function NationalsRegistration() {
                          )}
                       </div>
                       {participantEodsaIds.length > 1 && 
-                       !(performanceType === 'Small Group' || performanceType === 'Large Group' || performanceType === 'Group') && (
+                       performanceType !== 'Group' && (
                         <button
                           type="button"
                           onClick={() => removeParticipant(index)}
@@ -1373,7 +1425,7 @@ export default function NationalsRegistration() {
                     </div>
                   )}
                   
-                  {(performanceType === 'Small Group' || performanceType === 'Large Group') && (
+                  {performanceType === 'Group' && (
                     <div className="text-xs text-yellow-700 italic">
                       • Group pricing: Small (4-9): R220pp • Large (10+): R190pp
                     </div>

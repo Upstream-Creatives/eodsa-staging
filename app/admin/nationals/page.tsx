@@ -84,6 +84,18 @@ export default function NationalsAdminDashboard() {
   const { showAlert, showConfirm, showPrompt } = useAlert();
   const router = useRouter();
   
+  // Entry details modal state
+  const [selectedEntry, setSelectedEntry] = useState<NationalsEventEntry | null>(null);
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  
+  // Item assignment state
+  const [assigningItemNumbers, setAssigningItemNumbers] = useState<Set<string>>(new Set());
+  const [editingItemNumber, setEditingItemNumber] = useState<string | null>(null);
+  const [tempItemNumber, setTempItemNumber] = useState<string>('');
+  
+  // Performance type grouping state
+  const [groupByPerformanceType, setGroupByPerformanceType] = useState(true);
+  
   // Event creation state
   const [newEvent, setNewEvent] = useState({
     name: '',
@@ -415,20 +427,125 @@ export default function NationalsAdminDashboard() {
 
       if (response.ok) {
         success('Entry unapproved successfully!');
-        fetchData(); // Refresh the data
+        fetchData();
       } else {
-        const errorData = await response.json();
-        error(errorData.error || 'Failed to unapprove entry');
+        const result = await response.json();
+        throw new Error(result.error || 'Failed to unapprove entry');
       }
     } catch (err) {
       console.error('Error unapproving entry:', err);
-      error('Failed to unapprove entry');
+      error(err instanceof Error ? err.message : 'Failed to unapprove entry');
     }
+  };
+
+  const handleApprovePayment = async (entryId: string) => {
+    try {
+      const response = await fetch(`/api/nationals/event-entries/${entryId}/payment`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentStatus: 'paid'
+        }),
+      });
+
+      if (response.ok) {
+        success('Payment approved successfully!');
+        fetchData();
+      } else {
+        const result = await response.json();
+        throw new Error(result.error || 'Failed to approve payment');
+      }
+    } catch (err) {
+      console.error('Error approving payment:', err);
+      error(err instanceof Error ? err.message : 'Failed to approve payment');
+    }
+  };
+
+  const assignItemNumber = async (entryId: string, itemNumber: number) => {
+    if (assigningItemNumbers.has(entryId)) return;
+
+    setAssigningItemNumbers(prev => new Set(prev).add(entryId));
+
+    try {
+      const response = await fetch(`/api/nationals/event-entries/${entryId}/assign-item-number`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ itemNumber }),
+      });
+
+      if (response.ok) {
+        success('Item number assigned successfully!');
+        setEditingItemNumber(null);
+        setTempItemNumber('');
+        fetchData();
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to assign item number');
+      }
+    } catch (error: any) {
+      console.error('Error assigning item number:', error);
+      throw new Error(error.message || 'Failed to assign item number');
+    } finally {
+      setAssigningItemNumbers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entryId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleItemNumberEdit = (entryId: string, currentNumber?: number) => {
+    setEditingItemNumber(entryId);
+    setTempItemNumber(currentNumber ? currentNumber.toString() : '');
+  };
+
+  const handleItemNumberSave = (entryId: string) => {
+    const itemNumber = parseInt(tempItemNumber);
+    if (isNaN(itemNumber) || itemNumber < 1) {
+      warning('Please enter a valid item number (positive integer)');
+      return;
+    }
+    assignItemNumber(entryId, itemNumber);
+  };
+
+  const handleItemNumberCancel = () => {
+    setEditingItemNumber(null);
+    setTempItemNumber('');
   };
 
   const handleLogout = () => {
     localStorage.removeItem('adminSession');
-    router.push('/');
+    router.push('/portal/admin');
+  };
+
+  // Group entries by performance type
+  const groupEntriesByPerformanceType = (entries: NationalsEventEntry[]) => {
+    const groups = entries.reduce((acc, entry) => {
+      const type = entry.performanceType;
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(entry);
+      return acc;
+    }, {} as Record<string, NationalsEventEntry[]>);
+
+    // Sort each group by item number (assigned items first, then by number, then unassigned)
+    Object.keys(groups).forEach(type => {
+      groups[type].sort((a, b) => {
+        if (a.itemNumber && b.itemNumber) {
+          return a.itemNumber - b.itemNumber;
+        }
+        if (a.itemNumber && !b.itemNumber) return -1;
+        if (!a.itemNumber && b.itemNumber) return 1;
+        return 0;
+      });
+    });
+
+    return groups;
   };
 
   if (isLoading) {
@@ -721,7 +838,20 @@ export default function NationalsAdminDashboard() {
           {/* Entries Tab */}
           {activeTab === 'entries' && (
             <div className="space-y-6">
+              <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">Nationals Event Entries</h2>
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={groupByPerformanceType}
+                      onChange={(e) => setGroupByPerformanceType(e.target.checked)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-700">Group by Performance Type</span>
+                  </label>
+                </div>
+              </div>
 
               {nationalsEntries.length === 0 ? (
                 <div className="text-center py-12 bg-white/80 rounded-2xl shadow-lg">
@@ -729,12 +859,27 @@ export default function NationalsAdminDashboard() {
                   <p className="text-gray-500 text-lg">No nationals entries yet</p>
                   <p className="text-gray-400 text-sm mt-2">Entries will appear here once dancers register for nationals events</p>
                 </div>
-              ) : (
-                <div className="bg-white/90 rounded-2xl shadow-lg overflow-hidden">
+              ) : groupByPerformanceType ? (
+                <div className="space-y-8">
+                  {Object.entries(groupEntriesByPerformanceType(nationalsEntries)).map(([performanceType, entries]) => (
+                    <div key={performanceType} className="bg-white/90 rounded-2xl shadow-lg overflow-hidden">
+                      <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4">
+                        <h3 className="text-xl font-bold flex items-center">
+                          <span className="text-2xl mr-3">
+                            {performanceType === 'Solo' ? '👤' : 
+                             performanceType === 'Duet' ? '👥' : 
+                             performanceType === 'Trio' ? '👨‍👩‍👧' : '👨‍👩‍👧‍👦'}
+                          </span>
+                          {performanceType} ({entries.length} entries)
+                        </h3>
+                      </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-gray-50/80">
                         <tr>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Item #
+                              </th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Contestant
                           </th>
@@ -748,7 +893,10 @@ export default function NationalsAdminDashboard() {
                             Fee
                           </th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                            Status
+                                Approval
+                              </th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Payment
                           </th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Actions
@@ -756,8 +904,46 @@ export default function NationalsAdminDashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {nationalsEntries.map((entry) => (
+                            {entries.map((entry) => (
                           <tr key={entry.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {editingItemNumber === entry.id ? (
+                                    <div className="flex items-center space-x-2">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={tempItemNumber}
+                                        onChange={(e) => setTempItemNumber(e.target.value)}
+                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleItemNumberSave(entry.id);
+                                          if (e.key === 'Escape') handleItemNumberCancel();
+                                        }}
+                                        autoFocus
+                                      />
+                                      <button
+                                        onClick={() => handleItemNumberSave(entry.id)}
+                                        disabled={assigningItemNumbers.has(entry.id)}
+                                        className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                      >
+                                        {assigningItemNumbers.has(entry.id) ? '...' : '✓'}
+                                      </button>
+                                      <button
+                                        onClick={handleItemNumberCancel}
+                                        className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleItemNumberEdit(entry.id, entry.itemNumber)}
+                                      className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                                    >
+                                      {entry.itemNumber || 'Click to assign'}
+                                    </button>
+                                  )}
+                                </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div>
                                 <div className="text-sm font-medium text-gray-900">{entry.contestantName}</div>
@@ -771,23 +957,168 @@ export default function NationalsAdminDashboard() {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">{entry.itemName}</div>
                               <div className="text-sm text-gray-500">
-                                {entry.performanceType === 'Solo' && entry.soloCount > 1 && entry.soloDetails ? (
-                                  <div>
-                                    <div className="font-medium">{entry.performanceType} ({entry.soloCount} solos) • {entry.ageCategory}</div>
-                                    {entry.soloDetails.type === 'multiple' && entry.soloDetails.details && (
-                                      <div className="mt-1 text-xs bg-gray-100 rounded p-2">
-                                        <div className="font-medium text-gray-700 mb-1">Solo Details:</div>
-                                        {entry.soloDetails.details.map((solo: any, index: number) => (
-                                          <div key={index} className="flex justify-between py-1 border-b border-gray-200 last:border-b-0">
-                                            <span className="font-medium">{solo.itemName}</span>
-                                            <span className="text-gray-600">{solo.itemStyle}</span>
-                                          </div>
-                                        ))}
-                                      </div>
+                                    {entry.performanceType === 'Solo' && entry.soloCount > 1 ? (
+                                      `${entry.performanceType} (${entry.soloCount} solos) • ${entry.ageCategory}`
+                                    ) : (
+                                      `${entry.performanceType} • ${entry.ageCategory}`
                                     )}
+                                          </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  R{entry.calculatedFee.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                    entry.approved 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {entry.approved ? 'Approved' : 'Pending'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                    entry.paymentStatus === 'paid' 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : entry.paymentStatus === 'pending'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {entry.paymentStatus.charAt(0).toUpperCase() + entry.paymentStatus.slice(1)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex space-x-2">
+                                    {!entry.approved ? (
+                                      <button
+                                        onClick={() => handleApproveEntry(entry.id)}
+                                        className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs"
+                                      >
+                                        Approve
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleUnapproveEntry(entry.id)}
+                                        className="px-3 py-1 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-xs"
+                                      >
+                                        Revoke
+                                      </button>
+                                    )}
+                                    {entry.paymentStatus === 'pending' && (
+                                      <button
+                                        onClick={() => handleApprovePayment(entry.id)}
+                                        className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"
+                                      >
+                                        Mark as Paid
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => {
+                                        setSelectedEntry(entry);
+                                        setShowEntryModal(true);
+                                      }}
+                                      className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs"
+                                    >
+                                      Details
+                                    </button>
                                   </div>
-                                ) : entry.performanceType === 'Solo' && entry.soloCount > 1 ? (
-                                  `${entry.performanceType} (${entry.soloCount} solo${entry.soloCount > 1 ? 's' : ''}) • ${entry.ageCategory}`
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white/90 rounded-2xl shadow-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50/80">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Item #
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Contestant
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Event
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Performance
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Fee
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Approval
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Payment
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {nationalsEntries.map((entry) => (
+                          <tr key={entry.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {editingItemNumber === entry.id ? (
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={tempItemNumber}
+                                    onChange={(e) => setTempItemNumber(e.target.value)}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleItemNumberSave(entry.id);
+                                      if (e.key === 'Escape') handleItemNumberCancel();
+                                    }}
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleItemNumberSave(entry.id)}
+                                    disabled={assigningItemNumbers.has(entry.id)}
+                                    className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                  >
+                                    {assigningItemNumbers.has(entry.id) ? '...' : '✓'}
+                                  </button>
+                                  <button
+                                    onClick={handleItemNumberCancel}
+                                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleItemNumberEdit(entry.id, entry.itemNumber)}
+                                  className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                                >
+                                  {entry.itemNumber || 'Click to assign'}
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{entry.contestantName}</div>
+                                <div className="text-sm text-gray-500">EODSA ID: {entry.eodsaId}</div>
+                                  </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{entry.event.name}</div>
+                              <div className="text-sm text-gray-500">{new Date(entry.event.eventDate).toLocaleDateString()}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{entry.itemName}</div>
+                              <div className="text-sm text-gray-500">
+                                {entry.performanceType === 'Solo' && entry.soloCount > 1 ? (
+                                  `${entry.performanceType} (${entry.soloCount} solos) • ${entry.ageCategory}`
                                 ) : (
                                   `${entry.performanceType} • ${entry.ageCategory}`
                                 )}
@@ -804,26 +1135,53 @@ export default function NationalsAdminDashboard() {
                               }`}>
                                 {entry.approved ? 'Approved' : 'Pending'}
                               </span>
-                              <div className="text-xs text-gray-500 mt-1">
-                                {entry.paymentStatus}
-                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                entry.paymentStatus === 'paid' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : entry.paymentStatus === 'pending'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {entry.paymentStatus.charAt(0).toUpperCase() + entry.paymentStatus.slice(1)}
+                              </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex space-x-2">
                               {!entry.approved ? (
                                 <button
                                   onClick={() => handleApproveEntry(entry.id)}
-                                  className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors mr-2"
+                                    className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs"
                                 >
                                   Approve
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => handleUnapproveEntry(entry.id)}
-                                  className="px-3 py-1 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors mr-2"
+                                    className="px-3 py-1 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-xs"
                                 >
-                                  Unapprove
+                                    Revoke
                                 </button>
                               )}
+                                {entry.paymentStatus === 'pending' && (
+                                  <button
+                                    onClick={() => handleApprovePayment(entry.id)}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"
+                                  >
+                                    Mark as Paid
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setSelectedEntry(entry);
+                                    setShowEntryModal(true);
+                                  }}
+                                  className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs"
+                                >
+                                  Details
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1120,7 +1478,7 @@ export default function NationalsAdminDashboard() {
                 <div className="lg:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-3">Select Performance Types to Create</label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {['Solo', 'Duet', 'Trio', 'Small Group', 'Large Group'].map(type => (
+                    {['Solo', 'Duet', 'Trio', 'Group'].map(type => (
                       <div key={type} className="relative">
                         <input
                           type="checkbox"
@@ -1205,6 +1563,217 @@ export default function NationalsAdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Entry Details Modal */}
+      {showEntryModal && selectedEntry && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Entry Details</h3>
+                <button
+                  onClick={() => setShowEntryModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left Column - Contestant Info */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-semibold text-gray-900 border-b pb-2">Contestant Information</h4>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.contestantName}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">EODSA ID</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.eodsaId}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Submitted At</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {new Date(selectedEntry.submittedAt).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column - Event Info */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-semibold text-gray-900 border-b pb-2">Event Information</h4>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Event</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.event.name}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {new Date(selectedEntry.event.eventDate).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Venue</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.event.venue}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Performance Details */}
+              <div className="mt-6 space-y-4">
+                <h4 className="text-lg font-semibold text-gray-900 border-b pb-2">Performance Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.itemName}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Choreographer</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.choreographer}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Performance Type</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {selectedEntry.performanceType === 'Solo' && selectedEntry.soloCount > 1 
+                        ? `${selectedEntry.performanceType} (${selectedEntry.soloCount} solos)`
+                        : selectedEntry.performanceType}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Age Category</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.ageCategory}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mastery Level</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.mastery}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Item Style</label>
+                    <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedEntry.itemStyle}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status & Payment */}
+              <div className="mt-6 space-y-4">
+                <h4 className="text-lg font-semibold text-gray-900 border-b pb-2">Status & Payment</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Item Number</label>
+                    <div className="text-sm">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        selectedEntry.itemNumber 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {selectedEntry.itemNumber || 'Not Assigned'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Approval Status</label>
+                    <div className="text-sm">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        selectedEntry.approved 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {selectedEntry.approved ? 'Approved' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+                    <div className="text-sm">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        selectedEntry.paymentStatus === 'paid' 
+                          ? 'bg-green-100 text-green-800' 
+                          : selectedEntry.paymentStatus === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedEntry.paymentStatus.charAt(0).toUpperCase() + selectedEntry.paymentStatus.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Fee</label>
+                    <div className="text-lg font-semibold text-gray-900">R{selectedEntry.calculatedFee.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Notes */}
+              {selectedEntry.additionalNotes && (
+                <div className="mt-6 space-y-4">
+                  <h4 className="text-lg font-semibold text-gray-900 border-b pb-2">Additional Notes</h4>
+                  <div className="text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                    {selectedEntry.additionalNotes}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="mt-6 flex flex-wrap gap-3 pt-4 border-t">
+                {!selectedEntry.approved ? (
+                  <button
+                    onClick={() => {
+                      handleApproveEntry(selectedEntry.id);
+                      setShowEntryModal(false);
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Approve Entry
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      handleUnapproveEntry(selectedEntry.id);
+                      setShowEntryModal(false);
+                    }}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    Revoke Approval
+                  </button>
+                )}
+                
+                {selectedEntry.paymentStatus === 'pending' && (
+                  <button
+                    onClick={() => {
+                      handleApprovePayment(selectedEntry.id);
+                      setShowEntryModal(false);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Mark as Paid
+                  </button>
+                )}
+
+                {!selectedEntry.itemNumber && (
+                  <button
+                    onClick={() => {
+                      handleItemNumberEdit(selectedEntry.id, selectedEntry.itemNumber);
+                      setShowEntryModal(false);
+                    }}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Assign Item Number
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => setShowEntryModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -138,8 +138,7 @@ export default function NationalsDashboard() {
       case 'Solo': return '👤';
       case 'Duet': return '👥';
       case 'Trio': return '👥';
-      case 'Small Group': return '👥';
-      case 'Large Group': return '👥';
+              case 'Group': return '👥';
       default: return '🎭';
     }
   };

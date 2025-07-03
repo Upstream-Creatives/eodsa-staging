@@ -16,35 +16,35 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { approved } = body;
+    const { paymentStatus } = body;
 
-    if (typeof approved !== 'boolean') {
+    if (!paymentStatus || !['paid', 'pending', 'failed'].includes(paymentStatus)) {
       return NextResponse.json(
-        { error: 'approved field must be a boolean' },
+        { error: 'Valid payment status is required (paid, pending, failed)' },
         { status: 400 }
       );
     }
 
-    // Update the entry approval status
-    const result = await db.updateNationalsEventEntry(id, { approved });
+    // Update the payment status
+    const result = await db.updateNationalsEventPayment(id, paymentStatus);
 
     if (!result) {
       return NextResponse.json(
-        { error: 'Failed to update entry or entry not found' },
+        { error: 'Failed to update payment status or entry not found' },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: `Entry ${approved ? 'approved' : 'unapproved'} successfully`,
+      message: `Payment status updated to ${paymentStatus}`,
       entry: result
     });
 
   } catch (error) {
-    console.error('Error updating nationals event entry:', error);
+    console.error('Error updating payment status:', error);
     return NextResponse.json(
-      { error: 'Failed to update entry' },
+      { error: 'Failed to update payment status' },
       { status: 500 }
     );
   }
