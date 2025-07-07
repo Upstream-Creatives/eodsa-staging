@@ -9,9 +9,9 @@ export async function GET() {
       assignments
     });
   } catch (error) {
-    console.error('Error fetching regional judge assignments:', error);
+    console.error('Error fetching nationals judge assignments:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch regional assignments' },
+      { success: false, error: 'Failed to fetch nationals assignments' },
       { status: 500 }
     );
   }

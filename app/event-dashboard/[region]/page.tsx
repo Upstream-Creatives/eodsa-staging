@@ -45,7 +45,7 @@ interface StudioSession {
   registrationNumber: string;
 }
 
-export default function RegionalEventsPage() {
+export default function NationalsEventsPage() {
   const searchParams = useSearchParams();
   const params = useParams();
   const router = useRouter();
@@ -65,11 +65,11 @@ export default function RegionalEventsPage() {
     if (region && eodsaId) {
       setIsStudioMode(false);
       loadContestant(eodsaId);
-      loadRegionalEvents();
+      loadNationalsEvents();
     } else if (region && studioId) {
       setIsStudioMode(true);
       loadStudioData(studioId);
-      loadRegionalEvents();
+      loadNationalsEvents();
     }
   }, [region, eodsaId, studioId]);
 
@@ -158,7 +158,7 @@ export default function RegionalEventsPage() {
     }
   };
 
-  const loadRegionalEvents = async () => {
+  const loadNationalsEvents = async () => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/events');
@@ -200,15 +200,13 @@ export default function RegionalEventsPage() {
   };
 
   const getStartingFee = (performanceType: string) => {
-    const fees = EODSA_FEES.PERFORMANCE['Earth (Eisteddfod)'];
-    const key = performanceType as keyof typeof fees;
-
-    if (fees && fees[key]) {
-      return fees[key];
-    }
-    // Fallback for Duet/Trio/Group if not explicitly defined
-    if (performanceType === 'Duet' || performanceType === 'Trio' || performanceType === 'Group') {
-      return fees['Group'];
+    // Use the new simplified fee structure
+    if (performanceType === 'Solo') {
+      return EODSA_FEES.PERFORMANCE.Solo;
+    } else if (performanceType === 'Duet' || performanceType === 'Trio') {
+      return EODSA_FEES.PERFORMANCE.Duet; // R280 per person
+    } else if (performanceType === 'Group') {
+      return EODSA_FEES.PERFORMANCE.SmallGroup; // R220 per person (default to small group)
     }
     return 0; // Default case
   };

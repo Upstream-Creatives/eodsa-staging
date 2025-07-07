@@ -56,7 +56,6 @@ interface CompetitionEntry {
   paymentMethod?: string;
   submittedAt: string;
   approved: boolean;
-  qualifiedForNationals: boolean;
   itemNumber?: number;
   itemName: string;
   choreographer: string;

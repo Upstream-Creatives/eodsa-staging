@@ -48,117 +48,8 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE event_entries ADD COLUMN IF NOT EXISTS item_number INTEGER`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS event_end_date TEXT`;
 
-    // 🏆 NATIONALS TABLES
-    // Create nationals events table
-    await sqlClient`
-      CREATE TABLE IF NOT EXISTS nationals_events (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        event_date TEXT NOT NULL,
-        event_end_date TEXT,
-        registration_deadline TEXT NOT NULL,
-        venue TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'upcoming',
-        max_participants INTEGER,
-        created_by TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `;
-
-    // Create nationals event entries table
-    await sqlClient`
-      CREATE TABLE IF NOT EXISTS nationals_event_entries (
-        id TEXT PRIMARY KEY,
-        nationals_event_id TEXT NOT NULL,
-        contestant_id TEXT NOT NULL,
-        eodsa_id TEXT NOT NULL,
-        participant_ids TEXT NOT NULL,
-        calculated_fee REAL NOT NULL,
-        payment_status TEXT NOT NULL DEFAULT 'pending',
-        payment_method TEXT,
-        submitted_at TEXT NOT NULL,
-        approved BOOLEAN NOT NULL DEFAULT FALSE,
-        qualified_for_nationals BOOLEAN DEFAULT FALSE,
-        item_number INTEGER,
-        item_name TEXT NOT NULL,
-        choreographer TEXT NOT NULL,
-        mastery TEXT NOT NULL,
-        item_style TEXT NOT NULL,
-        estimated_duration INTEGER NOT NULL,
-        created_at TEXT NOT NULL,
-        performance_type TEXT NOT NULL,
-        age_category TEXT NOT NULL,
-        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
-        FOREIGN KEY (contestant_id) REFERENCES contestants(id)
-      )
-    `;
-
-    // Create nationals performances table
-    await sqlClient`
-      CREATE TABLE IF NOT EXISTS nationals_performances (
-        id TEXT PRIMARY KEY,
-        nationals_event_id TEXT NOT NULL,
-        contestant_id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        participant_names TEXT NOT NULL,
-        item_style TEXT NOT NULL,
-        duration INTEGER NOT NULL,
-        mastery TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        item_number INTEGER,
-        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
-        FOREIGN KEY (contestant_id) REFERENCES contestants(id)
-      )
-    `;
-
-    // Create nationals scores table
-    await sqlClient`
-      CREATE TABLE IF NOT EXISTS nationals_scores (
-        id TEXT PRIMARY KEY,
-        performance_id TEXT NOT NULL,
-        judge_id TEXT NOT NULL,
-        technical_score REAL NOT NULL,
-        musical_score REAL NOT NULL,
-        performance_score REAL NOT NULL,
-        styling_score REAL NOT NULL,
-        overall_impression_score REAL NOT NULL,
-        comments TEXT,
-        submitted_at TEXT NOT NULL,
-        FOREIGN KEY (performance_id) REFERENCES nationals_performances(id),
-        FOREIGN KEY (judge_id) REFERENCES judges(id),
-        UNIQUE(performance_id, judge_id)
-      )
-    `;
-
-    // Create nationals judge assignments table
-    await sqlClient`
-      CREATE TABLE IF NOT EXISTS nationals_judge_assignments (
-        id TEXT PRIMARY KEY,
-        judge_id TEXT NOT NULL,
-        nationals_event_id TEXT NOT NULL,
-        assigned_by TEXT NOT NULL,
-        assigned_at TEXT NOT NULL,
-        FOREIGN KEY (judge_id) REFERENCES judges(id),
-        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
-        UNIQUE(judge_id, nationals_event_id)
-      )
-    `;
-
-    // Create nationals rankings table
-    await sqlClient`
-      CREATE TABLE IF NOT EXISTS nationals_rankings (
-        id TEXT PRIMARY KEY,
-        nationals_event_id TEXT NOT NULL,
-        performance_id TEXT NOT NULL,
-        total_score REAL NOT NULL,
-        average_score REAL NOT NULL,
-        rank INTEGER NOT NULL,
-        calculated_at TEXT NOT NULL,
-        FOREIGN KEY (nationals_event_id) REFERENCES nationals_events(id),
-        FOREIGN KEY (performance_id) REFERENCES nationals_performances(id)
-      )
-    `;
+    // 🏆 NATIONALS TABLES - REMOVED
+    // The nationals system has been removed. Regional competitions are now referred to as "Nationals".
 
     console.log('✅ Database schema is up to date.');
     
@@ -542,17 +433,14 @@ export const db = {
     }));
   },
 
+  // DEPRECATED: Use calculateEODSAFee from types.ts instead
   async calculateFee(ageCategory: string, performanceType: string) {
-    const sqlClient = getSql();
-    const result = await sqlClient`SELECT * FROM fee_schedule WHERE age_category = ${ageCategory}` as any[];
-    if (result.length === 0) return 0;
-    
-    const fees = result[0];
+    // Return simplified fees for backwards compatibility
     switch (performanceType.toLowerCase()) {
-      case 'solo': return parseFloat(fees.solo_fee);
-      case 'duet': return parseFloat(fees.duet_fee);
-      case 'trio': return parseFloat(fees.trio_fee);
-      case 'group': return parseFloat(fees.group_fee);
+      case 'solo': return 400; // R400 for 1 solo
+      case 'duet': return 280; // R280 per dancer
+      case 'trio': return 280; // R280 per dancer
+      case 'group': return 220; // R220 per dancer (default to small group)
       default: return 0;
     }
   },
@@ -1376,6 +1264,31 @@ export const db = {
     assignedBy: string;
   }) {
     const sqlClient = getSql();
+    
+    // Check if this judge is already assigned to this event
+    const existingAssignment = await sqlClient`
+      SELECT id FROM judge_event_assignments 
+      WHERE judge_id = ${assignment.judgeId} 
+      AND event_id = ${assignment.eventId}
+      AND status = 'active'
+    ` as any[];
+    
+    if (existingAssignment.length > 0) {
+      throw new Error('This judge is already assigned to this event');
+    }
+    
+    // Check how many judges are already assigned to this event
+    const judgeCount = await sqlClient`
+      SELECT COUNT(*) as count FROM judge_event_assignments 
+      WHERE event_id = ${assignment.eventId}
+      AND status = 'active'
+    ` as any[];
+    
+    const currentJudgeCount = parseInt(judgeCount[0].count);
+    if (currentJudgeCount >= 4) {
+      throw new Error('This event already has the maximum of 4 judges assigned');
+    }
+    
     const id = `assignment-${Date.now()}`;
     const assignedAt = new Date().toISOString();
     

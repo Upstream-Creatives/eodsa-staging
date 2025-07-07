@@ -378,7 +378,7 @@ function EventDashboardContent() {
             <div className="bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-purple-700">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-white mb-2">Select Your Region</h3>
-                <p className="text-gray-300">Choose your regional competition to view available events</p>
+                <p className="text-gray-300">Choose your nationals competition to view available events</p>
               </div>
               
               <div className="grid md:grid-cols-3 gap-6">
@@ -396,7 +396,7 @@ function EventDashboardContent() {
                         </div>
                         <h4 className="text-xl font-bold text-white mb-2">{region}</h4>
                         <p className="text-gray-300 mb-4">
-                          Regional Competition Events Available
+                          Nationals Competition Events Available
                         </p>
                         <div className="text-sm text-purple-300 font-medium">
                           View Events →

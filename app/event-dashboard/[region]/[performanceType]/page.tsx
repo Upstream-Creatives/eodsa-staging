@@ -182,7 +182,7 @@ export default function PerformanceTypeEntryPage() {
     }
   }, [formData.eventId, events]);
 
-  // Handle pre-selected event from regional page
+        // Handle pre-selected event from nationals page
   useEffect(() => {
     if (preSelectedEventId && events.length > 0 && !formData.eventId) {
       const preSelected = events.find(e => e.id === preSelectedEventId);

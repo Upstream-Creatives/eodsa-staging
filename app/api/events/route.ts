@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     // 🚀 AUTO-ASSIGN: Automatically assign judges who are already assigned to this region
     try {
       const existingAssignments = await database.getAllJudgeAssignments();
-      const regionalJudges = existingAssignments
+      const nationalsJudges = existingAssignments
         .filter(assignment => assignment.region === body.region)
         .reduce((unique, assignment) => {
           if (!unique.find(j => j.judgeId === assignment.judgeId)) {
@@ -89,8 +89,8 @@ export async function POST(request: Request) {
           return unique;
         }, [] as { judgeId: string; assignedBy: string }[]);
 
-      // Auto-assign each regional judge to the new event
-      for (const judge of regionalJudges) {
+          // Auto-assign each nationals judge to the new event
+    for (const judge of nationalsJudges) {
         await database.createJudgeEventAssignment({
           judgeId: judge.judgeId,
           eventId: event.id,
@@ -98,8 +98,8 @@ export async function POST(request: Request) {
         });
       }
 
-      if (regionalJudges.length > 0) {
-        console.log(`✅ Auto-assigned ${regionalJudges.length} judges to new event: ${event.name}`);
+          if (nationalsJudges.length > 0) {
+      console.log(`✅ Auto-assigned ${nationalsJudges.length} judges to new event: ${event.name}`);
       }
     } catch (assignmentError) {
       console.error('Auto-assignment failed (non-critical):', assignmentError);

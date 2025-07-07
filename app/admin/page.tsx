@@ -222,7 +222,7 @@ export default function AdminDashboard() {
       const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes, verificationRes] = await Promise.all([
         fetch('/api/events'),
         fetch('/api/judges'),
-        fetch('/api/judge-assignments/regional-view'),
+        fetch('/api/judge-assignments/nationals-view'),
         fetch('/api/admin/dancers'),
         fetch('/api/admin/studios'),
         fetch('/api/admin/studio-applications'),
@@ -486,7 +486,7 @@ export default function AdminDashboard() {
       const adminData = JSON.parse(session);
 
       // Assign judge to all events in the selected region
-      const response = await fetch('/api/judge-assignments/regional', {
+      const response = await fetch('/api/judge-assignments/nationals', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -539,7 +539,7 @@ export default function AdminDashboard() {
       const adminData = JSON.parse(session);
 
       // Reassign judge to all events in their current region (picks up new events)
-      const response = await fetch('/api/judge-assignments/regional', {
+      const response = await fetch('/api/judge-assignments/nationals', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1115,13 +1115,7 @@ export default function AdminDashboard() {
                 <span className="text-sm sm:text-base">📊</span>
                 <span className="font-medium">Rankings</span>
               </Link>
-              <Link 
-                href="/admin/nationals"
-                className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg sm:rounded-xl hover:from-yellow-600 hover:to-orange-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
-              >
-                <span className="text-sm sm:text-base">🏆</span>
-                <span className="font-medium">Nationals</span>
-              </Link>
+
               <button
                 onClick={handleLogout}
                 className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-lg sm:rounded-xl hover:from-red-600 hover:to-pink-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
@@ -2100,7 +2094,7 @@ export default function AdminDashboard() {
                     onChange={(e) => setNewEvent(prev => ({ ...prev, name: e.target.value }))}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     required
-                    placeholder="e.g., EODSA Regional Championships 2024"
+                    placeholder="e.g., EODSA Nationals Championships 2024"
                   />
                 </div>
 
@@ -2511,9 +2505,9 @@ export default function AdminDashboard() {
                     onChange={(e) => setBulkEventTemplate(prev => ({ ...prev, baseName: e.target.value }))}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base font-medium text-gray-900 placeholder-gray-400"
                     required
-                    placeholder="e.g. EODSA Gauteng Regionals 2024"
+                    placeholder="e.g. EODSA Gauteng Nationals 2024"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Performance type will be appended automatically (e.g. "EODSA Gauteng Regionals 2024 - Solo")</p>
+                                      <p className="text-xs text-gray-500 mt-1">Performance type will be appended automatically (e.g. "EODSA Gauteng Nationals 2024 - Solo")</p>
                 </div>
 
                 <div className="lg:col-span-2">

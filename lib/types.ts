@@ -64,7 +64,7 @@ export interface Contestant {
 // NEW: Events are competitions created by admin
 export interface Event {
   id: string;
-  name: string; // e.g. "EODSA Regional Championships 2024 - Gauteng"
+  name: string; // e.g. "EODSA Nationals Championships 2024 - Gauteng"
   description: string;
   region: 'Gauteng' | 'Free State' | 'Mpumalanga';
   ageCategory: string;
@@ -93,7 +93,7 @@ export interface EventEntry {
   approved: boolean;
   qualifiedForNationals: boolean;
   itemNumber?: number; // NEW: Item Number for program order
-  // EODSA Regional Entry Form fields
+  // EODSA Nationals Entry Form fields
   itemName: string;
   choreographer: string;
   mastery: string; // UPDATED: New mastery levels
@@ -112,7 +112,7 @@ export interface Performance {
   itemNumber?: number; // NEW: Item Number for program order
   scheduledTime?: string;
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-  // EODSA Regional Entry Form fields
+  // EODSA Nationals Entry Form fields
   choreographer: string;
   mastery: string; // UPDATED: New mastery levels
   itemStyle: string;
@@ -275,67 +275,38 @@ export const TIME_LIMITS = {
   Group: 3.5 // minutes (3:30)
 };
 
-// EODSA Fee Structure based on official pricing (Updated from Gabriel's fee structure)
+// EODSA Fee Structure - Updated for Nationals 2024
 export const EODSA_FEES = {
-  // Registration fees per person (flat once-off charge per dancer)
+  // Registration fees per person (flat rate for all mastery levels)
   REGISTRATION: {
-    'Water (Competition)': 250,    // R250 PP for Competitive
-    'Fire (Advanced)': 250,        // R250 PP for Advanced  
-    'Earth (Eisteddfod)': 150,     // R150 PP for Eisteddfod
-    'Air (Special Needs)': 150     // R150 PP for Special Needs
+    'Water (Competition)': 300,    // R300 PP for all mastery levels
+    'Fire (Advanced)': 300,        // R300 PP for all mastery levels  
+    'Earth (Eisteddfod)': 300,     // R300 PP for all mastery levels
+    'Air (Special Needs)': 300     // R300 PP for all mastery levels
   },
   
-  // Performance fees by mastery level
-  PERFORMANCE: {
-    'Water (Competition)': {
-      Solo: 300,           // R300 for 1st solo
-      SoloAdditional: 180, // R180 for each additional solo
-      Duet: 200,           // R200 per dancer (so R400 total for 2 dancers)
-      Trio: 200,           // R200 per dancer (so R600 total for 3 dancers)
-      Group: 180           // R180 per dancer
-    },
-    'Fire (Advanced)': {
-      Solo: 300,           // R300 for 1st solo
-      SoloAdditional: 180, // R180 for each additional solo
-      Duet: 200,           // R200 per dancer (so R400 total for 2 dancers)
-      Trio: 200,           // R200 per dancer (so R600 total for 3 dancers)
-      Group: 180           // R180 per dancer
-    },
-    'Earth (Eisteddfod)': {
-      Solo: 200,           // R200 for solo
-      SoloAdditional: 200, // R200 for each additional solo (no package deals)
-      Duet: 200,           // R200 per dancer (so R400 total for 2 dancers)
-      Trio: 200,           // R200 per dancer (so R600 total for 3 dancers)
-      Group: 180           // R180 per dancer
-    },
-    'Air (Special Needs)': {
-      Solo: 200,           // R200 for solo
-      SoloAdditional: 200, // R200 for each additional solo (no package deals)
-      Duet: 200,           // R200 per dancer (so R400 total for 2 dancers)
-      Trio: 200,           // R200 per dancer (so R600 total for 3 dancers)
-      Group: 180           // R180 per dancer
-    }
-  },
-  
-  // Multiple solo packages for Competitive/Advanced ONLY
+  // Solo packages - same for all mastery levels
   SOLO_PACKAGES: {
-    'Water (Competition)': {
-      1: 300,   // 1 solo: R300
-      2: 520,   // 2 solos: R520 (saves R80)
-      3: 700    // 3 solos: R700 (saves R140)
-      // 4+ solos: R700 + (additional_solos × R180)
-    },
-    'Fire (Advanced)': {
-      1: 300,   // 1 solo: R300
-      2: 520,   // 2 solos: R520 (saves R80)
-      3: 700    // 3 solos: R700 (saves R140)
-      // 4+ solos: R700 + (additional_solos × R180)
-    }
-    // Note: Earth (Eisteddfod) and Air (Special Needs) don't have package deals
+    1: 400,   // 1 solo: R400
+    2: 750,   // 2 solos: R750
+    3: 1000,  // 3 solos: R1000
+    4: 1200,  // 4 solos: R1200
+    5: 1200   // 5 solos: R1200 (5th solo is FREE)
+    // 6+ solos: R1200 + ((additional_solos - 5) × R100)
+  },
+  
+  // Performance fees - simplified structure for all mastery levels
+  PERFORMANCE: {
+    Solo: 400,              // R400 for 1 solo
+    SoloAdditional: 100,    // R100 for each additional solo after 5th
+    Duet: 280,              // R280 per dancer
+    Trio: 280,              // R280 per dancer  
+    SmallGroup: 220,        // R220 per dancer (4-9 dancers)
+    LargeGroup: 190         // R190 per dancer (10+ dancers)
   }
 };
 
-// EODSA Fee Calculation Function
+// EODSA Fee Calculation Function - Updated for Nationals 2024
 export const calculateEODSAFee = (
   masteryLevel: string,
   performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group',
@@ -343,38 +314,28 @@ export const calculateEODSAFee = (
   options?: {
     isMultipleSolos?: boolean;
     soloCount?: number;
-    includeRegistration?: boolean; // New option to control registration fee inclusion
-    participantDancers?: Dancer[]; // NEW: Array of dancer objects to check registration status
+    includeRegistration?: boolean;
+    participantDancers?: Dancer[];
   }
 ): { registrationFee: number; performanceFee: number; totalFee: number; breakdown: string; registrationBreakdown?: string } => {
   
   const { isMultipleSolos = false, soloCount = 1, includeRegistration = true, participantDancers = [] } = options || {};
   
-  // Calculate registration fee intelligently based on dancer payment status
+  // Calculate registration fee - R300 per dancer for all mastery levels
   let registrationFee = 0;
   let registrationBreakdown = '';
   
   if (includeRegistration && participantDancers.length > 0) {
-    const masteryFeeMap = EODSA_FEES.REGISTRATION;
-    
     // Check each dancer's registration status
     const unpaidDancers = participantDancers.filter(dancer => {
-      if (!dancer.registrationFeePaid || !dancer.registrationFeeMasteryLevel) {
-        return true; // Not paid at all or mastery level at time of payment is unknown
+      if (!dancer.registrationFeePaid) {
+        return true; // Not paid at all
       }
-      
-      const paidFee = masteryFeeMap[dancer.registrationFeeMasteryLevel as keyof typeof masteryFeeMap] || 0;
-      const currentFee = masteryFeeMap[masteryLevel as keyof typeof masteryFeeMap] || 0;
-      
-      // Charge if current fee is higher than what they paid
-      return currentFee > paidFee;
+      return false; // Already paid
     });
     
     if (unpaidDancers.length > 0) {
-      // For upgrades, we could charge the difference, but for simplicity, we'll charge the full new fee
-      // as the system doesn't yet support partial payments on registration.
-      const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
-      registrationFee = registrationFeePerPerson * unpaidDancers.length;
+      registrationFee = 300 * unpaidDancers.length;
       
       if (unpaidDancers.length === participantDancers.length) {
         registrationBreakdown = `Registration fee for ${unpaidDancers.length} dancer${unpaidDancers.length > 1 ? 's' : ''}`;
@@ -386,47 +347,56 @@ export const calculateEODSAFee = (
       registrationBreakdown = 'All dancers have already paid registration fee';
     }
   } else if (includeRegistration) {
-    // Fallback to old calculation if no dancer data provided
-  const registrationFeePerPerson = EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION] || 0;
-    registrationFee = registrationFeePerPerson * numberOfParticipants;
+    // Fallback calculation if no dancer data provided
+    registrationFee = 300 * numberOfParticipants;
     registrationBreakdown = `Registration fee for ${numberOfParticipants} dancer${numberOfParticipants > 1 ? 's' : ''}`;
   }
   
   let performanceFee = 0;
   let breakdown = '';
   
-  // Handle solo packages for competitive/advanced levels ONLY
-  if (performanceType === 'Solo' && (masteryLevel === 'Water (Competition)' || masteryLevel === 'Fire (Advanced)')) {
-    const packages = EODSA_FEES.SOLO_PACKAGES[masteryLevel as keyof typeof EODSA_FEES.SOLO_PACKAGES];
-    if (packages && soloCount && soloCount <= 3) {
-      performanceFee = packages[soloCount as keyof typeof packages] || 0;
-      breakdown = `${soloCount} Solo${soloCount > 1 ? 's' : ''} Package`;
-    } else if (soloCount && soloCount > 3) {
-      // 3 solos package + additional solos at R180 each
-      const packageFee = packages[3];
-      const additionalFee = (soloCount - 3) * EODSA_FEES.PERFORMANCE[masteryLevel as keyof typeof EODSA_FEES.PERFORMANCE].SoloAdditional;
-      performanceFee = packageFee + additionalFee;
-      breakdown = `3 Solos Package + ${soloCount - 3} Additional Solo${soloCount - 3 > 1 ? 's' : ''}`;
+  // Calculate performance fees based on new structure
+  if (performanceType === 'Solo') {
+    if (soloCount && soloCount > 1) {
+      // Multiple solos - use package pricing
+      if (soloCount <= 5) {
+        performanceFee = EODSA_FEES.SOLO_PACKAGES[soloCount as keyof typeof EODSA_FEES.SOLO_PACKAGES] || 0;
+        breakdown = `${soloCount} Solo${soloCount > 1 ? 's' : ''} Package`;
+      } else {
+        // More than 5 solos: 5-solo package + additional solos at R100 each
+        const packageFee = EODSA_FEES.SOLO_PACKAGES[5];
+        const additionalFee = (soloCount - 5) * EODSA_FEES.PERFORMANCE.SoloAdditional;
+        performanceFee = packageFee + additionalFee;
+        breakdown = `5 Solos Package + ${soloCount - 5} Additional Solo${soloCount - 5 > 1 ? 's' : ''}`;
+      }
     } else {
       // Single solo
-      performanceFee = EODSA_FEES.PERFORMANCE[masteryLevel as keyof typeof EODSA_FEES.PERFORMANCE].Solo;
+      performanceFee = EODSA_FEES.PERFORMANCE.Solo;
       breakdown = '1 Solo';
     }
-  } else {
-    // Regular performance fees (no packages for Eisteddfod/Special Needs, or for non-solo performances)
-    const performanceFees = EODSA_FEES.PERFORMANCE[masteryLevel as keyof typeof EODSA_FEES.PERFORMANCE];
-    if (performanceFees) {
-      const baseFee = performanceFees[performanceType as keyof typeof performanceFees] || 0;
-      
-      if (performanceType === 'Solo') {
-        performanceFee = baseFee;
-        breakdown = '1 Solo';
-      } else {
-        // For Duet, Trio, Group - multiply by number of dancers
-        performanceFee = baseFee * numberOfParticipants;
-        breakdown = `${performanceType} (R${baseFee} × ${numberOfParticipants} dancers)`;
-      }
+  } else if (performanceType === 'Duet' || performanceType === 'Trio') {
+    // Duos/trios: R280 per person
+    performanceFee = EODSA_FEES.PERFORMANCE.Duet * numberOfParticipants;
+    breakdown = `${performanceType} (R${EODSA_FEES.PERFORMANCE.Duet} × ${numberOfParticipants} dancers)`;
+  } else if (performanceType === 'Group') {
+    // Groups: R220 for small groups (4-9), R190 for large groups (10+)
+    let feePerPerson = 0;
+    let groupSize = '';
+    
+    if (numberOfParticipants >= 4 && numberOfParticipants <= 9) {
+      feePerPerson = EODSA_FEES.PERFORMANCE.SmallGroup;
+      groupSize = 'Small Group';
+    } else if (numberOfParticipants >= 10) {
+      feePerPerson = EODSA_FEES.PERFORMANCE.LargeGroup;
+      groupSize = 'Large Group';
+    } else {
+      // Less than 4 participants should be handled as trio or duet
+      feePerPerson = EODSA_FEES.PERFORMANCE.Duet;
+      groupSize = 'Group';
     }
+    
+    performanceFee = feePerPerson * numberOfParticipants;
+    breakdown = `${groupSize} (R${feePerPerson} × ${numberOfParticipants} dancers)`;
   }
   
   return {
