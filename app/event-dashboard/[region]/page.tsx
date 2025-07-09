@@ -73,27 +73,11 @@ export default function NationalsEventsPage() {
     }
   }, [region, eodsaId, studioId]);
 
-  // Group events by performance type after loading
+  // No longer need to group events by performance type since we have unified events
   useEffect(() => {
     if (events.length > 0) {
-      const grouped = events.reduce((acc, event) => {
-        // If event has performanceType 'All', create entries for each performance type
-        if (event.performanceType === 'All') {
-          const performanceTypes = ['Solo', 'Duet', 'Trio', 'Group'];
-          performanceTypes.forEach(type => {
-            if (!acc[type]) acc[type] = [];
-            // Create a copy of the event for each performance type
-            acc[type].push({ ...event, performanceType: type });
-          });
-        } else {
-          // Regular event with specific performance type
-          const type = event.performanceType;
-          if (!acc[type]) acc[type] = [];
-          acc[type].push(event);
-        }
-        return acc;
-      }, {} as {[key: string]: Event[]});
-      setGroupedEvents(grouped);
+      // For unified events, we don't need to group by performance type
+      setGroupedEvents({}); // Clear grouped events since we'll show unified events directly
     }
   }, [events]);
 
@@ -176,9 +160,11 @@ export default function NationalsEventsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-                // Filter events by nationals status (since we only have Nationals now)
+          // Filter to only show UNIFIED events (performanceType === 'All')
+          // This excludes old separate events like "National Test - Solo", "National Test - Duet"
       const nationalsEvents = data.events.filter((event: Event) =>
         event.region === 'Nationals' &&
+            event.performanceType === 'All' &&
         (event.status === 'registration_open' || event.status === 'upcoming')
       );
       setEvents(nationalsEvents);
@@ -348,184 +334,128 @@ export default function NationalsEventsPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {Object.entries(groupedEvents).length > 0 ? (
+        {events.length > 0 ? (
           <div className="space-y-8 sm:space-y-12">
-            {Object.entries(groupedEvents).map(([performanceType, eventsOfType]) => {
-              const performanceInfo = PERFORMANCE_TYPES[performanceType as keyof typeof PERFORMANCE_TYPES];
-              if (!performanceInfo) return null;
-
-              return (
-                <div key={performanceType} className="group">
-                  {/* Section Header - Enhanced Design */}
+            {events.map((event) => (
+              <div key={event.id} className="group">
+                {/* Event Header */}
                   <div className="relative mb-6 sm:mb-8">
                     <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-purple-500/10 rounded-2xl blur-xl"></div>
                     <div className="relative bg-slate-800/70 backdrop-blur-xl rounded-2xl p-4 sm:p-6 border border-slate-700/50 hover:border-purple-500/30 transition-all duration-500">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex items-center space-x-3 sm:space-x-4">
-                          {/* Performance Type Icon */}
                           <div className="relative">
                             <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
-                              <div className="text-2xl sm:text-3xl">
-                                {performanceType === 'Solo' && '💃'}
-                                {performanceType === 'Duet' && '👯'}
-                                {performanceType === 'Trio' && '👥'}
-                                {performanceType === 'Group' && '🎭'}
-                              </div>
+                            <div className="text-2xl sm:text-3xl">🏆</div>
                             </div>
                             <div className="absolute -inset-1 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl sm:rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity"></div>
                           </div>
                           
                           <div>
                             <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">
-                              {performanceInfo.name}
-                              <span className="text-purple-400 ml-2">Events</span>
+                            {event.name}
                             </h2>
-                            <p className="text-slate-400 text-sm sm:text-base">{performanceInfo.description}</p>
-                            
-                            {/* Mobile Fee Preview */}
-                            <div className="sm:hidden mt-2">
+                          <p className="text-slate-400 text-sm sm:text-base">{event.description}</p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <span className="inline-flex items-center px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded-lg text-xs font-medium">
+                              <div className="w-2 h-2 bg-emerald-400 rounded-full mr-1 animate-pulse"></div>
+                              Open for Registration
+                            </span>
                               <span className="inline-flex items-center px-2 py-1 bg-purple-500/20 text-purple-300 rounded-lg text-xs font-medium">
-                                From R{getStartingFee(performanceType)}
+                              All Performance Types
                               </span>
                             </div>
                           </div>
                         </div>
                         
-                        {/* Desktop Stats */}
                         <div className="hidden sm:flex items-center space-x-6">
                           <div className="text-center">
-                            <p className="text-2xl lg:text-3xl font-bold text-purple-400">{eventsOfType.length}</p>
-                            <p className="text-xs lg:text-sm text-slate-400 uppercase tracking-wide">Available</p>
+                          <p className="text-xl lg:text-2xl font-bold text-purple-400">{new Date(event.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                          <p className="text-xs lg:text-sm text-slate-400 uppercase tracking-wide">Event Date</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xl lg:text-2xl font-bold text-emerald-400">R{getStartingFee(performanceType)}</p>
-                            <p className="text-xs lg:text-sm text-slate-400 uppercase tracking-wide">From</p>
-                          </div>
+                          <p className="text-xl lg:text-2xl font-bold text-emerald-400">{event.venue}</p>
+                          <p className="text-xs lg:text-sm text-slate-400 uppercase tracking-wide">Venue</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                              </div>
+                              
+                                {/* Event Details Card */}
+                <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 sm:p-8">
+                  {/* Event Details Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-slate-500 text-sm uppercase tracking-wide font-semibold mb-2">Event Date</p>
+                        <p className="text-slate-200 text-lg font-medium">
+                          {new Date(event.eventDate).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-sm uppercase tracking-wide font-semibold mb-2">Age Categories</p>
+                        <p className="text-slate-200 text-lg font-medium">{event.ageCategory}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-slate-500 text-sm uppercase tracking-wide font-semibold mb-2">Venue</p>
+                        <p className="text-slate-200 text-lg font-medium">{event.venue}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-sm uppercase tracking-wide font-semibold mb-2">Performance Types</p>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="inline-flex items-center px-3 py-1 bg-purple-500/20 text-purple-300 rounded-lg text-sm font-medium">💃 Solo</span>
+                          <span className="inline-flex items-center px-3 py-1 bg-purple-500/20 text-purple-300 rounded-lg text-sm font-medium">👯 Duet</span>
+                          <span className="inline-flex items-center px-3 py-1 bg-purple-500/20 text-purple-300 rounded-lg text-sm font-medium">👥 Trio</span>
+                          <span className="inline-flex items-center px-3 py-1 bg-purple-500/20 text-purple-300 rounded-lg text-sm font-medium">🎭 Group</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Events Grid - Responsive */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-                    {eventsOfType.map((event, index) => (
-                      <div
-                        key={event.id}
-                        className="group/card relative"
-                        style={{ animationDelay: `${index * 100}ms` }}
-                      >
-                        {/* Card Background Glow */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-pink-500/5 to-purple-500/5 rounded-2xl blur-xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-500"></div>
-                        
-                        {/* Main Card */}
-                        <div className="relative bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 hover:border-purple-500/30 transition-all duration-500 overflow-hidden group-hover/card:shadow-2xl group-hover/card:shadow-purple-500/10">
-                          {/* Event Header */}
-                          <div className="p-4 sm:p-6">
-                            <div className="flex items-start justify-between mb-4">
-                              <div className="flex-1">
-                                <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover/card:text-purple-300 transition-colors">
-                                  {event.name}
-                                </h3>
-                                <p className="text-slate-400 text-sm leading-relaxed line-clamp-2">
-                                  {event.description}
-                                </p>
-                              </div>
-                              
-                              {/* Status Badge */}
-                              <div className="ml-3">
-                                <span className="inline-flex items-center px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded-lg text-xs font-medium">
-                                  <div className="w-2 h-2 bg-emerald-400 rounded-full mr-1 animate-pulse"></div>
-                                  Open
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Event Details Grid */}
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                              <div className="space-y-3">
-                                <div>
-                                  <p className="text-slate-500 text-xs uppercase tracking-wide font-semibold">Date</p>
-                                  <p className="text-slate-200 text-sm font-medium">
-                                    {new Date(event.eventDate).toLocaleDateString('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric'
-                                    })}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-slate-500 text-xs uppercase tracking-wide font-semibold">Age Group</p>
-                                  <p className="text-slate-200 text-sm font-medium">{event.ageCategory}</p>
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-3">
-                                <div>
-                                  <p className="text-slate-500 text-xs uppercase tracking-wide font-semibold">Venue</p>
-                                  <p className="text-slate-200 text-sm font-medium line-clamp-1" title={event.venue}>
-                                    {event.venue}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-slate-500 text-xs uppercase tracking-wide font-semibold">Entry Fee</p>
-                                  <p className="text-emerald-400 text-lg font-bold">
-                                    R{getStartingFee(event.performanceType)}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Fee Details - Expandable on Mobile */}
-                            <div className="mb-4 p-3 bg-slate-900/50 rounded-xl border border-slate-700/30">
-                              <p className="text-slate-300 text-xs leading-relaxed">
-                                {getFeeExplanation(event.performanceType)}
-                              </p>
-                            </div>
-
-                            {/* Registration Deadline */}
-                            <div className="mb-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                              <div className="flex items-center space-x-2 mb-1">
-                                <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path>
-                                </svg>
-                                <span className="text-amber-300 text-sm font-medium">Registration Deadline</span>
-                              </div>
-                              <p className="text-amber-200 text-sm">
-                                {new Date(event.registrationDeadline).toLocaleDateString('en-US', {
-                                  weekday: 'long',
-                                  month: 'long',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
-                              </p>
-                              <div className="mt-2">
-                                <CountdownTimer deadline={event.registrationDeadline} />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action Button */}
-                          <div className="p-4 sm:p-6 pt-0">
-                            <button
-                              onClick={() => router.push(`/event-dashboard/${region}/${performanceType.toLowerCase()}?${isStudioMode ? `studioId=${studioId}` : `eodsaId=${eodsaId}`}&eventId=${event.id}`)}
-                              className="w-full group/btn relative overflow-hidden px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl hover:shadow-purple-500/25"
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-                              <div className="relative flex items-center justify-center space-x-2">
-                                <span className="text-sm sm:text-base">Enter Competition</span>
-                                <svg className="w-4 h-4 sm:w-5 sm:h-5 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                </svg>
-                              </div>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  {/* Registration Deadline */}
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-6">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path>
+                      </svg>
+                      <span className="text-amber-300 font-medium">Registration Deadline</span>
+                    </div>
+                    <p className="text-amber-200 mb-2">
+                      {new Date(event.registrationDeadline).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </p>
+                    <CountdownTimer deadline={event.registrationDeadline} />
                   </div>
+
+                  {/* Enter Competition Button */}
+                  <button
+                    onClick={() => router.push(`/event-dashboard/${region}/competition?${isStudioMode ? `studioId=${studioId}` : `eodsaId=${eodsaId}`}&eventId=${event.id}`)}
+                    className="w-full group/btn relative overflow-hidden px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl hover:shadow-purple-500/25"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
+                    <div className="relative flex items-center justify-center space-x-2">
+                      <span className="text-lg">Enter Competition</span>
+                      <svg className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </div>
+                  </button>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         ) : (
           <div className="text-center py-16 sm:py-24">

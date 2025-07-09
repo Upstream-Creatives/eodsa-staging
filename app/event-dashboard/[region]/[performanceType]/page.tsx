@@ -949,9 +949,9 @@ export default function PerformanceTypeEntryPage() {
         }
       }
 
-      // Prepare entry data - use nationals API for solo nationals, regular API for others
-      if (performanceType?.toLowerCase() === 'solo' && region?.toLowerCase() === 'nationals') {
-        // Submit to nationals API
+      // Prepare entry data - use nationals API for all nationals entries, regular API for others
+      if (region?.toLowerCase() === 'nationals') {
+        // Submit to nationals API for all performance types
         const nationalsEntryData = {
           nationalsEventId: formData.eventId,
           contestantId: finalContestantId,
@@ -967,18 +967,18 @@ export default function PerformanceTypeEntryPage() {
           mastery: formData.solos[0]?.mastery || formData.mastery,
           itemStyle: formData.solos[0]?.itemStyle || formData.itemStyle,
           estimatedDuration: convertDurationToMinutes(formData.solos[0]?.estimatedDuration || formData.estimatedDuration),
-          performanceType: 'Solo',
+          performanceType: getCapitalizedPerformanceType(performanceType || 'Solo'), // Set correct performance type
           ageCategory: formData.ageCategory,
           soloCount: formData.soloCount,
-          soloDetails: formData.solos.map((solo, index) => ({
+          soloDetails: performanceType?.toLowerCase() === 'solo' ? formData.solos.map((solo, index) => ({
             soloNumber: index + 1,
             itemName: solo.itemName,
             choreographer: solo.choreographer,
             mastery: solo.mastery,
             itemStyle: solo.itemStyle,
             estimatedDuration: convertDurationToMinutes(solo.estimatedDuration)
-          })),
-          additionalNotes: `Nationals entry with ${formData.soloCount} solo${formData.soloCount > 1 ? 's' : ''}`
+          })) : null,
+          additionalNotes: `Nationals ${performanceType} entry${performanceType?.toLowerCase() === 'solo' ? ` with ${formData.soloCount} solo${formData.soloCount > 1 ? 's' : ''}` : ''}`
         };
 
         const response = await fetch('/api/nationals/entries', {
@@ -990,11 +990,11 @@ export default function PerformanceTypeEntryPage() {
         });
 
         if (response.ok) {
-          console.log('✅ Nationals entry submitted successfully');
+          console.log(`✅ Nationals ${performanceType} entry submitted successfully`);
           setSubmitted(true);
         } else {
           const error = await response.json();
-          showAlert(`Nationals entry failed: ${error.error}`, 'error');
+          showAlert(`Nationals ${performanceType} entry failed: ${error.error}`, 'error');
         }
       } else {
         // Submit to regular event-entries API

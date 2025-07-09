@@ -246,53 +246,28 @@ export default function AdminDashboard() {
 
       const adminData = JSON.parse(session);
 
-      // Create separate events for each performance type
-      const performanceTypes = ['Solo', 'Duet', 'Trio', 'Group'];
-      const performanceEmojis = {
-        'Solo': '🕺',
-        'Duet': '👯',
-        'Trio': '👨‍👩‍👧',
-        'Group': '👥'
-      };
+      // Create ONE unified event for all performance types
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...newEvent,
+          performanceType: 'All', // Set to 'All' to accommodate all performance types
+          // Set defaults for simplified event creation
+          ageCategory: 'All',
+          entryFee: 0,
+          maxParticipants: null,
+          createdBy: adminData.id,
+          status: 'upcoming'
+        }),
+      });
 
-      let successCount = 0;
-      let errorMessages = [];
+      const data = await response.json();
 
-      for (const performanceType of performanceTypes) {
-        try {
-          const response = await fetch('/api/events', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              ...newEvent,
-              name: `${newEvent.name} - ${performanceType}`,
-              description: `${newEvent.description} (${performanceType} performances)`,
-              performanceType: performanceType,
-              // Set defaults for simplified event creation
-              ageCategory: 'All',
-              entryFee: 0,
-              maxParticipants: null,
-              createdBy: adminData.id,
-              status: 'upcoming'
-            }),
-          });
-
-          const data = await response.json();
-
-          if (data.success) {
-            successCount++;
-          } else {
-            errorMessages.push(`${performanceType}: ${data.error}`);
-          }
-        } catch (error) {
-          errorMessages.push(`${performanceType}: Failed to create`);
-        }
-      }
-
-      if (successCount === 4) {
-        setCreateEventMessage('🎉 All 4 events created successfully! (Solo, Duet, Trio, Group)');
+      if (data.success) {
+        setCreateEventMessage('🎉 Event created successfully! This event can accommodate all performance types (Solo, Duet, Trio, Group)');
         setNewEvent({
           name: '',
           description: '',
@@ -305,14 +280,12 @@ export default function AdminDashboard() {
         fetchData();
         setShowCreateEventModal(false);
         setTimeout(() => setCreateEventMessage(''), 5000);
-      } else if (successCount > 0) {
-        setCreateEventMessage(`⚠️ ${successCount} out of 4 events created successfully. Errors: ${errorMessages.join(', ')}`);
       } else {
-        setCreateEventMessage(`❌ Failed to create any events. Errors: ${errorMessages.join(', ')}`);
+        setCreateEventMessage(`❌ Failed to create event. Error: ${data.error}`);
       }
     } catch (error) {
-      console.error('Error creating events:', error);
-      setCreateEventMessage('Error creating events. Please check your connection and try again.');
+      console.error('Error creating event:', error);
+      setCreateEventMessage('Error creating event. Please check your connection and try again.');
     } finally {
       setIsCreatingEvent(false);
     }
@@ -382,47 +355,31 @@ export default function AdminDashboard() {
 
       const adminData = JSON.parse(session);
 
-      // Find all events that match the selected root name
-      const rootEventName = assignment.eventId; // This is now the root name
-      const relatedEvents = events.filter(event => event.name.startsWith(rootEventName));
+      // Find the selected event by ID
+      const selectedEvent = events.find(event => event.id === assignment.eventId);
 
-      if (relatedEvents.length === 0) {
-        setAssignmentMessage('Error: No events found for the selected event group.');
+      if (!selectedEvent) {
+        setAssignmentMessage('Error: Selected event not found.');
         return;
       }
 
-      let successCount = 0;
-      let errorMessages = [];
+      // Assign judge to the unified event
+      const response = await fetch('/api/judge-assignments/event', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          judgeId: assignment.judgeId,
+          eventId: selectedEvent.id,
+          assignedBy: adminData.id
+        }),
+      });
 
-      // Assign judge to all related events (Solo, Duet, Trio, Group)
-      for (const event of relatedEvents) {
-        try {
-          const response = await fetch('/api/judge-assignments/event', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              judgeId: assignment.judgeId,
-              eventId: event.id,
-              assignedBy: adminData.id
-            }),
-          });
+      const data = await response.json();
 
-          const data = await response.json();
-
-          if (data.success) {
-            successCount++;
-          } else {
-            errorMessages.push(`${event.performanceType}: ${data.error}`);
-          }
-        } catch (error) {
-          errorMessages.push(`${event.performanceType}: Failed to assign`);
-        }
-      }
-
-      if (successCount === relatedEvents.length) {
-        setAssignmentMessage(`🎉 Judge assigned to all ${successCount} performance types successfully! (${relatedEvents.map(e => e.performanceType).join(', ')})`);
+      if (data.success) {
+        setAssignmentMessage(`🎉 Judge assigned to "${selectedEvent.name}" successfully! This judge can now score all performance types within this event.`);
         setAssignment({
           judgeId: '',
           eventId: ''
@@ -430,10 +387,8 @@ export default function AdminDashboard() {
         fetchData();
         setShowAssignJudgeModal(false);
         setTimeout(() => setAssignmentMessage(''), 5000);
-      } else if (successCount > 0) {
-        setAssignmentMessage(`⚠️ Judge assigned to ${successCount} out of ${relatedEvents.length} events. Errors: ${errorMessages.join(', ')}`);
       } else {
-        setAssignmentMessage(`❌ Failed to assign judge to any events. Errors: ${errorMessages.join(', ')}`);
+        setAssignmentMessage(`❌ Failed to assign judge. Error: ${data.error}`);
       }
     } catch (error) {
       console.error('Error assigning judge:', error);
@@ -2298,28 +2253,14 @@ export default function AdminDashboard() {
                     required
                   >
                     <option value="">Choose an event</option>
-                    {(() => {
-                      // Group events by their root name (remove " - Solo", " - Duet", etc.)
-                      const groupedEvents = events.reduce((acc, event) => {
-                        const rootName = event.name.replace(/ - (Solo|Duet|Trio|Group)$/, '');
-                        if (!acc.some(group => group.rootName === rootName)) {
-                          acc.push({
-                            rootName,
-                            events: events.filter(e => e.name.startsWith(rootName))
-                          });
-                        }
-                        return acc;
-                      }, [] as { rootName: string; events: typeof events }[]);
-
-                      return groupedEvents.map(group => (
-                        <option key={group.rootName} value={group.rootName}>
-                          {group.rootName} (All Performance Types)
-                        </option>
-                      ));
-                    })()}
+                    {events.map(event => (
+                      <option key={event.id} value={event.id}>
+                        {event.name} {event.performanceType === 'All' ? '(All Performance Types)' : `(${event.performanceType})`}
+                      </option>
+                    ))}
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    💡 Selecting an event will assign the judge to ALL performance types (Solo, Duet, Trio, Group).
+                    💡 Unified events support all performance types (Solo, Duet, Trio, Group) within the same event.
                   </p>
                 </div>
               </div>
