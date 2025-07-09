@@ -883,42 +883,18 @@ export default function PerformanceTypeEntryPage() {
         }
       }
 
-      // Calculate fee correctly
+      // Calculate fee correctly - use EODSA fee calculation for all entries
       let totalFee = 0;
-      if (performanceType?.toLowerCase() === 'solo' && region?.toLowerCase() === 'nationals') {
-        // Use nationals fee calculation for solos
-        const feeResponse = await fetch('/api/nationals/calculate-fee', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            performanceType: 'Solo',
-            soloCount: formData.soloCount,
-            participantCount: formData.participantIds.length,
-            participantIds: formData.participantIds
-          }),
-        });
-
-        if (feeResponse.ok) {
-          const feeData = await feeResponse.json();
-          totalFee = feeData.feeBreakdown.totalFee;
-        } else {
-          totalFee = feeBreakdown?.totalFee || 0;
+      const feeBreakdownResult = calculateEODSAFee(
+        formData.mastery,
+        getCapitalizedPerformanceType(performanceType),
+        formData.participantIds.length,
+        {
+          soloCount: performanceType?.toLowerCase() === 'solo' ? formData.soloCount : 1,
+          includeRegistration: true
         }
-      } else {
-        // Use EODSA fee calculation for non-solo or non-nationals events
-        const feeBreakdownResult = calculateEODSAFee(
-          formData.mastery,
-          getCapitalizedPerformanceType(performanceType),
-          formData.participantIds.length,
-          {
-            soloCount: 1,
-            includeRegistration: true
-          }
-        );
-        totalFee = feeBreakdownResult.totalFee;
-      }
+      );
+      totalFee = feeBreakdownResult.totalFee;
 
       // For group entries without initial EODSA ID, use the first participant's EODSA ID
       let finalEodsaId = eodsaId;
@@ -949,86 +925,38 @@ export default function PerformanceTypeEntryPage() {
         }
       }
 
-      // Prepare entry data - use nationals API for all nationals entries, regular API for others
-      if (region?.toLowerCase() === 'nationals') {
-        // Submit to nationals API for all performance types
-        const nationalsEntryData = {
-          nationalsEventId: formData.eventId,
-          contestantId: finalContestantId,
-          eodsaId: finalEodsaId,
-          participantIds: formData.participantIds,
-          calculatedFee: totalFee,
-          paymentStatus: 'pending',
-          paymentMethod: 'invoice',
-          approved: false,
-          qualifiedForNationals: true,
-          itemName: formData.solos[0]?.itemName || formData.itemName,
-          choreographer: formData.solos[0]?.choreographer || formData.choreographer,
-          mastery: formData.solos[0]?.mastery || formData.mastery,
-          itemStyle: formData.solos[0]?.itemStyle || formData.itemStyle,
-          estimatedDuration: convertDurationToMinutes(formData.solos[0]?.estimatedDuration || formData.estimatedDuration),
-          performanceType: getCapitalizedPerformanceType(performanceType || 'Solo'), // Set correct performance type
-          ageCategory: formData.ageCategory,
-          soloCount: formData.soloCount,
-          soloDetails: performanceType?.toLowerCase() === 'solo' ? formData.solos.map((solo, index) => ({
-            soloNumber: index + 1,
-            itemName: solo.itemName,
-            choreographer: solo.choreographer,
-            mastery: solo.mastery,
-            itemStyle: solo.itemStyle,
-            estimatedDuration: convertDurationToMinutes(solo.estimatedDuration)
-          })) : null,
-          additionalNotes: `Nationals ${performanceType} entry${performanceType?.toLowerCase() === 'solo' ? ` with ${formData.soloCount} solo${formData.soloCount > 1 ? 's' : ''}` : ''}`
-        };
+      // Prepare entry data - use regular event entries API for all entries
+      // Submit to regular event-entries API
+      const eventEntryData = {
+        eventId: formData.eventId,
+        contestantId: finalContestantId,
+        eodsaId: finalEodsaId,
+        participantIds: formData.participantIds,
+        calculatedFee: totalFee,
+        paymentStatus: 'pending',
+        paymentMethod: 'invoice',
+        approved: false,
+        itemName: formData.itemName,
+        choreographer: formData.choreographer,
+        mastery: formData.mastery,
+        itemStyle: formData.itemStyle,
+        estimatedDuration: convertDurationToMinutes(formData.estimatedDuration)
+      };
 
-        const response = await fetch('/api/nationals/entries', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(nationalsEntryData),
-        });
+      const response = await fetch('/api/event-entries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventEntryData),
+      });
 
-        if (response.ok) {
-          console.log(`✅ Nationals ${performanceType} entry submitted successfully`);
-          setSubmitted(true);
-        } else {
-          const error = await response.json();
-          showAlert(`Nationals ${performanceType} entry failed: ${error.error}`, 'error');
-        }
+      if (response.ok) {
+        console.log('✅ Event entry submitted successfully');
+        setSubmitted(true);
       } else {
-        // Submit to regular event-entries API
-        const eventEntryData = {
-          eventId: formData.eventId,
-          contestantId: finalContestantId,
-          eodsaId: finalEodsaId,
-          participantIds: formData.participantIds,
-          calculatedFee: totalFee,
-          paymentStatus: 'pending',
-          paymentMethod: 'invoice',
-          approved: false,
-          itemName: formData.itemName,
-          choreographer: formData.choreographer,
-          mastery: formData.mastery,
-          itemStyle: formData.itemStyle,
-          estimatedDuration: convertDurationToMinutes(formData.estimatedDuration)
-        };
-
-        const response = await fetch('/api/event-entries', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(eventEntryData),
-        });
-
-        if (response.ok) {
-          console.log('✅ Event entry submitted successfully');
-          setSubmitted(true);
-        } else {
-          const error = await response.json();
-          showAlert(`Entry failed: ${error.error}`, 'error');
-        }
+        const error = await response.json();
+        showAlert(`Entry failed: ${error.error}`, 'error');
       }
     } catch (error) {
       console.error('Entry error:', error);
