@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PERFORMANCE_TYPES } from '@/lib/types';
-import { CountdownTimer } from '@/components/CountdownTimer';
+import CountdownTimer from '@/app/components/CountdownTimer';
+import { useToast } from '@/components/ui/simple-toast';
 
 interface Event {
   id: string;
@@ -45,10 +46,25 @@ interface StudioSession {
   registrationNumber: string;
 }
 
+interface PerformanceEntry {
+  id: string;
+  performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group';
+  itemName: string;
+  choreographer: string;
+  mastery: string;
+  itemStyle: string;
+  estimatedDuration: string;
+  participantIds: string[];
+  participants: any[];
+  ageCategory: string;
+  fee: number;
+}
+
 export default function CompetitionEntryPage() {
   const searchParams = useSearchParams();
   const params = useParams();
   const router = useRouter();
+  const { success, error } = useToast();
   const region = decodeURIComponent(params?.region as string || '');
   const eodsaId = searchParams?.get('eodsaId') || '';
   const studioId = searchParams?.get('studioId') || '';
@@ -60,6 +76,21 @@ export default function CompetitionEntryPage() {
   const [isStudioMode, setIsStudioMode] = useState(false);
   const [event, setEvent] = useState<Event | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [entries, setEntries] = useState<PerformanceEntry[]>([]);
+  const [showAddForm, setShowAddForm] = useState<string | null>(null);
+  const [currentForm, setCurrentForm] = useState({
+    itemName: '',
+    choreographer: '',
+    mastery: 'Beginner',
+    itemStyle: '',
+    estimatedDuration: '',
+    participantIds: [] as string[],
+    ageCategory: 'All'
+  });
+  const [savedForms, setSavedForms] = useState<Record<string, typeof currentForm>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState<{entries: number, totalFee: number} | null>(null);
 
   useEffect(() => {
     if (region && eventId) {
@@ -99,6 +130,15 @@ export default function CompetitionEntryPage() {
               nationalId: dancer.nationalId
             }]
           });
+          // For solo dancers, add them to availableDancers so they can select themselves
+          setAvailableDancers([{
+            id: dancer.id,
+            name: dancer.name,
+            fullName: dancer.name,
+            eodsaId: dancer.eodsaId,
+            age: dancer.age,
+            nationalId: dancer.nationalId
+          }]);
           return;
         }
       }
@@ -108,6 +148,16 @@ export default function CompetitionEntryPage() {
       if (legacyResponse.ok) {
         const legacyData = await legacyResponse.json();
         setContestant(legacyData);
+        // For legacy contestants, also add them to availableDancers
+        if (legacyData.dancers && legacyData.dancers.length > 0) {
+          setAvailableDancers(legacyData.dancers.map((dancer: any) => ({
+            id: dancer.id,
+            name: dancer.name,
+            fullName: dancer.name,
+            eodsaId: dancer.nationalId,
+            age: dancer.age
+          })));
+        }
       }
     } catch (error) {
       console.error('Failed to load contestant:', error);
@@ -194,6 +244,209 @@ export default function CompetitionEntryPage() {
     return 'Per person + R300 registration each';
   };
 
+  const getParticipantLimits = (performanceType: string) => {
+    switch (performanceType) {
+      case 'Solo': return { min: 1, max: 1 };
+      case 'Duet': return { min: 2, max: 2 };
+      case 'Trio': return { min: 3, max: 3 };
+      case 'Group': return { min: 4, max: 10 };
+      default: return { min: 1, max: 10 };
+    }
+  };
+
+  const calculateEntryFee = (performanceType: string, participantCount: number) => {
+    if (performanceType === 'Solo') {
+      // Solo packages: 1 solo R400, 2 solos R750, 3 solos R1000, 4 solos R1200, 5th FREE
+      const soloCount = entries.filter(entry => entry.performanceType === 'Solo').length + 1; // +1 for current entry
+      if (soloCount === 1) return 400;
+      if (soloCount === 2) return 750 - 400; // R350 for 2nd solo (total R750)
+      if (soloCount === 3) return 1000 - 750; // R250 for 3rd solo (total R1000)
+      if (soloCount === 4) return 1200 - 1000; // R200 for 4th solo (total R1200)
+      if (soloCount >= 5) return 0; // 5th solo is FREE
+      return 400;
+    } else if (performanceType === 'Duet' || performanceType === 'Trio') {
+      return 280 * participantCount;
+    } else if (performanceType === 'Group') {
+      return participantCount <= 9 ? 220 * participantCount : 190 * participantCount;
+    }
+    return 0;
+  };
+
+  const handleAddPerformanceType = (performanceType: string) => {
+    // Save current form state if switching from another form
+    if (showAddForm && showAddForm !== performanceType) {
+      setSavedForms(prev => ({
+        ...prev,
+        [showAddForm]: currentForm
+      }));
+    }
+    
+    setShowAddForm(performanceType);
+    
+    // Restore saved form state or use default
+    const savedForm = savedForms[performanceType];
+    if (savedForm) {
+      setCurrentForm(savedForm);
+    } else {
+      setCurrentForm({
+        itemName: '',
+        choreographer: '',
+        mastery: 'Beginner',
+        itemStyle: '',
+        estimatedDuration: '',
+        participantIds: [],
+        ageCategory: 'All'
+      });
+    }
+  };
+
+  const handleSaveEntry = () => {
+    if (!showAddForm || currentForm.participantIds.length === 0 || !currentForm.itemName) {
+      return;
+    }
+
+    const limits = getParticipantLimits(showAddForm);
+    if (currentForm.participantIds.length < limits.min || currentForm.participantIds.length > limits.max) {
+      // Add some visual feedback that the form is invalid
+      console.warn('Invalid participant selection:', {
+        selected: currentForm.participantIds.length,
+        required: `${limits.min}-${limits.max}`,
+        performanceType: showAddForm
+      });
+      return;
+    }
+
+    const participants = availableDancers.filter(dancer => 
+      currentForm.participantIds.includes(dancer.id)
+    );
+
+    const fee = calculateEntryFee(showAddForm, currentForm.participantIds.length);
+
+    const newEntry: PerformanceEntry = {
+      id: `entry-${Date.now()}`,
+      performanceType: showAddForm as 'Solo' | 'Duet' | 'Trio' | 'Group',
+      ...currentForm,
+      participants,
+      fee
+    };
+
+    setEntries(prev => [...prev, newEntry]);
+    
+    // Clear saved form state for this performance type
+    setSavedForms(prev => {
+      const newSavedForms = { ...prev };
+      delete newSavedForms[showAddForm];
+      return newSavedForms;
+    });
+    
+    setShowAddForm(null);
+  };
+
+  const handleRemoveEntry = (entryId: string) => {
+    setEntries(prev => {
+      const newEntries = prev.filter(entry => entry.id !== entryId);
+      
+      // If we're removing a solo entry, recalculate solo fees for remaining entries
+      const removedEntry = prev.find(entry => entry.id === entryId);
+      if (removedEntry && removedEntry.performanceType === 'Solo') {
+        const soloEntries = newEntries.filter(entry => entry.performanceType === 'Solo');
+        
+        // Recalculate solo fees based on new positioning
+        soloEntries.forEach((entry, index) => {
+          const soloCount = index + 1;
+          if (soloCount === 1) entry.fee = 400;
+          else if (soloCount === 2) entry.fee = 750 - 400; // R350 for 2nd solo
+          else if (soloCount === 3) entry.fee = 1000 - 750; // R250 for 3rd solo
+          else if (soloCount === 4) entry.fee = 1200 - 1000; // R200 for 4th solo
+          else if (soloCount >= 5) entry.fee = 0; // 5th+ solo is FREE
+        });
+      }
+      
+      return newEntries;
+    });
+  };
+
+  const calculateTotalFee = () => {
+    const performanceFee = entries.reduce((total, entry) => total + entry.fee, 0);
+    const uniqueParticipants = new Set();
+    entries.forEach(entry => {
+      entry.participantIds.forEach(id => uniqueParticipants.add(id));
+    });
+    const registrationFee = uniqueParticipants.size * 300;
+    return { performanceFee, registrationFee, total: performanceFee + registrationFee };
+  };
+
+  const getPreviewFee = () => {
+    if (!showAddForm || currentForm.participantIds.length === 0) return 0;
+    
+    // Only show fee if validation passes
+    const limits = getParticipantLimits(showAddForm);
+    if (currentForm.participantIds.length < limits.min || currentForm.participantIds.length > limits.max) {
+      return 0;
+    }
+    
+    return calculateEntryFee(showAddForm, currentForm.participantIds.length);
+  };
+
+  const handleProceedToPayment = async () => {
+    if (entries.length === 0 || isSubmitting) return;
+
+    setIsSubmitting(true);
+
+    try {
+      // Submit all entries to backend using regular event entries API
+      for (const entry of entries) {
+        const eventEntryData = {
+          eventId: eventId, // Use regular event ID
+          contestantId: isStudioMode ? studioInfo?.id : contestant?.id,
+          eodsaId: isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId,
+          participantIds: entry.participantIds,
+          calculatedFee: entry.fee,
+          paymentStatus: 'pending',
+          paymentMethod: 'invoice',
+          approved: false,
+          qualifiedForNationals: true, // Mark as qualified for nationals
+          itemName: entry.itemName,
+          choreographer: entry.choreographer,
+          mastery: entry.mastery,
+          itemStyle: entry.itemStyle,
+          estimatedDuration: parseFloat(entry.estimatedDuration.replace(':', '.')) || 2
+        };
+
+        try {
+          const response = await fetch('/api/event-entries', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(eventEntryData),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to submit ${entry.performanceType} entry: ${errorData.error || 'Unknown error'}`);
+          }
+        } catch (error: any) {
+          console.error(`Error submitting ${entry.performanceType} entry:`, error);
+          error(`Error submitting ${entry.performanceType} entry: ${error.message || 'Unknown error'}`);
+          return;
+        }
+      }
+
+      // Show success message
+      const totalFee = calculateTotalFee().total;
+      setSubmissionResult({ entries: entries.length, totalFee });
+      setShowSuccessModal(true);
+      
+      // Navigation is now handled by the modal buttons
+    } catch (error: any) {
+      console.error('Error during submission:', error);
+      error(`Error during submission: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (!region || (!eodsaId && !studioId) || !eventId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
@@ -227,11 +480,94 @@ export default function CompetitionEntryPage() {
           <div className="space-y-2">
             <h3 className="text-xl font-bold text-white">Loading Competition</h3>
             <p className="text-slate-400 text-sm">Preparing performance options...</p>
+                  </div>
+      </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && submissionResult && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-md w-full mx-4 transform animate-in zoom-in-95 duration-300">
+            {/* Success Icon */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-4">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">
+                Submission Successful!
+              </h3>
+              <p className="text-slate-300 text-sm">
+                Your competition entries have been submitted
+              </p>
+            </div>
+
+            {/* Success Details */}
+            <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Entries Submitted:</span>
+                  <span className="text-white font-semibold">{submissionResult.entries}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Total Fee:</span>
+                  <span className="text-emerald-400 font-semibold text-lg">R{submissionResult.totalFee}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-600">
+                  <p className="text-sm text-slate-300">
+                    ✅ All entries qualified for nationals
+                  </p>
+                  <p className="text-sm text-slate-300">
+                    ⏳ Payment status: Pending
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Next Steps */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+              <h4 className="text-blue-400 font-semibold mb-2">Next Steps:</h4>
+              <ul className="text-sm text-slate-300 space-y-1">
+                <li>• Payment invoice will be sent to your email</li>
+                <li>• Complete payment to confirm your entries</li>
+                <li>• Check your dashboard for updates</li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  if (isStudioMode) {
+                    router.push(`/studio-dashboard?studioId=${studioId}`);
+                  } else {
+                    router.push(`/event-dashboard/${region}?eodsaId=${eodsaId}`);
+                  }
+                }}
+                className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                Return to Dashboard
+              </button>
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="px-4 py-3 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                Stay Here
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      )}
+    </div>
+  );
+}
+
+  // Calculate fees in real-time
+  const feeCalculation = calculateTotalFee();
+  const previewFee = getPreviewFee();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
@@ -256,7 +592,7 @@ export default function CompetitionEntryPage() {
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2">
               {event.name}
             </h1>
-            <p className="text-slate-400 text-sm sm:text-base mb-4">Choose your performance category</p>
+            <p className="text-slate-400 text-sm sm:text-base mb-4">Build your competition entry</p>
             
             {/* User Info */}
             {(contestant || studioInfo) && (
@@ -288,98 +624,467 @@ export default function CompetitionEntryPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 sm:p-8">
-          <h3 className="text-xl sm:text-2xl font-bold text-white mb-6 text-center">Register for Competition</h3>
-          
-          {/* Performance Types Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {['Duet', 'Trio', 'Solo', 'Group'].map((performanceType) => (
-              <div key={performanceType} className="group/type">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-purple-500/10 rounded-xl blur-lg opacity-0 group-hover/type:opacity-100 transition-opacity duration-300"></div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Performance Type Selection and Forms */}
+          <div className="lg:col-span-2">
+            {/* Performance Type Selection */}
+            <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mb-8">
+              <h3 className="text-xl font-bold text-white mb-4">Add Performance Types</h3>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {['Solo', 'Duet', 'Trio', 'Group'].map((type) => {
+                   const isActive = showAddForm === type;
+                   const soloCount = entries.filter(e => e.performanceType === 'Solo').length;
+                   const nextSoloFee = type === 'Solo' ? calculateEntryFee('Solo', 1) : 0;
+                   
+                   return (
+                     <button
+                       key={type}
+                       onClick={() => handleAddPerformanceType(type)}
+                       className={`p-4 bg-gradient-to-r text-white rounded-lg transition-all duration-300 transform hover:scale-[1.02] ${
+                         isActive 
+                           ? 'from-emerald-600 to-blue-600 ring-2 ring-emerald-400 animate-pulse' 
+                           : 'from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500'
+                       }`}
+                     >
+                       <div className="text-center">
+                         <h4 className="text-lg font-semibold mb-2">Add {type}</h4>
+                         
+                         {/* Dynamic pricing for Solo */}
+                         {type === 'Solo' && (
+                           <div className="text-sm mb-2">
+                             <div className="font-semibold text-emerald-200">
+                               Next: R{nextSoloFee}
+                             </div>
+                             {soloCount === 0 && <div className="text-xs opacity-75">1st Solo</div>}
+                             {soloCount === 1 && <div className="text-xs opacity-75">2nd Solo (Package deal)</div>}
+                             {soloCount === 2 && <div className="text-xs opacity-75">3rd Solo (Package deal)</div>}
+                             {soloCount === 3 && <div className="text-xs opacity-75">4th Solo (Package deal)</div>}
+                             {soloCount >= 4 && <div className="text-xs opacity-75">FREE!</div>}
+                           </div>
+                         )}
+                         
+                         {/* Static pricing for others */}
+                         {type !== 'Solo' && (
+                           <div className="text-sm mb-2">
+                             <div className="font-semibold text-emerald-200">
+                               From R{getStartingFee(type)}
+                             </div>
+                           </div>
+                         )}
+                         
+                         <p className="text-xs opacity-90">
+                           {getFeeExplanation(type)}
+                         </p>
+                       </div>
+                     </button>
+                   );
+                 })}
+               </div>
+            </div>
+
+                         {/* Entry Form */}
+             {showAddForm && (
+               <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mb-8">
+                 <div className="flex justify-between items-center mb-4">
+                   <div>
+                     <h3 className="text-xl font-semibold text-white">Add {showAddForm} Entry</h3>
+                     {savedForms[showAddForm] && (
+                       <p className="text-xs text-emerald-400 mt-1">✓ Form data restored</p>
+                     )}
+                   </div>
+                  <button
+                    onClick={() => {
+                      // Save current form state before closing
+                      setSavedForms(prev => ({
+                        ...prev,
+                        [showAddForm]: currentForm
+                      }));
+                      setShowAddForm(null);
+                    }}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Item Name *</label>
+                    <input
+                      type="text"
+                      value={currentForm.itemName}
+                      onChange={(e) => setCurrentForm({...currentForm, itemName: e.target.value})}
+                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
                   
-                  <div className="relative bg-slate-700/50 backdrop-blur-xl rounded-xl p-4 sm:p-6 border border-slate-600/50 hover:border-purple-500/30 transition-all duration-300">
-                    {/* Performance Type Header */}
-                    <div className="flex items-center space-x-3 mb-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                        <span className="text-lg">
-                          {performanceType === 'Solo' && '💃'}
-                          {performanceType === 'Duet' && '👯'}
-                          {performanceType === 'Trio' && '👥'}
-                          {performanceType === 'Group' && '🎭'}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-bold text-white">{performanceType}s</h4>
-                        <p className="text-slate-400 text-sm">{getParticipantRequirements(performanceType).description}</p>
-                      </div>
-                    </div>
-
-                    {/* Fee Info */}
-                    <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
-                      <p className="text-emerald-400 text-sm font-medium mb-1">
-                        From R{getStartingFee(performanceType)}
-                      </p>
-                      <p className="text-slate-300 text-xs">
-                        {getFeeExplanation(performanceType)}
-                      </p>
-                    </div>
-
-                    {/* Existing Dancers (for studios) */}
-                    {isStudioMode && availableDancers.length > 0 && (
-                      <div className="mb-4">
-                        <h5 className="text-sm font-medium text-slate-300 mb-2">Available Dancers:</h5>
-                        <div className="space-y-1 max-h-24 overflow-y-auto">
-                          {availableDancers.slice(0, 3).map((dancer) => (
-                            <div key={dancer.id} className="flex items-center space-x-2 text-xs">
-                              <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-                              <span className="text-slate-300">{dancer.name}</span>
-                              <span className="text-slate-500">({dancer.eodsaId})</span>
-                            </div>
-                          ))}
-                          {availableDancers.length > 3 && (
-                            <p className="text-xs text-slate-400">+{availableDancers.length - 3} more</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action Button */}
-                    <button
-                      onClick={() => router.push(`/event-dashboard/${region}/${performanceType.toLowerCase()}?${isStudioMode ? `studioId=${studioId}` : `eodsaId=${eodsaId}`}&eventId=${event.id}`)}
-                      className="w-full group/btn relative overflow-hidden px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-medium transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl hover:shadow-purple-500/25"
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Choreographer *</label>
+                    <input
+                      type="text"
+                      value={currentForm.choreographer}
+                      onChange={(e) => setCurrentForm({...currentForm, choreographer: e.target.value})}
+                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Mastery Level</label>
+                    <select
+                      value={currentForm.mastery}
+                      onChange={(e) => setCurrentForm({...currentForm, mastery: e.target.value})}
+                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-                      <div className="relative flex items-center justify-center space-x-2">
-                        <span className="text-sm">Add {performanceType}</span>
-                        <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                      </div>
-                    </button>
+                      <option value="Beginner">Beginner</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Item Style</label>
+                    <input
+                      type="text"
+                      value={currentForm.itemStyle}
+                      onChange={(e) => setCurrentForm({...currentForm, itemStyle: e.target.value})}
+                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Estimated Duration</label>
+                    <input
+                      type="text"
+                      value={currentForm.estimatedDuration}
+                      onChange={(e) => setCurrentForm({...currentForm, estimatedDuration: e.target.value})}
+                      placeholder="e.g., 2:30"
+                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Age Category</label>
+                    <select
+                      value={currentForm.ageCategory}
+                      onChange={(e) => setCurrentForm({...currentForm, ageCategory: e.target.value})}
+                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="All">All Ages</option>
+                      <option value="Youth">Youth (Under 18)</option>
+                      <option value="Adult">Adult (18+)</option>
+                    </select>
                   </div>
                 </div>
+                
+                                 <div className="mt-4">
+                   <label className="block text-sm font-medium text-slate-300 mb-2">
+                     Select Participants * ({getParticipantLimits(showAddForm).min} - {getParticipantLimits(showAddForm).max} required)
+                     {currentForm.participantIds.length > 0 && (
+                       <span className={`ml-2 text-xs px-2 py-1 rounded-full ${
+                         currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
+                         currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                           ? 'bg-red-500/20 text-red-400'
+                           : 'bg-emerald-500/20 text-emerald-400'
+                       }`}>
+                         {currentForm.participantIds.length} selected
+                       </span>
+                     )}
+                   </label>
+                   
+                   {/* Validation Messages */}
+                   {currentForm.participantIds.length > 0 && (
+                     <div className="mb-3">
+                       {currentForm.participantIds.length < getParticipantLimits(showAddForm).min && (
+                         <div className="text-amber-400 text-sm flex items-center space-x-1 animate-pulse">
+                           <span>⚠️</span>
+                           <span>Need {getParticipantLimits(showAddForm).min - currentForm.participantIds.length} more participant(s)</span>
+                         </div>
+                       )}
+                       {currentForm.participantIds.length > getParticipantLimits(showAddForm).max && (
+                         <div className="text-red-400 text-sm flex items-center space-x-1 animate-bounce">
+                           <span>❌</span>
+                           <span>Too many participants! Remove {currentForm.participantIds.length - getParticipantLimits(showAddForm).max} participant(s)</span>
+                         </div>
+                       )}
+                       {currentForm.participantIds.length >= getParticipantLimits(showAddForm).min && 
+                        currentForm.participantIds.length <= getParticipantLimits(showAddForm).max && (
+                         <div className="text-emerald-400 text-sm flex items-center space-x-1">
+                           <span>✅</span>
+                           <span>Perfect! {currentForm.participantIds.length} participant(s) selected</span>
+                         </div>
+                       )}
+                     </div>
+                   )}
+                   
+                   <div className={`grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-4 rounded-lg transition-all duration-300 ${
+                     currentForm.participantIds.length > getParticipantLimits(showAddForm).max 
+                       ? 'bg-red-900/20 border-2 border-red-500/50' 
+                       : currentForm.participantIds.length >= getParticipantLimits(showAddForm).min && 
+                         currentForm.participantIds.length <= getParticipantLimits(showAddForm).max
+                         ? 'bg-emerald-900/20 border-2 border-emerald-500/50'
+                         : 'bg-slate-700/30 border border-slate-600/50'
+                   }`}>
+                     {availableDancers.length === 0 && (
+                       <p className="text-slate-400 text-sm">No dancers available</p>
+                     )}
+                     {availableDancers.map(dancer => {
+                       const isSelected = currentForm.participantIds.includes(dancer.id);
+                       const isOverLimit = currentForm.participantIds.length >= getParticipantLimits(showAddForm).max;
+                       
+                       return (
+                         <label 
+                           key={dancer.id} 
+                           className={`flex items-center space-x-2 p-2 rounded transition-all duration-200 ${
+                             isSelected 
+                               ? currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                                 ? 'bg-red-500/20 text-red-300' 
+                                 : 'bg-emerald-500/20 text-emerald-300'
+                               : isOverLimit && !isSelected
+                                 ? 'text-slate-500 opacity-50 cursor-not-allowed'
+                                 : 'text-slate-300 hover:bg-slate-600/30 cursor-pointer'
+                           }`}
+                         >
+                           <input
+                             type="checkbox"
+                             checked={isSelected}
+                             onChange={(e) => {
+                               if (!isSelected && isOverLimit) {
+                                 return; // Don't allow selection if over limit
+                               }
+                               
+                               const newIds = e.target.checked
+                                 ? [...currentForm.participantIds, dancer.id]
+                                 : currentForm.participantIds.filter(id => id !== dancer.id);
+                               setCurrentForm({...currentForm, participantIds: newIds});
+                             }}
+                             disabled={!isSelected && isOverLimit}
+                             className={`rounded ${
+                               isSelected && currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                                 ? 'accent-red-500' 
+                                 : 'accent-emerald-500'
+                             }`}
+                           />
+                           <span className="text-sm">{dancer.fullName || dancer.name}</span>
+                         </label>
+                       );
+                     })}
+                   </div>
+                 </div>
+                
+                                 {/* Fee Preview */}
+                 {currentForm.participantIds.length > 0 && (
+                   <div className={`mt-4 p-3 rounded-lg border transition-all duration-300 ${
+                     currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
+                     currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                       ? 'bg-red-900/20 border-red-500/50'
+                       : 'bg-slate-700/30 border-slate-600/50'
+                   }`}>
+                     <div className="flex justify-between items-center">
+                       <span className="text-sm text-slate-300">Entry Fee Preview:</span>
+                       <span className={`text-lg font-semibold ${
+                         previewFee > 0 ? 'text-emerald-400' : 'text-red-400'
+                       }`}>
+                         {previewFee > 0 ? `R${previewFee}` : 'Invalid'}
+                       </span>
+                     </div>
+                     {showAddForm === 'Solo' && previewFee > 0 && (
+                       <div className="text-xs text-slate-400 mt-1">
+                         {entries.filter(e => e.performanceType === 'Solo').length === 0 && '1st Solo: R400'}
+                         {entries.filter(e => e.performanceType === 'Solo').length === 1 && '2nd Solo: R350 (Package: R750 total)'}
+                         {entries.filter(e => e.performanceType === 'Solo').length === 2 && '3rd Solo: R250 (Package: R1000 total)'}
+                         {entries.filter(e => e.performanceType === 'Solo').length === 3 && '4th Solo: R200 (Package: R1200 total)'}
+                         {entries.filter(e => e.performanceType === 'Solo').length >= 4 && '5th+ Solo: FREE!'}
+                       </div>
+                     )}
+                     {previewFee === 0 && currentForm.participantIds.length > 0 && (
+                       <div className="text-xs text-red-400 mt-1">
+                         Fix participant selection to see fee
+                       </div>
+                     )}
+                   </div>
+                 )}
+                 
+                 <div className="mt-6 flex justify-end space-x-4">
+                   <button
+                     onClick={() => {
+                       // Save current form state before closing
+                       setSavedForms(prev => ({
+                         ...prev,
+                         [showAddForm]: currentForm
+                       }));
+                       setShowAddForm(null);
+                     }}
+                     className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500"
+                   >
+                     Cancel
+                   </button>
+                   <button
+                     onClick={handleSaveEntry}
+                     disabled={
+                       !currentForm.itemName || 
+                       currentForm.participantIds.length === 0 ||
+                       currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
+                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                     }
+                     className={`px-6 py-2 text-white rounded-lg transition-all duration-300 ${
+                       !currentForm.itemName || 
+                       currentForm.participantIds.length === 0 ||
+                       currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
+                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                         ? 'bg-slate-500 cursor-not-allowed'
+                         : 'bg-purple-600 hover:bg-purple-500 hover:scale-105'
+                     }`}
+                   >
+                     {!currentForm.itemName ? 'Enter Item Name' :
+                      currentForm.participantIds.length === 0 ? 'Select Participants' :
+                      currentForm.participantIds.length < getParticipantLimits(showAddForm).min ? 
+                        `Need ${getParticipantLimits(showAddForm).min - currentForm.participantIds.length} More` :
+                      currentForm.participantIds.length > getParticipantLimits(showAddForm).max ? 
+                        `Remove ${currentForm.participantIds.length - getParticipantLimits(showAddForm).max}` :
+                      `Add Entry ${previewFee > 0 ? `(R${previewFee})` : ''}`}
+                   </button>
+                 </div>
               </div>
-            ))}
+            )}
+
+            {/* Added Entries List */}
+            {entries.length > 0 && (
+              <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Added Entries ({entries.length})</h3>
+                <div className="space-y-4">
+                  {entries.map((entry) => (
+                    <div key={entry.id} className="bg-slate-700/30 border border-slate-600/50 rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-lg text-white">{entry.itemName}</h4>
+                          <p className="text-slate-300">{entry.performanceType} • {entry.choreographer}</p>
+                                                     <p className="text-sm text-slate-400">
+                             {entry.participants.map(p => p.fullName || p.name).join(', ')}
+                           </p>
+                          <p className="text-sm text-slate-400">
+                            {entry.mastery} • {entry.itemStyle} • {entry.estimatedDuration}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-lg text-emerald-400">R{entry.fee}</p>
+                          <button
+                            onClick={() => handleRemoveEntry(entry.id)}
+                            className="text-red-400 hover:text-red-300 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Registration Deadline */}
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-            <div className="flex items-center space-x-2 mb-2">
-              <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path>
-              </svg>
-              <span className="text-amber-300 font-medium">Registration Deadline</span>
+          {/* Right Column - Summary and Payment */}
+          <div className="lg:col-span-1">
+            <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 sticky top-8">
+              <h3 className="text-xl font-semibold text-white mb-4">Registration Summary</h3>
+              
+                             <div className="space-y-2 mb-4 text-slate-300">
+                 <div className="flex justify-between">
+                   <span>Entries:</span>
+                   <span>{entries.length}{showAddForm && previewFee > 0 && <span className="text-slate-400"> (+1)</span>}</span>
+                 </div>
+                 
+                 {/* Pending entry preview */}
+                 {showAddForm && previewFee > 0 && (
+                   <div className="text-xs text-slate-400 bg-slate-700/20 p-2 rounded border border-slate-600/30">
+                     <div className="flex justify-between">
+                       <span>+ Adding {showAddForm}:</span>
+                       <span className="text-emerald-400">R{previewFee}</span>
+                     </div>
+                   </div>
+                 )}
+                 
+                 {/* Solo package info */}
+                 {entries.filter(e => e.performanceType === 'Solo').length > 0 && (
+                   <div className="text-xs text-slate-400 bg-slate-700/30 p-2 rounded">
+                     <div className="flex justify-between">
+                       <span>Solo entries:</span>
+                       <span>{entries.filter(e => e.performanceType === 'Solo').length}</span>
+                     </div>
+                     {entries.filter(e => e.performanceType === 'Solo').length >= 2 && (
+                       <div className="text-emerald-400 mt-1">
+                         ✓ Solo package pricing applied
+                       </div>
+                     )}
+                     {entries.filter(e => e.performanceType === 'Solo').length >= 5 && (
+                       <div className="text-emerald-400">
+                         ✓ 5th+ solo entries are FREE!
+                       </div>
+                     )}
+                   </div>
+                 )}
+                 
+                 <div className="flex justify-between">
+                   <span>Performance Fees:</span>
+                   <span>R{feeCalculation.performanceFee}</span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span>Registration Fees:</span>
+                   <span>R{feeCalculation.registrationFee}</span>
+                 </div>
+                 <div className="text-xs text-slate-400">
+                   ({new Set(entries.flatMap(e => e.participantIds)).size} unique participants × R300)
+                 </div>
+                 
+                 {/* Preview total with pending entry */}
+                 {showAddForm && previewFee > 0 && (
+                   <div className="border-t border-slate-600/50 pt-2">
+                     <div className="flex justify-between text-sm text-slate-400">
+                       <span>Preview Total:</span>
+                       <span>R{feeCalculation.total + previewFee}</span>
+                     </div>
+                   </div>
+                 )}
+                 
+                 <div className="border-t border-slate-600 pt-2">
+                   <div className="flex justify-between font-semibold text-lg text-emerald-400">
+                     <span>Total:</span>
+                     <span className="transition-all duration-300 transform hover:scale-110">
+                       R{feeCalculation.total}
+                     </span>
+                   </div>
+                 </div>
+               </div>
+
+              <button
+                onClick={handleProceedToPayment}
+                disabled={entries.length === 0 || isSubmitting}
+                className={`w-full py-3 text-white rounded-lg font-semibold transition-all duration-300 ${
+                  isSubmitting 
+                    ? 'bg-slate-500 cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:bg-slate-500 disabled:cursor-not-allowed'
+                }`}
+              >
+                {isSubmitting ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Submitting Entries...</span>
+                  </div>
+                ) : (
+                  'Proceed to Payment'
+                )}
+              </button>
             </div>
-            <p className="text-amber-200 mb-2">
-              {new Date(event.registrationDeadline).toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-              })}
-            </p>
-            <CountdownTimer deadline={event.registrationDeadline} />
+
+            {/* Event Details */}
+            <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mt-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Event Details</h3>
+                             <div className="space-y-2 text-sm text-slate-300">
+                 <p><strong>Date:</strong> {event?.eventDate ? new Date(event.eventDate).toLocaleDateString() : 'TBD'}</p>
+                 <p><strong>Time:</strong> {event?.eventDate ? new Date(event.eventDate).toLocaleTimeString() : 'TBD'}</p>
+                 <p><strong>Venue:</strong> {event?.venue || 'TBD'}</p>
+                 <p><strong>Registration Deadline:</strong> {event?.registrationDeadline ? new Date(event.registrationDeadline).toLocaleDateString() : 'TBD'}</p>
+               </div>
+            </div>
           </div>
         </div>
       </div>

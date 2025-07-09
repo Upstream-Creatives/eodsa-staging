@@ -77,7 +77,45 @@ export default function EventParticipantsPage() {
   const [tempItemNumber, setTempItemNumber] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
   const [deletingEntries, setDeletingEntries] = useState<Set<string>>(new Set());
+  const [performanceTypeFilter, setPerformanceTypeFilter] = useState<string>('all');
   const { showAlert } = useAlert();
+
+  // Determine performance type from participant count
+  const getPerformanceType = (participantIds: string[]) => {
+    const count = participantIds.length;
+    if (count === 1) return 'Solo';
+    if (count === 2) return 'Duet';
+    if (count === 3) return 'Trio';
+    if (count >= 4) return 'Group';
+    return 'Unknown';
+  };
+
+  // Get performance type color
+  const getPerformanceTypeColor = (type: string) => {
+    switch (type) {
+      case 'Solo': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'Duet': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'Trio': return 'bg-green-100 text-green-800 border-green-200';
+      case 'Group': return 'bg-orange-100 text-orange-800 border-orange-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Filter entries by performance type
+  const filteredEntries = performanceTypeFilter === 'all' 
+    ? entries 
+    : entries.filter(entry => getPerformanceType(entry.participantIds).toLowerCase() === performanceTypeFilter);
+
+  // Get performance type statistics
+  const getPerformanceStats = () => {
+    const stats = {
+      solo: entries.filter(e => getPerformanceType(e.participantIds) === 'Solo').length,
+      duet: entries.filter(e => getPerformanceType(e.participantIds) === 'Duet').length,
+      trio: entries.filter(e => getPerformanceType(e.participantIds) === 'Trio').length,
+      group: entries.filter(e => getPerformanceType(e.participantIds) === 'Group').length,
+    };
+    return stats;
+  };
 
   useEffect(() => {
     const session = localStorage.getItem('adminSession');
@@ -501,8 +539,85 @@ export default function EventParticipantsPage() {
                 <p className="text-gray-700">R{event.entryFee.toFixed(2)}</p>
               </div>
               <div>
-                <p className="font-semibold text-gray-700">Participants</p>
-                <p className="text-gray-700">{entries.length} entries</p>
+                <p className="font-semibold text-gray-700">Entries</p>
+                <p className="text-gray-700">{entries.length} total</p>
+                {entries.length > 0 && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    {getPerformanceStats().solo > 0 && `${getPerformanceStats().solo} Solo`}
+                    {getPerformanceStats().duet > 0 && (getPerformanceStats().solo > 0 ? `, ${getPerformanceStats().duet} Duet` : `${getPerformanceStats().duet} Duet`)}
+                    {getPerformanceStats().trio > 0 && (getPerformanceStats().solo > 0 || getPerformanceStats().duet > 0 ? `, ${getPerformanceStats().trio} Trio` : `${getPerformanceStats().trio} Trio`)}
+                    {getPerformanceStats().group > 0 && (getPerformanceStats().solo > 0 || getPerformanceStats().duet > 0 || getPerformanceStats().trio > 0 ? `, ${getPerformanceStats().group} Group` : `${getPerformanceStats().group} Group`)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Performance Type Filter Tabs */}
+        {entries.length > 0 && (
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-indigo-100 mb-6">
+            <div className="px-6 py-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter by Performance Type</h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setPerformanceTypeFilter('all')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    performanceTypeFilter === 'all'
+                      ? 'bg-indigo-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  All Entries ({entries.length})
+                </button>
+                {getPerformanceStats().solo > 0 && (
+                  <button
+                    onClick={() => setPerformanceTypeFilter('solo')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      performanceTypeFilter === 'solo'
+                        ? 'bg-purple-600 text-white shadow-lg'
+                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    }`}
+                  >
+                    Solo ({getPerformanceStats().solo})
+                  </button>
+                )}
+                {getPerformanceStats().duet > 0 && (
+                  <button
+                    onClick={() => setPerformanceTypeFilter('duet')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      performanceTypeFilter === 'duet'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    }`}
+                  >
+                    Duet ({getPerformanceStats().duet})
+                  </button>
+                )}
+                {getPerformanceStats().trio > 0 && (
+                  <button
+                    onClick={() => setPerformanceTypeFilter('trio')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      performanceTypeFilter === 'trio'
+                        ? 'bg-green-600 text-white shadow-lg'
+                        : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    }`}
+                  >
+                    Trio ({getPerformanceStats().trio})
+                  </button>
+                )}
+                {getPerformanceStats().group > 0 && (
+                  <button
+                    onClick={() => setPerformanceTypeFilter('group')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      performanceTypeFilter === 'group'
+                        ? 'bg-orange-600 text-white shadow-lg'
+                        : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                    }`}
+                  >
+                    Group ({getPerformanceStats().group})
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -512,14 +627,19 @@ export default function EventParticipantsPage() {
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-indigo-100 mb-8">
           <div className="px-6 py-4 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-b border-indigo-100">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">Participants & Entries</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                {performanceTypeFilter === 'all' 
+                  ? 'All Participants & Entries' 
+                  : `${performanceTypeFilter.charAt(0).toUpperCase() + performanceTypeFilter.slice(1)} Entries`
+                }
+              </h2>
               <div className="flex items-center space-x-3">
                 <div className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
-                  {entries.length} entries
+                  {filteredEntries.length} entries
                 </div>
-                {entries.length > 0 && (
+                {filteredEntries.length > 0 && (
                   <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
-                    {entries.filter(e => e.qualifiedForNationals).length} qualified
+                    {filteredEntries.filter(e => e.qualifiedForNationals).length} qualified
                   </div>
                 )}
               </div>
@@ -527,13 +647,23 @@ export default function EventParticipantsPage() {
           </div>
 
           {/* Table with Item Number column */}
-          {entries.length === 0 ? (
+          {filteredEntries.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                 <span className="text-2xl">📝</span>
               </div>
-              <h3 className="text-lg font-medium mb-2">No entries yet</h3>
-              <p className="text-sm">Participants will appear here once they register for this event.</p>
+              <h3 className="text-lg font-medium mb-2">
+                {performanceTypeFilter === 'all' 
+                  ? 'No entries yet' 
+                  : `No ${performanceTypeFilter} entries`
+                }
+              </h3>
+              <p className="text-sm">
+                {performanceTypeFilter === 'all'
+                  ? 'Participants will appear here once they register for this event.'
+                  : `No ${performanceTypeFilter} entries found. Try selecting "All Entries" to see other performance types.`
+                }
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -541,6 +671,7 @@ export default function EventParticipantsPage() {
                 <thead className="bg-gray-50/80">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Item #</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Type</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Contestant</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Performance</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Payment</th>
@@ -550,7 +681,9 @@ export default function EventParticipantsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white/50 divide-y divide-gray-200">
-                  {entries.map((entry) => (
+                  {filteredEntries.map((entry) => {
+                    const performanceType = getPerformanceType(entry.participantIds);
+                    return (
                     <tr key={entry.id} className="hover:bg-indigo-50/50 transition-colors duration-200">
                       <td className="px-6 py-4 whitespace-nowrap">
                         {editingItemNumber === entry.id ? (
@@ -598,10 +731,27 @@ export default function EventParticipantsPage() {
                           </div>
                         )}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full border ${getPerformanceTypeColor(performanceType)}`}>
+                          {performanceType.toUpperCase()}
+                        </span>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {entry.participantIds.length} participant{entry.participantIds.length !== 1 ? 's' : ''}
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <div>
                           <div className="text-sm font-bold text-gray-900">{entry.contestantName || 'Loading...'}</div>
                           <div className="text-sm text-gray-700">{entry.eodsaId}</div>
+                          {/* Show all participant names for trio/group entries */}
+                          {performanceType !== 'Solo' && entry.participantNames && entry.participantNames.length > 1 && (
+                            <div className="text-xs text-gray-600 mt-1">
+                              <span className="font-medium">Participants:</span>
+                              <div className="text-gray-500">
+                                {entry.participantNames.join(', ')}
+                              </div>
+                            </div>
+                          )}
                           <div className="text-xs text-gray-500 sm:hidden mt-1">
                             {entry.itemName} • {entry.mastery}
                           </div>
@@ -612,6 +762,20 @@ export default function EventParticipantsPage() {
                           <div className="text-sm font-medium text-gray-900">{entry.itemName}</div>
                           <div className="text-sm text-gray-700">{entry.choreographer}</div>
                           <div className="text-xs text-gray-500">{entry.mastery} • {entry.itemStyle}</div>
+                          {/* Show all participant names for multi-person entries */}
+                          {performanceType !== 'Solo' && entry.participantNames && entry.participantNames.length > 0 && (
+                            <div className="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded">
+                              <span className="font-medium text-gray-700">Dancers:</span>
+                              <div className="text-gray-600 mt-1">
+                                {entry.participantNames.map((name, index) => (
+                                  <div key={index} className="flex items-center space-x-1">
+                                    <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                    <span>{name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -678,7 +842,8 @@ export default function EventParticipantsPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

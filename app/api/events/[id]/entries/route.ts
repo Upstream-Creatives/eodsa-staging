@@ -32,11 +32,25 @@ export async function GET(
           if (dancer) {
             // This is a unified system dancer
             console.log(`Found unified dancer: ${dancer.name} (${dancer.eodsaId})`);
+            
+            // Get all participant names for this entry
+            const participantNames = await Promise.all(
+              entry.participantIds.map(async (participantId) => {
+                try {
+                  const participant = await unifiedDb.getDancerById(participantId);
+                  return participant ? participant.name : 'Unknown Dancer';
+                } catch (error) {
+                  console.error(`Error fetching participant ${participantId}:`, error);
+                  return 'Unknown Dancer';
+                }
+              })
+            );
+            
             return {
               ...entry,
               contestantName: dancer.name,
               contestantEmail: dancer.email || '',
-              participantNames: [dancer.name] // For solo entries, participant is the dancer themselves
+              participantNames: participantNames
             };
           } else {
             // Try legacy contestant system
