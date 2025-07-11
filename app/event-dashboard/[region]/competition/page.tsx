@@ -244,6 +244,48 @@ export default function CompetitionEntryPage() {
     return 'Per person + R300 registration each';
   };
 
+  // NEW: Helper function to get maximum duration display for performance type
+  const getMaxDurationDisplay = (performanceType: string) => {
+    const TIME_LIMITS = {
+      'Solo': 2,
+      'Duet': 3,
+      'Trio': 3,
+      'Group': 3.5
+    };
+    const maxTime = TIME_LIMITS[performanceType as keyof typeof TIME_LIMITS] || 0;
+    return maxTime === 3.5 ? '3:30' : `${maxTime}:00`;
+  };
+
+  // NEW: Helper function to determine age category based on oldest participant
+  const getCalculatedAgeCategory = () => {
+    if (!currentForm.participantIds.length || !availableDancers.length) {
+      return 'All Ages';
+    }
+
+    const selectedParticipants = availableDancers.filter(dancer => 
+      currentForm.participantIds.includes(dancer.id)
+    );
+
+    if (selectedParticipants.length === 0) {
+      return 'All Ages';
+    }
+
+    // Find the oldest participant
+    const oldestAge = Math.max(...selectedParticipants.map(dancer => dancer.age));
+    
+    // Determine age category based on oldest participant
+    if (oldestAge <= 4) return '4 & Under';
+    if (oldestAge <= 6) return '6 & Under';
+    if (oldestAge <= 9) return '7-9';
+    if (oldestAge <= 12) return '10-12';
+    if (oldestAge <= 14) return '13-14';
+    if (oldestAge <= 17) return '15-17';
+    if (oldestAge <= 24) return '18-24';
+    if (oldestAge <= 39) return '25-39';
+    if (oldestAge < 60) return '40+';
+    return '60+';
+  };
+
   const getParticipantLimits = (performanceType: string) => {
     switch (performanceType) {
       case 'Solo': return { min: 1, max: 1 };
@@ -483,84 +525,6 @@ export default function CompetitionEntryPage() {
                   </div>
       </div>
 
-      {/* Success Modal */}
-      {showSuccessModal && submissionResult && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-md w-full mx-4 transform animate-in zoom-in-95 duration-300">
-            {/* Success Icon */}
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-4">
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-2">
-                Submission Successful!
-              </h3>
-              <p className="text-slate-300 text-sm">
-                Your competition entries have been submitted
-              </p>
-            </div>
-
-            {/* Success Details */}
-            <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300">Entries Submitted:</span>
-                  <span className="text-white font-semibold">{submissionResult.entries}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300">Total Fee:</span>
-                  <span className="text-emerald-400 font-semibold text-lg">R{submissionResult.totalFee}</span>
-                </div>
-                <div className="pt-2 border-t border-slate-600">
-                  <p className="text-sm text-slate-300">
-                    ✅ All entries qualified for nationals
-                  </p>
-                  <p className="text-sm text-slate-300">
-                    ⏳ Payment status: Pending
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Next Steps */}
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
-              <h4 className="text-blue-400 font-semibold mb-2">Next Steps:</h4>
-              <ul className="text-sm text-slate-300 space-y-1">
-                <li>• Payment invoice will be sent to your email</li>
-                <li>• Complete payment to confirm your entries</li>
-                <li>• Check your dashboard for updates</li>
-              </ul>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  if (isStudioMode) {
-                    router.push(`/studio-dashboard?studioId=${studioId}`);
-                  } else {
-                    router.push(`/event-dashboard/${region}?eodsaId=${eodsaId}`);
-                  }
-                }}
-                className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors"
-              >
-                Return to Dashboard
-              </button>
-              <button
-                onClick={() => setShowSuccessModal(false)}
-                className="px-4 py-3 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
-              >
-                Stay Here
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -752,27 +716,49 @@ export default function CompetitionEntryPage() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Estimated Duration</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Estimated Duration - Maximum: {getMaxDurationDisplay(showAddForm || '')}
+                      <span className="text-xs text-slate-400 block mt-1">Read-only: Shows maximum time limit for {showAddForm}</span>
+                    </label>
                     <input
                       type="text"
-                      value={currentForm.estimatedDuration}
-                      onChange={(e) => setCurrentForm({...currentForm, estimatedDuration: e.target.value})}
-                      placeholder="e.g., 2:30"
-                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      value={getMaxDurationDisplay(showAddForm || '')}
+                      readOnly
+                      className="w-full p-3 bg-slate-600/50 border border-slate-500 rounded-lg text-slate-300 cursor-not-allowed"
+                      title="Maximum duration automatically set based on performance type"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Age Category</label>
-                    <select
-                      value={currentForm.ageCategory}
-                      onChange={(e) => setCurrentForm({...currentForm, ageCategory: e.target.value})}
-                      className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="All">All Ages</option>
-                      <option value="Youth">Youth (Under 18)</option>
-                      <option value="Adult">Adult (18+)</option>
-                    </select>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Age Category
+                      <span className="text-xs text-slate-400 block mt-1">Read-only: Based on oldest participant</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={getCalculatedAgeCategory()}
+                      readOnly
+                      className="w-full p-3 bg-slate-600/50 border border-slate-500 rounded-lg text-slate-300 cursor-not-allowed"
+                      title="Age category automatically determined by oldest participant"
+                    />
+                    {currentForm.participantIds.length > 0 && availableDancers.length > 0 && (
+                      <div className="mt-2 p-2 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                        <div className="text-purple-300 text-sm">
+                          <strong>Participants:</strong> {
+                            availableDancers
+                              .filter(dancer => currentForm.participantIds.includes(dancer.id))
+                              .map(dancer => `${dancer.name} (${dancer.age}y)`)
+                              .join(', ')
+                          }
+                        </div>
+                        <div className="text-purple-200 text-xs mt-1">
+                          Oldest: {Math.max(...availableDancers
+                            .filter(dancer => currentForm.participantIds.includes(dancer.id))
+                            .map(dancer => dancer.age)
+                          )} years → Category: {getCalculatedAgeCategory()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -1088,6 +1074,101 @@ export default function CompetitionEntryPage() {
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && submissionResult && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-700/50 p-8 max-w-lg w-full">
+            {/* Success Icon */}
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">🎉 Entries Submitted Successfully!</h2>
+              <p className="text-slate-300">Your competition entries have been registered for {event?.name}</p>
+            </div>
+
+            {/* Entry Summary */}
+            <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Entries Submitted:</span>
+                                  <span className="text-white font-semibold">{submissionResult?.entries}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-300">Total Fee:</span>
+                <span className="text-emerald-400 font-semibold text-lg">R{submissionResult?.totalFee}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-600">
+                  <p className="text-sm text-slate-300">
+                    ✅ All entries qualified for nationals
+                  </p>
+                  <p className="text-sm text-slate-300">
+                    ⏳ Payment status: Pending
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Next Steps */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+              <h4 className="text-blue-400 font-semibold mb-2">Next Steps:</h4>
+              <ul className="text-sm text-slate-300 space-y-1">
+                <li>• Payment invoice will be sent to your email</li>
+                <li>• Complete payment to confirm your entries</li>
+                <li>• Check your dashboard for updates</li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              {isStudioMode ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      // Clear entries and reset form
+                      setEntries([]);
+                      setSubmissionResult(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500 transition-colors"
+                  >
+                    Enter More Events
+                  </button>
+                  <button
+                    onClick={() => router.push(`/studio-dashboard?studioId=${studioId}`)}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
+                  >
+                    Studio Dashboard
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      // Clear entries and reset form
+                      setEntries([]);
+                      setSubmissionResult(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500 transition-colors"
+                  >
+                    Enter More Events
+                  </button>
+                  <button
+                    onClick={() => router.push(`/event-dashboard?eodsaId=${eodsaId}`)}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
+                  >
+                    Event Dashboard
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

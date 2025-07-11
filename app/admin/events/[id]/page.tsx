@@ -370,8 +370,35 @@ export default function EventParticipantsPage() {
   const exportToExcel = async () => {
     setIsExporting(true);
     try {
-      // Prepare data for export with enhanced fee breakdown
-      const exportData = entries.map((entry) => {
+      // Import XLSX library
+      const XLSX = await import('xlsx');
+      
+      if (entries.length === 0) {
+        showAlert('No data to export', 'warning');
+        return;
+      }
+
+      // Create a new workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Prepare event information section
+      const eventInfo = [
+        ['EVENT DETAILS', '', '', '', '', '', '', '', '', '', ''],
+        ['Event Name:', event?.name || '', '', '', '', '', '', '', '', '', ''],
+        ['Event Date:', new Date(event?.eventDate || '').toLocaleDateString(), '', '', '', '', '', '', '', '', ''],
+        ['Venue:', event?.venue || '', '', '', '', '', '', '', '', '', ''],
+        ['Region:', event?.region || '', '', '', '', '', '', '', '', '', ''],
+        ['Performance Type:', event?.performanceType || '', '', '', '', '', '', '', '', '', ''],
+        ['Age Category:', event?.ageCategory || '', '', '', '', '', '', '', '', '', ''],
+        ['Entry Fee:', `R${event?.entryFee?.toFixed(2) || '0.00'}`, '', '', '', '', '', '', '', '', ''],
+        ['Total Entries:', entries.length.toString(), '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', '', ''], // Empty row for separation
+        ['PARTICIPANT ENTRIES', '', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', '', ''], // Empty row for separation
+      ];
+
+      // Prepare participant data with enhanced information
+      const participantData = entries.map((entry) => {
         // Calculate fee breakdown for each entry
         const feeBreakdown = calculateEODSAFee(
           entry.mastery,
@@ -383,56 +410,191 @@ export default function EventParticipantsPage() {
           }
         );
 
-        return {
-          'Item Number': entry.itemNumber || 'Not Assigned',
-          'EODSA ID': entry.eodsaId,
-          'Name': entry.contestantName,
-          'Performance Type': event?.performanceType || '',
-          'Mastery Level': entry.mastery,
-          'Style': entry.itemStyle,
-          'Age Category': event?.ageCategory || '',
-          'Participants': entry.participantIds?.length || 1,
-          'Registration Fee': `R${feeBreakdown.registrationFee.toFixed(2)}`,
-          'Performance Fee': `R${feeBreakdown.performanceFee.toFixed(2)}`,
-          'Fee Breakdown': feeBreakdown.breakdown,
-          'Total Fee': `R${entry.calculatedFee.toFixed(2)}`,
-          'Qualified for Nationals': entry.qualifiedForNationals ? 'Yes' : 'No',
-          'Payment Status': entry.paymentStatus.toUpperCase(),
-          'Entry Status': entry.approved ? 'APPROVED' : 'PENDING',
-          'Choreographer': entry.choreographer,
-          'Duration (minutes)': entry.estimatedDuration || 'N/A',
-          'Submitted Date': new Date(entry.submittedAt).toLocaleDateString()
-        };
+        // Get participant names if available
+        const participantNames = entry.participantNames?.join(', ') || 'Unknown';
+        
+        // Calculate age category based on performance type
+        const performanceType = getPerformanceType(entry.participantIds);
+        
+        return [
+          entry.itemNumber || 'Not Assigned',
+          entry.eodsaId,
+          entry.contestantName || 'Unknown',
+          performanceType,
+          entry.mastery,
+          entry.itemStyle,
+          event?.ageCategory || 'N/A',
+          entry.participantIds?.length || 1,
+          participantNames,
+          entry.choreographer,
+          entry.estimatedDuration || 'N/A',
+          `R${feeBreakdown.registrationFee.toFixed(2)}`,
+          `R${feeBreakdown.performanceFee.toFixed(2)}`,
+          `R${entry.calculatedFee.toFixed(2)}`,
+          entry.qualifiedForNationals ? 'Yes' : 'No',
+          entry.paymentStatus.toUpperCase(),
+          entry.approved ? 'APPROVED' : 'PENDING',
+          new Date(entry.submittedAt).toLocaleDateString(),
+          new Date(entry.submittedAt).toLocaleTimeString()
+        ];
       });
 
-      // Convert to CSV format
-      if (exportData.length === 0) {
-        showAlert('No data to export', 'warning');
-        return;
+      // Create headers for participant data
+      const participantHeaders = [
+        'Item Number',
+        'EODSA ID',
+        'Contestant Name',
+        'Performance Type', 
+        'Mastery Level',
+        'Style',
+        'Age Category',
+        'No. of Participants',
+        'Participant Names',
+        'Choreographer',
+        'Duration (min)',
+        'Registration Fee',
+        'Performance Fee',
+        'Total Fee',
+        'Qualified for Nationals',
+        'Payment Status',
+        'Entry Status',
+        'Submitted Date',
+        'Submitted Time'
+      ];
+
+      // Combine all data
+      const fullData = [
+        ...eventInfo,
+        participantHeaders,
+        ...participantData
+      ];
+
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(fullData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 12 }, // Item Number
+        { wch: 12 }, // EODSA ID
+        { wch: 20 }, // Contestant Name
+        { wch: 15 }, // Performance Type
+        { wch: 12 }, // Mastery Level
+        { wch: 15 }, // Style
+        { wch: 12 }, // Age Category
+        { wch: 8 },  // No. of Participants
+        { wch: 30 }, // Participant Names
+        { wch: 20 }, // Choreographer
+        { wch: 12 }, // Duration
+        { wch: 15 }, // Registration Fee
+        { wch: 15 }, // Performance Fee
+        { wch: 12 }, // Total Fee
+        { wch: 12 }, // Qualified for Nationals
+        { wch: 12 }, // Payment Status
+        { wch: 12 }, // Entry Status
+        { wch: 12 }, // Submitted Date
+        { wch: 12 }  // Submitted Time
+      ];
+      ws['!cols'] = colWidths;
+
+      // Apply styles and borders
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      
+      // Style the event info section (first 12 rows)
+      for (let R = 0; R < 12; R++) {
+        for (let C = 0; C <= 10; C++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellAddress]) continue;
+          
+          // Event details header styling
+          if (R === 0) {
+            ws[cellAddress].s = {
+              font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
+              fill: { fgColor: { rgb: '4F46E5' } },
+              alignment: { horizontal: 'center', vertical: 'center' },
+              border: {
+                top: { style: 'thick', color: { rgb: '000000' } },
+                bottom: { style: 'thick', color: { rgb: '000000' } },
+                left: { style: 'thick', color: { rgb: '000000' } },
+                right: { style: 'thick', color: { rgb: '000000' } }
+              }
+            };
+          }
+          // Event info styling
+          else if (R >= 1 && R <= 8) {
+            ws[cellAddress].s = {
+              font: { bold: C === 0, sz: 12 },
+              fill: { fgColor: { rgb: C === 0 ? 'E0E7FF' : 'F8FAFC' } },
+              border: {
+                top: { style: 'thin', color: { rgb: '000000' } },
+                bottom: { style: 'thin', color: { rgb: '000000' } },
+                left: { style: 'thin', color: { rgb: '000000' } },
+                right: { style: 'thin', color: { rgb: '000000' } }
+              }
+            };
+          }
+          // Participant entries header styling
+          else if (R === 10) {
+            ws[cellAddress].s = {
+              font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } },
+              fill: { fgColor: { rgb: '059669' } },
+              alignment: { horizontal: 'center', vertical: 'center' },
+              border: {
+                top: { style: 'thick', color: { rgb: '000000' } },
+                bottom: { style: 'thick', color: { rgb: '000000' } },
+                left: { style: 'thick', color: { rgb: '000000' } },
+                right: { style: 'thick', color: { rgb: '000000' } }
+              }
+            };
+          }
+        }
       }
 
-      const headers = Object.keys(exportData[0]);
-      const csvContent = [
-        headers.join(','),
-        ...exportData.map(row => 
-          headers.map(header => {
-            const value = row[header as keyof typeof row];
-            // Handle values that might contain commas by wrapping in quotes
-            return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
-          }).join(',')
-        )
-      ].join('\n');
+      // Style the participant data headers (row 12)
+      for (let C = 0; C < participantHeaders.length; C++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 12, c: C });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
+            fill: { fgColor: { rgb: '7C3AED' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: {
+              top: { style: 'medium', color: { rgb: '000000' } },
+              bottom: { style: 'medium', color: { rgb: '000000' } },
+              left: { style: 'thin', color: { rgb: '000000' } },
+              right: { style: 'thin', color: { rgb: '000000' } }
+            }
+          };
+        }
+      }
 
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `${event?.name || 'Event'}_Participants_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Style the participant data rows (starting from row 13)
+      for (let R = 13; R <= range.e.r; R++) {
+        for (let C = 0; C < participantHeaders.length; C++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (ws[cellAddress]) {
+            ws[cellAddress].s = {
+              font: { sz: 10 },
+              fill: { fgColor: { rgb: (R - 13) % 2 === 0 ? 'F8FAFC' : 'FFFFFF' } },
+              alignment: { horizontal: 'left', vertical: 'center' },
+              border: {
+                top: { style: 'hair', color: { rgb: '000000' } },
+                bottom: { style: 'hair', color: { rgb: '000000' } },
+                left: { style: 'hair', color: { rgb: '000000' } },
+                right: { style: 'hair', color: { rgb: '000000' } }
+              }
+            };
+          }
+        }
+      }
+
+      // Add the worksheet to the workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Event Participants');
+
+      // Generate Excel file and download
+      const fileName = `${event?.name || 'Event'}_Participants_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      showAlert('Excel file downloaded successfully!', 'success');
     } catch (error) {
       console.error('Export failed:', error);
       showAlert('Failed to export data. Please try again.', 'error');

@@ -7,7 +7,7 @@ let sql: ReturnType<typeof neon> | null = null;
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
-const getSql = () => {
+export const getSql = () => {
   if (!sql) {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
@@ -2958,13 +2958,31 @@ export const unifiedDb = {
     // AUTO-ACTIVATE: Set approved to TRUE for immediate activation
     const approvedAt = new Date().toISOString();
     
-    await sqlClient`
-      INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id, email, phone, 
-                          guardian_name, guardian_email, guardian_phone, approved, approved_at)
-      VALUES (${id}, ${eodsaId}, ${dancer.name}, ${dancer.dateOfBirth}, ${age}, ${dancer.nationalId},
-              ${dancer.email || null}, ${dancer.phone || null}, ${dancer.guardianName || null},
-              ${dancer.guardianEmail || null}, ${dancer.guardianPhone || null}, TRUE, ${approvedAt})
-    `;
+    // Create both records to ensure consistency
+    try {
+      // Create the dancer record
+      await sqlClient`
+        INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id, email, phone, 
+                            guardian_name, guardian_email, guardian_phone, approved, approved_at)
+        VALUES (${id}, ${eodsaId}, ${dancer.name}, ${dancer.dateOfBirth}, ${age}, ${dancer.nationalId},
+                ${dancer.email || null}, ${dancer.phone || null}, ${dancer.guardianName || null},
+                ${dancer.guardianEmail || null}, ${dancer.guardianPhone || null}, TRUE, ${approvedAt})
+      `;
+      
+      // CONSISTENCY FIX: Also create a corresponding contestant record
+      // This prevents future foreign key constraint violations
+      await sqlClient`
+        INSERT INTO contestants (id, eodsa_id, name, email, phone, type, date_of_birth, registration_date)
+        VALUES (${id}, ${eodsaId}, ${dancer.name}, ${dancer.email || `temp-${id}@example.com`}, 
+                ${dancer.phone || '0000000000'}, 'private', ${dancer.dateOfBirth}, ${approvedAt})
+      `;
+      
+      console.log(`✅ Created unified dancer and contestant records for: ${dancer.name} (${eodsaId})`);
+      
+    } catch (error) {
+      console.error('❌ Failed to create dancer and contestant records:', error);
+      throw error;
+    }
     
     return { id, eodsaId };
   },
@@ -3034,11 +3052,47 @@ export const unifiedDb = {
     const sqlClient = getSql();
     const approvedAt = new Date().toISOString();
     
-    await sqlClient`
-      UPDATE dancers 
-      SET approved = true, approved_by = ${adminId}, approved_at = ${approvedAt}, rejection_reason = null
-      WHERE id = ${dancerId}
-    `;
+    try {
+      // First, get the dancer info before updating
+      const dancer = await sqlClient`
+        SELECT * FROM dancers WHERE id = ${dancerId}
+      ` as any[];
+      
+      if (dancer.length === 0) {
+        throw new Error(`Dancer not found: ${dancerId}`);
+      }
+      
+      const dancerData = dancer[0];
+      
+      // Update dancer approval status
+      await sqlClient`
+        UPDATE dancers 
+        SET approved = true, approved_by = ${adminId}, approved_at = ${approvedAt}, rejection_reason = null
+        WHERE id = ${dancerId}
+      `;
+      
+      // CONSISTENCY FIX: Create corresponding contestant record to prevent future FK errors
+      await sqlClient`
+        INSERT INTO contestants (id, eodsa_id, name, email, phone, type, date_of_birth, registration_date)
+        VALUES (
+          ${dancerData.id}, 
+          ${dancerData.eodsa_id}, 
+          ${dancerData.name}, 
+          ${dancerData.email || `temp-${dancerData.id}@example.com`}, 
+          ${dancerData.phone || '0000000000'}, 
+          'private', 
+          ${dancerData.date_of_birth}, 
+          ${approvedAt}
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+      
+      console.log(`✅ Approved dancer and created contestant record for: ${dancerData.name} (${dancerData.eodsa_id})`);
+      
+    } catch (error) {
+      console.error('❌ Failed to approve dancer and create contestant record:', error);
+      throw error;
+    }
   },
 
   async rejectDancer(dancerId: string, rejectionReason: string, adminId: string) {

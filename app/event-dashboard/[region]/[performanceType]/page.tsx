@@ -719,6 +719,42 @@ export default function PerformanceTypeEntryPage() {
     return TIME_LIMITS[capitalizedType as keyof typeof TIME_LIMITS] || 0;
   };
 
+  // NEW: Helper function to get maximum duration display
+  const getMaxDurationDisplay = () => {
+    const maxTime = getTimeLimit();
+    return maxTime === 3.5 ? '3:30' : `${maxTime}:00`;
+  };
+
+  // NEW: Helper function to determine age category based on oldest participant
+  const getCalculatedAgeCategory = () => {
+    if (!formData.participantIds.length || !contestant?.dancers) {
+      return 'All Ages';
+    }
+
+    const selectedParticipants = contestant.dancers.filter(dancer => 
+      formData.participantIds.includes(dancer.id)
+    );
+
+    if (selectedParticipants.length === 0) {
+      return 'All Ages';
+    }
+
+    // Find the oldest participant
+    const oldestAge = Math.max(...selectedParticipants.map(dancer => dancer.age));
+    
+    // Determine age category based on oldest participant
+    if (oldestAge <= 4) return '4 & Under';
+    if (oldestAge <= 6) return '6 & Under';
+    if (oldestAge <= 9) return '7-9';
+    if (oldestAge <= 12) return '10-12';
+    if (oldestAge <= 14) return '13-14';
+    if (oldestAge <= 17) return '15-17';
+    if (oldestAge <= 24) return '18-24';
+    if (oldestAge <= 39) return '25-39';
+    if (oldestAge < 60) return '40+';
+    return '60+';
+  };
+
   // Helper function to check if a dancer's age matches the event's age category
   const checkAgeEligibility = (dancerAge: number, ageCategory: string): boolean => {
     switch (ageCategory) {
@@ -1470,15 +1506,15 @@ export default function PerformanceTypeEntryPage() {
 
                           <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Estimated Duration (Optional) - MM:SS format
-                              <span className="text-xs text-gray-400 block mt-1">Max: 2:00 minutes for solos</span>
+                              Estimated Duration - Maximum: 2:00
+                              <span className="text-xs text-gray-400 block mt-1">Read-only: Shows maximum time limit for Solo</span>
                             </label>
                             <input
                               type="text"
-                              value={solo.estimatedDuration}
-                              onChange={(e) => updateSoloField(index, 'estimatedDuration', e.target.value)}
-                              placeholder="e.g., 1:45"
-                              className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-gray-400"
+                              value="2:00"
+                              readOnly
+                              className="w-full px-4 py-3 border border-gray-500 bg-gray-600 rounded-xl text-gray-300 cursor-not-allowed"
+                              title="Maximum duration automatically set based on performance type"
                             />
                           </div>
                         </div>
@@ -1553,80 +1589,65 @@ export default function PerformanceTypeEntryPage() {
                   {!(performanceType?.toLowerCase() === 'solo' && region?.toLowerCase() === 'nationals') && (
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Estimated Duration (Optional) - MM:SS format
-                        <span className="text-xs text-gray-400 block mt-1">Leave blank if unknown. Min: 30 seconds if provided.</span>
+                        Estimated Duration - Maximum: {getMaxDurationDisplay()}
+                        <span className="text-xs text-gray-400 block mt-1">Read-only: Shows maximum time limit for {performanceType}</span>
                       </label>
                       
-                      {/* Time Limit Information */}
-                      <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 mb-4">
-                        <div className="flex items-center mb-2">
-                          <svg className="w-5 h-5 text-yellow-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="text-yellow-300 font-semibold">EODSA Max Time Limits</span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                          <div className="bg-yellow-900/30 p-2 rounded">
-                            <div className="text-yellow-200 font-medium">Solos</div>
-                            <div className="text-yellow-100 text-lg">2:00 mins</div>
-                          </div>
-                          <div className="bg-yellow-900/30 p-2 rounded">
-                            <div className="text-yellow-200 font-medium">Duos/Trios</div>
-                            <div className="text-yellow-100 text-lg">3:00 mins</div>
-                          </div>
-                          <div className="bg-yellow-900/30 p-2 rounded">
-                            <div className="text-yellow-200 font-medium">Groups</div>
-                            <div className="text-yellow-100 text-lg">3:30 mins</div>
-                          </div>
-                        </div>
-                        <div className="mt-3 p-2 bg-yellow-900/40 rounded text-center">
-                          <span className="text-yellow-100 font-bold">
-                            Your {performanceType} limit: {getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minutes
-                          </span>
-                        </div>
-                      </div>
-
                       <input
                         type="text"
-                        name="estimatedDuration"
-                        value={formData.estimatedDuration}
-                        onChange={handleInputChange}
-                        placeholder={`e.g., 2:30 (Min: 0:30, Max: ${getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`})`}
-                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 text-white placeholder-gray-400 transition-all ${
-                          validateDuration(formData.estimatedDuration) 
-                            ? 'border-gray-600 bg-gray-700 focus:ring-purple-500 focus:border-purple-500' 
-                            : 'border-red-500 bg-red-900/30 focus:ring-red-500 focus:border-red-500'
-                        }`}
-                        pattern="[0-9]{1,2}:[0-5][0-9]"
-                        title="Enter duration in MM:SS format (e.g., 2:30) - Minimum 30 seconds"
+                        value={getMaxDurationDisplay()}
+                        readOnly
+                        className="w-full px-4 py-3 border border-gray-500 bg-gray-600 rounded-xl text-gray-300 cursor-not-allowed"
+                        title="Maximum duration automatically set based on performance type"
                       />
                       
-                      {/* Validation Messages */}
-                      {!validateDuration(formData.estimatedDuration) && convertDurationToMinutes(formData.estimatedDuration) > 0 && (
-                        <div className="mt-3 p-3 bg-red-900/30 border border-red-500/40 rounded-lg">
-                          <p className="text-red-300 text-sm font-medium flex items-center">
-                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {convertDurationToMinutes(formData.estimatedDuration) < 0.5 ? 'Duration too short!' : 'Duration too long!'}
-                          </p>
-                          <p className="text-red-200 text-sm mt-1">
-                            <strong>{performanceType} performances</strong> must be between <strong>0:30</strong> and <strong>{getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minutes</strong>.
-                            <br />Your current duration: <strong>{formData.estimatedDuration}</strong>
-                          </p>
-                        </div>
-                      )}
-                      
-                      {validateDuration(formData.estimatedDuration) && convertDurationToMinutes(formData.estimatedDuration) > 0 && (
-                        <p className="text-green-400 text-sm mt-2 flex items-center">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      {/* Time Limit Information */}
+                      <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 mt-2">
+                        <div className="flex items-center mb-1">
+                          <svg className="w-4 h-4 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          Perfect! Duration is within the {getTimeLimit() === 3.5 ? '3:30' : `${getTimeLimit()}:00`} minute limit
-                        </p>
-                      )}
+                          <span className="text-blue-300 font-medium text-sm">EODSA Time Limits</span>
+                        </div>
+                        <div className="text-blue-200 text-sm">
+                          Solo: 2:00 • Duet/Trio: 3:00 • Group: 3:30
+                        </div>
+                      </div>
                     </div>
                   )}
+
+                  {/* Age Category - Read-only, calculated from oldest participant */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Age Category
+                      <span className="text-xs text-gray-400 block mt-1">Read-only: Based on oldest participant</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={getCalculatedAgeCategory()}
+                      readOnly
+                      className="w-full px-4 py-3 border border-gray-500 bg-gray-600 rounded-xl text-gray-300 cursor-not-allowed"
+                      title="Age category automatically determined by oldest participant"
+                    />
+                    {formData.participantIds.length > 0 && contestant?.dancers && (
+                      <div className="mt-2 p-2 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                        <div className="text-purple-300 text-sm">
+                          <strong>Participants:</strong> {
+                            contestant.dancers
+                              .filter(dancer => formData.participantIds.includes(dancer.id))
+                              .map(dancer => `${dancer.name} (${dancer.age}y)`)
+                              .join(', ')
+                          }
+                        </div>
+                        <div className="text-purple-200 text-xs mt-1">
+                          Oldest: {Math.max(...contestant.dancers
+                            .filter(dancer => formData.participantIds.includes(dancer.id))
+                            .map(dancer => dancer.age)
+                          )} years → Category: {getCalculatedAgeCategory()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
