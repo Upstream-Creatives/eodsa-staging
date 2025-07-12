@@ -91,6 +91,7 @@ export default function StudioDashboardPage() {
   const [isRegisteringDancer, setIsRegisteringDancer] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [recaptchaToken, setRecaptchaToken] = useState<string>('');
+  const [dateValidationTimeout, setDateValidationTimeout] = useState<NodeJS.Timeout | null>(null);
   
   // Edit dancer state
   const [showEditDancerModal, setShowEditDancerModal] = useState(false);
@@ -142,6 +143,15 @@ export default function StudioDashboardPage() {
     setStudioSession(parsedSession);
     loadData(parsedSession.id);
   }, [router]);
+
+  // Cleanup timeout on component unmount
+  useEffect(() => {
+    return () => {
+      if (dateValidationTimeout) {
+        clearTimeout(dateValidationTimeout);
+      }
+    };
+  }, [dateValidationTimeout]);
 
   const loadData = async (studioId: string) => {
     try {
@@ -275,7 +285,16 @@ export default function StudioDashboardPage() {
         }),
       });
 
-      const registerData = await registerResponse.json();
+      let registerData;
+      try {
+        registerData = await registerResponse.json();
+      } catch (parseError) {
+        console.error('Error parsing registration response:', parseError);
+        setError('Server error - unable to process request. Please try again.');
+        return;
+      }
+      
+      console.log('Studio registration response:', registerData); // Debug log
 
       if (registerData.success) {
         setShowRegisterDancerModal(false);
@@ -304,10 +323,17 @@ export default function StudioDashboardPage() {
         // Clear success message after 5 seconds
         setTimeout(() => setSuccessMessage(''), 5000);
       } else {
+        // Display the specific error message from the server
         setError(registerData.error || 'Failed to register dancer');
+        
         // Handle reCAPTCHA specific errors
         if (registerData.recaptchaFailed) {
           setRecaptchaToken(''); // Reset reCAPTCHA on failure
+        }
+        
+        // If it's a duplicate National ID error, suggest changing it
+        if (registerData.error && registerData.error.includes('National ID is already registered')) {
+          setError(registerData.error + ' - Please try using a different National ID number.');
         }
       }
     } catch (error) {
@@ -481,38 +507,21 @@ export default function StudioDashboardPage() {
     // Limit to 13 digits (South African ID length)
     const limitedValue = numericValue.slice(0, 13);
     
-    // Auto-format: XX-XXXX-XXXX-X
-    let formattedValue = limitedValue;
-    if (limitedValue.length >= 2) {
-      formattedValue = limitedValue.slice(0, 2);
-      if (limitedValue.length >= 6) {
-        formattedValue += '-' + limitedValue.slice(2, 6);
-        if (limitedValue.length >= 10) {
-          formattedValue += '-' + limitedValue.slice(6, 10);
-          if (limitedValue.length >= 11) {
-            formattedValue += '-' + limitedValue.slice(10, 13);
-          }
-        } else if (limitedValue.length > 6) {
-          formattedValue += '-' + limitedValue.slice(6);
-        }
-      } else if (limitedValue.length > 2) {
-        formattedValue += '-' + limitedValue.slice(2);
-      }
-    }
-    
-    setData((prev: any) => ({ ...prev, nationalId: formattedValue }));
+    setData((prev: any) => ({ ...prev, nationalId: limitedValue }));
   };
 
   // Phone number validation handler
   const handlePhoneChange = (value: string, setData: (prev: any) => void, field: string) => {
     // Allow only digits, spaces, hyphens, parentheses, and plus sign
     const cleanValue = value.replace(/[^0-9\s\-\(\)\+]/g, '');
+    // Limit to 15 characters total (international format)
+    const limitedValue = cleanValue.slice(0, 15);
     
     // Auto-format: XXX XXX XXXX (for 10-digit numbers)
-    const numbersOnly = cleanValue.replace(/\D/g, '');
-    let formattedValue = cleanValue;
+    const numbersOnly = limitedValue.replace(/\D/g, '');
+    let formattedValue = limitedValue;
     
-    if (numbersOnly.length <= 10 && !cleanValue.includes('+')) {
+    if (numbersOnly.length <= 10 && !limitedValue.includes('+')) {
       if (numbersOnly.length >= 3) {
         formattedValue = numbersOnly.slice(0, 3);
         if (numbersOnly.length >= 6) {
@@ -550,25 +559,41 @@ export default function StudioDashboardPage() {
     setData((prev: any) => ({ ...prev, [field]: value }));
   };
 
-  // Date of birth validation handler
+  // Date of birth validation handler with debounced validation (wait 2 seconds after user stops typing)
   const handleDateOfBirthChange = (value: string, setData: (prev: any) => void) => {
-    const today = new Date();
-    const selectedDate = new Date(value);
-    const minDate = new Date('1900-01-01');
-    
-    // Prevent future dates
-    if (selectedDate > today) {
-      setError('Date of birth cannot be in the future.');
-      return;
+    // Clear any existing timeout
+    if (dateValidationTimeout) {
+      clearTimeout(dateValidationTimeout);
     }
     
-    // Prevent dates before 1900
-    if (selectedDate < minDate) {
-      setError('Please enter a valid date of birth after 1900');
-      return;
-    }
+    // Set a new timeout to validate after 2 seconds
+    const newTimeout = setTimeout(() => {
+      // Only validate if the date is reasonably complete (has at least YYYY-MM-DD format)
+      if (value.length >= 10 && value.includes('-')) {
+        const today = new Date();
+        const selectedDate = new Date(value);
+        const minDate = new Date('1900-01-01');
+        
+        // Only validate if the date is valid (not Invalid Date)
+        if (!isNaN(selectedDate.getTime())) {
+          // Prevent future dates
+          if (selectedDate > today) {
+            setError('Date of birth cannot be in the future.');
+            return;
+          }
+          
+          // Prevent dates before 1900
+          if (selectedDate < minDate) {
+            setError('Please enter a valid date of birth after 1900');
+            return;
+          }
+        }
+      }
+    }, 2000);
     
-    // Clear error if date is valid
+    setDateValidationTimeout(newTimeout);
+    
+    // Clear error immediately when typing starts
     setError('');
     setData((prev: any) => ({ ...prev, dateOfBirth: value }));
   };
@@ -1338,7 +1363,6 @@ export default function StudioDashboardPage() {
                   onChange={(e) => handleNationalIdChange(e.target.value, setRegisterDancerData)}
                   className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   placeholder="13 digit ID number"
-                  pattern="[0-9]{13}"
                   maxLength={13}
                   inputMode="numeric"
                   title="Please enter exactly 13 digits"
@@ -1364,6 +1388,7 @@ export default function StudioDashboardPage() {
                   onChange={(e) => handlePhoneChange(e.target.value, setRegisterDancerData, 'phone')}
                   className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   placeholder="081 234 5678"
+                  maxLength={15}
                 />
               </div>
               
@@ -1403,6 +1428,7 @@ export default function StudioDashboardPage() {
                       onChange={(e) => handlePhoneChange(e.target.value, setRegisterDancerData, 'guardianPhone')}
                       className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       placeholder="081 234 5678"
+                      maxLength={15}
                       required
                     />
                   </div>
@@ -1486,7 +1512,6 @@ export default function StudioDashboardPage() {
                   onChange={(e) => handleNationalIdChange(e.target.value, setEditDancerData)}
                   className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   placeholder="13 digit ID number"
-                  pattern="[0-9]{13}"
                   maxLength={13}
                   inputMode="numeric"
                   title="Please enter exactly 13 digits"
@@ -1512,6 +1537,7 @@ export default function StudioDashboardPage() {
                   onChange={(e) => handlePhoneChange(e.target.value, setEditDancerData, 'phone')}
                   className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   placeholder="081 234 5678"
+                  maxLength={15}
                 />
               </div>
             </div>

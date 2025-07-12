@@ -38,11 +38,14 @@ export default function StudioRegisterPage() {
     // Validate phone number to allow only digits, spaces, hyphens, parentheses, and plus with auto-formatting
     if (name === 'phone') {
       const cleanValue = value.replace(/[^0-9\s\-\(\)\+]/g, '');
-      // Auto-format: XXX XXX XXXX (for 10-digit numbers)
-      const numbersOnly = cleanValue.replace(/\D/g, '');
-      let formattedValue = cleanValue;
+      // Limit to 15 characters total (international format)
+      const limitedValue = cleanValue.slice(0, 15);
       
-      if (numbersOnly.length <= 10 && !cleanValue.includes('+')) {
+      // Auto-format: XXX XXX XXXX (for 10-digit numbers)
+      const numbersOnly = limitedValue.replace(/\D/g, '');
+      let formattedValue = limitedValue;
+      
+      if (numbersOnly.length <= 10 && !limitedValue.includes('+')) {
         if (numbersOnly.length >= 3) {
           formattedValue = numbersOnly.slice(0, 3);
           if (numbersOnly.length >= 6) {
@@ -352,6 +355,7 @@ export default function StudioRegisterPage() {
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400"
                     placeholder="011 123 4567"
+                    maxLength={15}
                     required
                   />
                 </div>

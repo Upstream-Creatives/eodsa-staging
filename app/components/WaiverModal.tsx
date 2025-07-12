@@ -51,6 +51,39 @@ export default function WaiverModal({ isOpen, onClose, dancerId, dancerName, onW
       }
     }
     
+    // Validate phone number to allow only digits, spaces, hyphens, parentheses, and plus with auto-formatting
+    if (name === 'parentPhone') {
+      const cleanValue = value.replace(/[^0-9\s\-\(\)\+]/g, '');
+      // Limit to 15 characters total (international format)
+      const limitedValue = cleanValue.slice(0, 15);
+      
+      // Auto-format: XXX XXX XXXX (for 10-digit numbers)
+      const numbersOnly = limitedValue.replace(/\D/g, '');
+      let formattedValue = limitedValue;
+      
+      if (numbersOnly.length <= 10 && !limitedValue.includes('+')) {
+        if (numbersOnly.length >= 3) {
+          formattedValue = numbersOnly.slice(0, 3);
+          if (numbersOnly.length >= 6) {
+            formattedValue += ' ' + numbersOnly.slice(3, 6);
+            if (numbersOnly.length > 6) {
+              formattedValue += ' ' + numbersOnly.slice(6, 10);
+            }
+          } else if (numbersOnly.length > 3) {
+            formattedValue += ' ' + numbersOnly.slice(3);
+          }
+        } else {
+          formattedValue = numbersOnly;
+        }
+      }
+      
+      setFormData({
+        ...formData,
+        [name]: formattedValue
+      });
+      return;
+    }
+    
     // Trim whitespace for text inputs  
     const trimmedValue = typeof value === 'string' ? value.trim() : value;
     
@@ -265,6 +298,7 @@ export default function WaiverModal({ isOpen, onClose, dancerId, dancerName, onW
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 placeholder="Enter phone number"
+                maxLength={15}
               />
             </div>
 

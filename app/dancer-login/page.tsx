@@ -126,7 +126,6 @@ export default function DancerLoginPage() {
                   onChange={handleInputChange}
                   className="w-full px-4 py-4 border-2 border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium text-white placeholder-gray-400"
                   placeholder="13 digit ID number"
-                  pattern="[0-9]{13}"
                   maxLength={13}
                   inputMode="numeric"
                   title="Please enter exactly 13 digits"

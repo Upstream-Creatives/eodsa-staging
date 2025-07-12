@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { RecaptchaV2 } from '@/components/RecaptchaV2';
 import { generateEODSAId } from '@/lib/database';
@@ -93,7 +93,17 @@ export default function RegisterPage() {
   const [eodsaId, setEodsaId] = useState('');
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState<string>('');
+  const [dateValidationTimeout, setDateValidationTimeout] = useState<NodeJS.Timeout | null>(null);
   const { success, error, warning, info } = useToast();
+
+  // Cleanup timeout on component unmount
+  useEffect(() => {
+    return () => {
+      if (dateValidationTimeout) {
+        clearTimeout(dateValidationTimeout);
+      }
+    };
+  }, [dateValidationTimeout]);
 
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth: string): number => {
@@ -122,34 +132,15 @@ export default function RegisterPage() {
       return;
     }
 
-    // Validate National ID to only accept numbers and auto-format
+    // Validate National ID to only accept numbers (no auto-formatting)
     if (name === 'nationalId') {
       // Remove any non-numeric characters
       const numericValue = value.replace(/\D/g, '');
       // Limit to 13 digits (South African ID length)
       const limitedValue = numericValue.slice(0, 13);
       
-      // Auto-format: XX-XXXX-XXXX-X
-      let formattedValue = limitedValue;
-      if (limitedValue.length >= 2) {
-        formattedValue = limitedValue.slice(0, 2);
-        if (limitedValue.length >= 6) {
-          formattedValue += '-' + limitedValue.slice(2, 6);
-          if (limitedValue.length >= 10) {
-            formattedValue += '-' + limitedValue.slice(6, 10);
-            if (limitedValue.length >= 11) {
-              formattedValue += '-' + limitedValue.slice(10, 13);
-            }
-          } else if (limitedValue.length > 6) {
-            formattedValue += '-' + limitedValue.slice(6);
-          }
-        } else if (limitedValue.length > 2) {
-          formattedValue += '-' + limitedValue.slice(2);
-        }
-      }
-      
       setFormData(prev => {
-        const newFormData = { ...prev, [name]: formattedValue };
+        const newFormData = { ...prev, [name]: limitedValue };
         return newFormData;
       });
       return;
@@ -158,11 +149,14 @@ export default function RegisterPage() {
     // Validate phone number to allow only digits, spaces, hyphens, parentheses, and plus with auto-formatting
     if (name === 'phone') {
       const cleanValue = value.replace(/[^0-9\s\-\(\)\+]/g, '');
-      // Auto-format: XXX XXX XXXX (for 10-digit numbers)
-      const numbersOnly = cleanValue.replace(/\D/g, '');
-      let formattedValue = cleanValue;
+      // Limit to 15 characters total (international format)
+      const limitedValue = cleanValue.slice(0, 15);
       
-      if (numbersOnly.length <= 10 && !cleanValue.includes('+')) {
+      // Auto-format: XXX XXX XXXX (for 10-digit numbers)
+      const numbersOnly = limitedValue.replace(/\D/g, '');
+      let formattedValue = limitedValue;
+      
+      if (numbersOnly.length <= 10 && !limitedValue.includes('+')) {
         if (numbersOnly.length >= 3) {
           formattedValue = numbersOnly.slice(0, 3);
           if (numbersOnly.length >= 6) {
@@ -195,23 +189,39 @@ export default function RegisterPage() {
       return;
     }
 
-    // Validate date of birth to prevent future dates and unrealistic ages
+    // Validate date of birth with debounced validation (wait 2 seconds after user stops typing)
     if (name === 'dateOfBirth') {
-      const today = new Date();
-      const selectedDate = new Date(value);
-      const minDate = new Date('1900-01-01');
-      
-      // Prevent future dates
-      if (selectedDate > today) {
-        warning('Date of birth cannot be in the future.', 4000);
-        return;
+      // Clear any existing timeout
+      if (dateValidationTimeout) {
+        clearTimeout(dateValidationTimeout);
       }
       
-      // Prevent dates before 1900
-      if (selectedDate < minDate) {
-        warning('Please enter a valid date of birth after 1900.', 4000);
-        return;
-      }
+      // Set a new timeout to validate after 2 seconds
+      const newTimeout = setTimeout(() => {
+        // Only validate if the date is reasonably complete (has at least YYYY-MM-DD format)
+        if (value.length >= 10 && value.includes('-')) {
+          const today = new Date();
+          const selectedDate = new Date(value);
+          const minDate = new Date('1900-01-01');
+          
+          // Only validate if the date is valid (not Invalid Date)
+          if (!isNaN(selectedDate.getTime())) {
+            // Prevent future dates
+            if (selectedDate > today) {
+              warning('Date of birth cannot be in the future.', 4000);
+              return;
+            }
+            
+            // Prevent dates before 1900
+            if (selectedDate < minDate) {
+              warning('Please enter a valid date of birth after 1900.', 4000);
+              return;
+            }
+          }
+        }
+      }, 2000);
+      
+      setDateValidationTimeout(newTimeout);
     }
 
     setFormData(prev => {
@@ -232,10 +242,13 @@ export default function RegisterPage() {
     // Validate guardian phone number with auto-formatting
     if (field === 'cell') {
       const cleanValue = value.replace(/[^0-9\s\-\(\)\+]/g, '');
-      // Auto-format: XXX XXX XXXX (for 10-digit numbers)
-      const numbersOnly = cleanValue.replace(/\D/g, '');
+      // Limit to 15 characters total (international format)
+      const limitedValue = cleanValue.slice(0, 15);
       
-      if (numbersOnly.length <= 10 && !cleanValue.includes('+')) {
+      // Auto-format: XXX XXX XXXX (for 10-digit numbers)
+      const numbersOnly = limitedValue.replace(/\D/g, '');
+      
+      if (numbersOnly.length <= 10 && !limitedValue.includes('+')) {
         if (numbersOnly.length >= 3) {
           value = numbersOnly.slice(0, 3);
           if (numbersOnly.length >= 6) {
@@ -250,7 +263,7 @@ export default function RegisterPage() {
           value = numbersOnly;
         }
       } else {
-        value = cleanValue;
+        value = limitedValue;
       }
     }
     
@@ -342,6 +355,13 @@ export default function RegisterPage() {
       info('Creating your dancer profile...', 3000);
 
       // Register individual dancer
+      console.log('Sending registration request with data:', {
+        name: formData.name,
+        nationalId: formData.nationalId,
+        email: formData.email,
+        phone: formData.phone
+      }); // Debug log
+      
       const response = await fetch('/api/dancers/register', {
         method: 'POST',
         headers: {
@@ -366,7 +386,16 @@ export default function RegisterPage() {
         success(`Welcome to EODSA! Your dancer ID is ${result.dancer.eodsaId}`, 8000);
         setSubmitted(true);
       } else {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError);
+          error('Server error - unable to process request. Please try again.', 8000);
+          return;
+        }
+        
+        console.log('Registration error response:', errorData); // Debug log
         
         // Handle specific error types
         if (errorData.rateLimited) {
@@ -374,13 +403,26 @@ export default function RegisterPage() {
           error(`⏰ Rate limit exceeded! You can only register 3 accounts per hour. Please try again after ${resetTime}.`, 8000);
         } else if (errorData.recaptchaFailed) {
           error(`🔒 Security verification failed. Please refresh the page and try again.`, 6000);
+          // Reset reCAPTCHA on failure
+          setRecaptchaToken('');
         } else {
-          error(errorData.error || 'Unable to complete registration. Please try again.', 8000);
+          // Display the specific error message from the server
+          const errorMessage = errorData.error || 'Unable to complete registration. Please try again.';
+          error(errorMessage, 8000);
+          
+          // If it's a duplicate National ID error, suggest changing it
+          if (errorMessage.includes('National ID is already registered')) {
+            setTimeout(() => {
+              warning('💡 Try using a different National ID number.', 6000);
+            }, 1000);
+          }
         }
       }
     } catch (err) {
       console.error('Registration error:', err);
       error('Unable to connect to registration service. Please check your connection and try again.', 8000);
+      // Reset reCAPTCHA on network/connection errors
+      setRecaptchaToken('');
     } finally {
       setIsSubmitting(false);
     }
@@ -591,7 +633,6 @@ export default function RegisterPage() {
                         onChange={handleInputChange}
                         className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-300 text-lg"
                         placeholder="13 digit ID number"
-                        pattern="[0-9]{13}"
                         maxLength={13}
                         inputMode="numeric"
                         title="Please enter exactly 13 digits"
@@ -643,6 +684,7 @@ export default function RegisterPage() {
                           onChange={handleInputChange}
                           className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-white placeholder-gray-300 text-lg"
                           placeholder="081 234 5678"
+                          maxLength={15}
                           required={formData.dateOfBirth ? calculateAge(formData.dateOfBirth) >= 18 : true}
                         />
                       </div>
@@ -745,6 +787,7 @@ export default function RegisterPage() {
                             value={formData.guardianInfo?.cell || ''}
                             onChange={(e) => handleGuardianChange('cell', e.target.value)}
                             className="w-full px-4 py-3 border border-gray-600 bg-gray-700 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all text-white placeholder-gray-400"
+                            maxLength={15}
                             required={isMinor(formData.dateOfBirth)}
                           />
                         </div>
