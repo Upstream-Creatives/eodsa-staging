@@ -263,6 +263,13 @@ export default function StudioRegisterPage() {
                 🎉 Studio Registration Successful!
               </h1>
               
+              {/* Avalon Blessing */}
+              <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-lg p-4 mb-6">
+                <p className="text-purple-300 text-center italic font-medium">
+                  ✨ "May the Mists of Avalon bring luck upon you" ✨
+                </p>
+              </div>
+              
               <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-6 mb-6">
                 <h3 className="text-lg font-semibold text-green-300 mb-3">Welcome to EODSA!</h3>
                 <div className="text-left space-y-2">

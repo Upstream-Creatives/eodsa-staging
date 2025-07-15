@@ -511,9 +511,16 @@ export default function RegisterPage() {
           </div>
 
           <div className="bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-8 text-center">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-6">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
               Registration Complete! 🎉
             </h2>
+            
+            {/* Avalon Blessing */}
+            <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-lg p-4 mb-6">
+              <p className="text-purple-300 text-center italic font-medium">
+                ✨ "May the Mists of Avalon bring luck upon you" ✨
+              </p>
+            </div>
             
             {/* E-O-D-S-A ID Display */}
             <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-2 border-purple-500/30 rounded-2xl p-6 mb-8">

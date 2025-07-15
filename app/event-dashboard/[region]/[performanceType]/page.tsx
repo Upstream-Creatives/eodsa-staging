@@ -1153,9 +1153,16 @@ export default function PerformanceTypeEntryPage() {
         <div className="max-w-lg w-full bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/20 p-8 text-center">
           <div className="text-6xl mb-6">🎉</div>
           <h2 className="text-3xl font-bold text-white mb-4">Entry Submitted!</h2>
-          <p className="text-gray-300 mb-6">
+          <p className="text-gray-300 mb-4">
             Your {performanceType} entry for {region} has been submitted successfully.
           </p>
+          
+          {/* Avalon Blessing */}
+          <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-lg p-4 mb-6">
+            <p className="text-purple-300 text-center italic font-medium">
+              ✨ "May the Mists of Avalon bring luck upon you" ✨
+            </p>
+          </div>
           
           {/* Fee Summary in Success */}
           {feeBreakdown && (

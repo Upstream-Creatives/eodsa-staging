@@ -1247,6 +1247,13 @@ export default function CompetitionEntryPage() {
               </div>
               <h2 className="text-2xl font-bold text-white mb-2">🎉 Entries Submitted Successfully!</h2>
               <p className="text-slate-300">Your competition entries have been registered for {event?.name}</p>
+              
+              {/* Avalon Blessing */}
+              <div className="mt-4 p-3 bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-lg">
+                <p className="text-purple-300 text-sm italic font-medium">
+                  ✨ "May the Mists of Avalon bring luck upon you" ✨
+                </p>
+              </div>
             </div>
 
             {/* Entry Summary */}

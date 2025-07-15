@@ -3,6 +3,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Animations for Avalon Splash Screen */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.delay-500 {
+  animation-delay: 0.5s;
+}
+
+.delay-1000 {
+  animation-delay: 1s;
+}
+
+.delay-1500 {
+  animation-delay: 1.5s;
+}
+
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;
