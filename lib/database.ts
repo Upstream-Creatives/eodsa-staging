@@ -2923,6 +2923,7 @@ export const unifiedDb = {
     name: string;
     dateOfBirth: string;
     nationalId: string;
+    province: string;
     email?: string;
     phone?: string;
     guardianName?: string;
@@ -2962,10 +2963,10 @@ export const unifiedDb = {
     try {
       // Create the dancer record
     await sqlClient`
-      INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id, email, phone, 
+      INSERT INTO dancers (id, eodsa_id, name, date_of_birth, age, national_id, province, email, phone, 
                           guardian_name, guardian_email, guardian_phone, approved, approved_at)
       VALUES (${id}, ${eodsaId}, ${dancer.name}, ${dancer.dateOfBirth}, ${age}, ${dancer.nationalId},
-              ${dancer.email || null}, ${dancer.phone || null}, ${dancer.guardianName || null},
+              ${dancer.province}, ${dancer.email || null}, ${dancer.phone || null}, ${dancer.guardianName || null},
               ${dancer.guardianEmail || null}, ${dancer.guardianPhone || null}, TRUE, ${approvedAt})
     `;
       

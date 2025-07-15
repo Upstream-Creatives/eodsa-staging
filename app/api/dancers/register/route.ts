@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     // // // await initializeDatabase() // Commented out for performance - initialization happens once on server start; // Commented out for performance - initialization happens once on server start // Commented out for performance - initialization happens once on server start
     
     const body = await request.json();
-    const { name, dateOfBirth, nationalId, email, phone, guardianName, guardianEmail, guardianPhone, studioId, recaptchaToken } = body;
+    const { name, dateOfBirth, nationalId, province, email, phone, guardianName, guardianEmail, guardianPhone, studioId, recaptchaToken } = body;
     
     // Rate limiting removed for bulk studio registrations
     
@@ -37,9 +37,9 @@ export async function POST(request: NextRequest) {
         );
       }
     
-          if (!name || !dateOfBirth || !nationalId) {
+          if (!name || !dateOfBirth || !nationalId || !province) {
         return NextResponse.json(
-          { error: 'Name, date of birth, and national ID are required' },
+          { error: 'Name, date of birth, national ID, and province are required' },
           { status: 400 }
         );
       }
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       name,
       dateOfBirth,
       nationalId,
+      province,
       email,
       phone,
       guardianName,

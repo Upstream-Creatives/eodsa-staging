@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { PERFORMANCE_TYPES, MASTERY_LEVELS } from '@/lib/types';
+import { PERFORMANCE_TYPES, MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
 import { useToast } from '@/components/ui/simple-toast';
 
@@ -745,13 +745,18 @@ export default function CompetitionEntryPage() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Item Style</label>
-                    <input
-                      type="text"
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Item Style *</label>
+                    <select
                       value={currentForm.itemStyle}
                       onChange={(e) => setCurrentForm({...currentForm, itemStyle: e.target.value})}
                       className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
+                      required
+                    >
+                      <option value="">Select item style</option>
+                      {ITEM_STYLES.map((style) => (
+                        <option key={style} value={style}>{style}</option>
+                      ))}
+                    </select>
                   </div>
                   
                   <div>

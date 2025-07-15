@@ -82,6 +82,7 @@ export default function StudioDashboardPage() {
     name: '',
     dateOfBirth: '',
     nationalId: '',
+    province: '',
     email: '',
     phone: '',
     guardianName: '',
@@ -231,8 +232,8 @@ export default function StudioDashboardPage() {
     if (!studioSession) return;
 
     // Validate required fields
-    if (!registerDancerData.name || !registerDancerData.dateOfBirth || !registerDancerData.nationalId) {
-      setError('Name, date of birth, and national ID are required');
+    if (!registerDancerData.name || !registerDancerData.dateOfBirth || !registerDancerData.nationalId || !registerDancerData.province) {
+      setError('Name, date of birth, national ID, and province are required');
       return;
     }
 
@@ -275,6 +276,7 @@ export default function StudioDashboardPage() {
           name: registerDancerData.name,
           dateOfBirth: registerDancerData.dateOfBirth,
           nationalId: registerDancerData.nationalId,
+          province: registerDancerData.province,
           email: registerDancerData.email || null,
           phone: registerDancerData.phone || null,
           guardianName: registerDancerData.guardianName || null,
@@ -302,6 +304,7 @@ export default function StudioDashboardPage() {
           name: '',
           dateOfBirth: '',
           nationalId: '',
+          province: '',
           email: '',
           phone: '',
           guardianName: '',
@@ -543,7 +546,8 @@ export default function StudioDashboardPage() {
   // Name validation handler
   const handleNameChange = (value: string, setData: (prev: any) => void, field: string) => {
     // Allow only letters, spaces, hyphens, and apostrophes
-    const cleanValue = value.replace(/[^a-zA-Z\s\-\']/g, '').trim();
+    // Don't trim here to preserve spaces during typing
+    const cleanValue = value.replace(/[^a-zA-Z\s\-\']/g, '');
     
     setData((prev: any) => ({ ...prev, [field]: cleanValue }));
   };
@@ -1395,6 +1399,27 @@ export default function StudioDashboardPage() {
               </div>
               
               <div>
+                <label className="block text-gray-300 text-sm font-medium mb-1">Province *</label>
+                <select
+                  value={registerDancerData.province}
+                  onChange={(e) => setRegisterDancerData({...registerDancerData, province: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  required
+                >
+                  <option value="">Select province</option>
+                  <option value="Western Cape">Western Cape</option>
+                  <option value="Eastern Cape">Eastern Cape</option>
+                  <option value="Northern Cape">Northern Cape</option>
+                  <option value="Free State">Free State</option>
+                  <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                  <option value="North West">North West</option>
+                  <option value="Gauteng">Gauteng</option>
+                  <option value="Mpumalanga">Mpumalanga</option>
+                  <option value="Limpopo">Limpopo</option>
+                </select>
+              </div>
+              
+              <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">Email {new Date().getFullYear() - new Date(registerDancerData.dateOfBirth).getFullYear() >= 18 && '*'}</label>
                 <input
                   type="email"
@@ -1475,16 +1500,17 @@ export default function StudioDashboardPage() {
               <button
                 onClick={() => {
                   setShowRegisterDancerModal(false);
-                  setRegisterDancerData({
-                    name: '',
-                    dateOfBirth: '',
-                    nationalId: '',
-                    email: '',
-                    phone: '',
-                    guardianName: '',
-                    guardianEmail: '',
-                    guardianPhone: ''
-                  });
+                        setRegisterDancerData({
+        name: '',
+        dateOfBirth: '',
+        nationalId: '',
+        province: '',
+        email: '',
+        phone: '',
+        guardianName: '',
+        guardianEmail: '',
+        guardianPhone: ''
+      });
                   setError('');
                   setRecaptchaToken('');
                 }}

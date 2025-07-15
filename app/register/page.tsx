@@ -19,6 +19,7 @@ interface RegistrationForm {
   phone: string;
   dateOfBirth: string;
   nationalId: string;
+  province: string;
   guardianInfo?: GuardianInfo;
   privacyPolicyAccepted: boolean;
 }
@@ -84,6 +85,7 @@ export default function RegisterPage() {
     phone: '',
     dateOfBirth: '',
     nationalId: '',
+    province: '',
     guardianInfo: undefined,
     privacyPolicyAccepted: false,
   });
@@ -332,8 +334,8 @@ export default function RegisterPage() {
       }
 
       // Validate individual dancer fields
-      if (!formData.name || !formData.dateOfBirth || !formData.nationalId) {
-        warning('Name, date of birth, and national ID are required for dancer registration.', 6000);
+      if (!formData.name || !formData.dateOfBirth || !formData.nationalId || !formData.province) {
+        warning('Name, date of birth, national ID, and province are required for dancer registration.', 6000);
         setIsSubmitting(false);
         return;
       }
@@ -415,6 +417,7 @@ export default function RegisterPage() {
           name: formData.name,
           dateOfBirth: formData.dateOfBirth,
           nationalId: formData.nationalId,
+          province: formData.province,
           email: formData.email,
           phone: formData.phone,
           guardianName: formData.guardianInfo?.name,
@@ -530,16 +533,17 @@ export default function RegisterPage() {
                 onClick={() => {
                   setSubmitted(false);
                   setEodsaId('');
-                  setFormData({
-                    type: 'individual_dancer',
-                    name: '',
-                    email: '',
-                    phone: '',
-                    dateOfBirth: '',
-                    nationalId: '',
-                    guardianInfo: undefined,
-                    privacyPolicyAccepted: false,
-                  });
+                          setFormData({
+          type: 'individual_dancer',
+          name: '',
+          email: '',
+          phone: '',
+          dateOfBirth: '',
+          nationalId: '',
+          province: '',
+          guardianInfo: undefined,
+          privacyPolicyAccepted: false,
+        });
                 }}
                 className="block w-full px-6 py-4 border-2 border-gray-600 text-gray-300 rounded-2xl hover:bg-gray-700 hover:border-gray-500 transition-all duration-300 font-semibold"
               >
@@ -682,6 +686,31 @@ export default function RegisterPage() {
                         title="Please enter exactly 13 digits"
                         required={formData.type === 'individual_dancer'}
                       />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="province" className="block text-sm font-semibold text-white mb-3">
+                        Province *
+                      </label>
+                      <select
+                        id="province"
+                        name="province"
+                        value={formData.province}
+                        onChange={handleInputChange}
+                        className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white text-lg"
+                        required={formData.type === 'individual_dancer'}
+                      >
+                        <option value="">Select your province</option>
+                        <option value="Western Cape">Western Cape</option>
+                        <option value="Eastern Cape">Eastern Cape</option>
+                        <option value="Northern Cape">Northern Cape</option>
+                        <option value="Free State">Free State</option>
+                        <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                        <option value="North West">North West</option>
+                        <option value="Gauteng">Gauteng</option>
+                        <option value="Mpumalanga">Mpumalanga</option>
+                        <option value="Limpopo">Limpopo</option>
+                      </select>
                       </div>
                     </div>
                   </div>
