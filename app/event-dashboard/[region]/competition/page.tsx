@@ -256,7 +256,7 @@ export default function CompetitionEntryPage() {
     return maxTime === 3.5 ? '3:30' : `${maxTime}:00`;
   };
 
-  // NEW: Helper function to determine age category based on oldest participant
+  // NEW: Helper function to determine age category based on average age
   const getCalculatedAgeCategory = () => {
     if (!currentForm.participantIds.length || !availableDancers.length) {
       return 'All Ages';
@@ -270,19 +270,20 @@ export default function CompetitionEntryPage() {
       return 'All Ages';
     }
 
-    // Find the oldest participant
-    const oldestAge = Math.max(...selectedParticipants.map(dancer => dancer.age));
+    // Calculate average age of all participants
+    const totalAge = selectedParticipants.reduce((sum, dancer) => sum + dancer.age, 0);
+    const averageAge = Math.round(totalAge / selectedParticipants.length);
     
-    // Determine age category based on oldest participant
-    if (oldestAge <= 4) return '4 & Under';
-    if (oldestAge <= 6) return '6 & Under';
-    if (oldestAge <= 9) return '7-9';
-    if (oldestAge <= 12) return '10-12';
-    if (oldestAge <= 14) return '13-14';
-    if (oldestAge <= 17) return '15-17';
-    if (oldestAge <= 24) return '18-24';
-    if (oldestAge <= 39) return '25-39';
-    if (oldestAge < 60) return '40+';
+    // Determine age category based on average age
+    if (averageAge <= 4) return '4 & Under';
+    if (averageAge <= 6) return '6 & Under';
+    if (averageAge <= 9) return '7-9';
+    if (averageAge <= 12) return '10-12';
+    if (averageAge <= 14) return '13-14';
+    if (averageAge <= 17) return '15-17';
+    if (averageAge <= 24) return '18-24';
+    if (averageAge <= 39) return '25-39';
+    if (averageAge < 60) return '40+';
     return '60+';
   };
 
@@ -745,14 +746,14 @@ export default function CompetitionEntryPage() {
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">
                       Age Category
-                      <span className="text-xs text-slate-400 block mt-1">Read-only: Based on oldest participant</span>
+                      <span className="text-xs text-slate-400 block mt-1">Read-only: Based on average age of participants</span>
                     </label>
                     <input
                       type="text"
                       value={getCalculatedAgeCategory()}
                       readOnly
                       className="w-full p-3 bg-slate-600/50 border border-slate-500 rounded-lg text-slate-300 cursor-not-allowed"
-                      title="Age category automatically determined by oldest participant"
+                      title="Age category automatically determined by average age of participants"
                     />
                     {currentForm.participantIds.length > 0 && availableDancers.length > 0 && (
                       <div className="mt-2 p-2 bg-purple-900/20 border border-purple-500/30 rounded-lg">
@@ -765,10 +766,11 @@ export default function CompetitionEntryPage() {
                           }
                         </div>
                         <div className="text-purple-200 text-xs mt-1">
-                          Oldest: {Math.max(...availableDancers
-                            .filter(dancer => currentForm.participantIds.includes(dancer.id))
-                            .map(dancer => dancer.age)
-                          )} years → Category: {getCalculatedAgeCategory()}
+                          Average Age: {(() => {
+                            const selectedParticipants = availableDancers.filter(dancer => currentForm.participantIds.includes(dancer.id));
+                            const totalAge = selectedParticipants.reduce((sum, dancer) => sum + dancer.age, 0);
+                            return Math.round(totalAge / selectedParticipants.length);
+                          })()} years → Category: {getCalculatedAgeCategory()}
                         </div>
                       </div>
                     )}
