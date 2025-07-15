@@ -595,24 +595,33 @@ export default function CompetitionEntryPage() {
             {/* Performance Type Selection */}
             <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mb-8">
               <h3 className="text-xl font-bold text-white mb-4">Add Performance Types</h3>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {['Solo', 'Duet', 'Trio', 'Group'].map((type) => {
-                   const isActive = showAddForm === type;
-                   const soloCount = entries.filter(e => e.performanceType === 'Solo').length;
-                   const nextSoloFee = type === 'Solo' ? calculateEntryFee('Solo', 1) : 0;
-                   
-                   return (
-                     <button
-                       key={type}
-                       onClick={() => handleAddPerformanceType(type)}
-                       className={`p-4 bg-gradient-to-r text-white rounded-lg transition-all duration-300 transform hover:scale-[1.02] ${
-                         isActive 
-                           ? 'from-emerald-600 to-blue-600 ring-2 ring-emerald-400 animate-pulse' 
-                           : 'from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500'
-                       }`}
-                     >
+                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {['Solo', 'Duet', 'Trio', 'Group'].map((type) => {
+                  const isActive = showAddForm === type;
+                  const soloCount = entries.filter(e => e.performanceType === 'Solo').length;
+                  const nextSoloFee = type === 'Solo' ? calculateEntryFee('Solo', 1) : 0;
+                  
+                  // For independent dancers (non-studio mode), only allow Solo
+                  const isDisabled = !isStudioMode && type !== 'Solo';
+                  
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => !isDisabled && handleAddPerformanceType(type)}
+                      disabled={isDisabled}
+                      className={`p-4 bg-gradient-to-r text-white rounded-lg transition-all duration-300 transform ${
+                        isDisabled 
+                          ? 'from-gray-500 to-gray-600 cursor-not-allowed opacity-50' 
+                          : isActive 
+                            ? 'from-emerald-600 to-blue-600 ring-2 ring-emerald-400 animate-pulse hover:scale-[1.02]' 
+                            : 'from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 hover:scale-[1.02]'
+                      }`}
+                    >
                        <div className="text-center">
-                         <h4 className="text-lg font-semibold mb-2">Add {type}</h4>
+                         <h4 className="text-lg font-semibold mb-2">
+                           Add {type}
+                           {isDisabled && <span className="block text-xs mt-1 opacity-75">Requires studio membership</span>}
+                         </h4>
                          
                          {/* Dynamic pricing for Solo */}
                          {type === 'Solo' && (
@@ -645,6 +654,22 @@ export default function CompetitionEntryPage() {
                    );
                  })}
                </div>
+               
+               {/* Information for independent dancers */}
+               {!isStudioMode && (
+                 <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                   <div className="flex items-center">
+                     <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                     </svg>
+                     <span className="text-blue-300 font-medium">Independent Dancer Information</span>
+                   </div>
+                   <p className="text-blue-200 text-sm mt-1">
+                     As an independent dancer, you can only register for <strong>Solo</strong> performances. 
+                     Duet, Trio, and Group performances require studio membership with multiple dancers.
+                   </p>
+                 </div>
+               )}
             </div>
 
                          {/* Entry Form */}
