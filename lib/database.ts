@@ -42,6 +42,7 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`;
     await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_paid_at TEXT`;
     await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS registration_fee_mastery_level TEXT`;
+    await sqlClient`ALTER TABLE dancers ADD COLUMN IF NOT EXISTS province TEXT`;
     
     // Add other checks here as needed, for example:
     await sqlClient`ALTER TABLE event_entries ADD COLUMN IF NOT EXISTS qualified_for_nationals BOOLEAN DEFAULT FALSE`;
