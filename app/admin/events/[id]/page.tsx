@@ -270,21 +270,30 @@ export default function EventParticipantsPage() {
       if (response.ok) {
         const result = await response.json();
         
-        // Update the local state immediately to show the change
-        setEntries(prev => prev.map(entry => 
-          entry.id === entryId 
-            ? { ...entry, itemNumber: itemNumber }
-            : entry
-        ));
-        
-        showAlert(result.message, 'success');
-        
-        // Clear editing state immediately so user sees the change
+        // Clear editing state first
         setEditingItemNumber(null);
         setTempItemNumber('');
         
-        // Reload data in background to ensure consistency (don't await to avoid overwriting)
-        loadEventData().catch(console.error);
+        // Then update the local state immediately to show the change
+        setEntries(prev => {
+          console.log('Updating entry:', entryId, 'with item number:', itemNumber);
+          const updatedEntries = prev.map(entry => {
+            if (entry.id === entryId) {
+              console.log('Found matching entry:', entry.id, 'updating item number from', entry.itemNumber, 'to', itemNumber);
+              return { ...entry, itemNumber: itemNumber };
+            }
+            return entry;
+          });
+          console.log('Updated entries:', updatedEntries.filter(e => e.id === entryId));
+          return updatedEntries;
+        });
+        
+        showAlert(result.message, 'success');
+        
+        // Reload data in background to ensure consistency (with delay to avoid race condition)
+        setTimeout(() => {
+          loadEventData().catch(console.error);
+        }, 1000);
       } else {
         const error = await response.json();
         showAlert(`Failed to assign item number: ${error.error}`, 'error');
@@ -896,12 +905,27 @@ export default function EventParticipantsPage() {
                             onClick={() => handleItemNumberEdit(entry.id, entry.itemNumber)}
                             className="cursor-pointer hover:bg-gray-100 rounded p-1 transition-colors"
                           >
-                            <div className="text-sm font-bold text-gray-900">
-                              {entry.itemNumber || 'Click to assign'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Program Order
-                            </div>
+                            {entry.itemNumber ? (
+                              // When item number is assigned
+                              <div className="space-y-1">
+                                <div className="text-lg font-bold text-indigo-600">
+                                  #{entry.itemNumber}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Click to reassign
+                                </div>
+                              </div>
+                            ) : (
+                              // When no item number is assigned
+                              <div className="space-y-1">
+                                <div className="text-sm font-medium text-orange-600">
+                                  Click to assign
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Program Order
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </td>
