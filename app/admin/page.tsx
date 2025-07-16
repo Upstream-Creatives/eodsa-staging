@@ -142,6 +142,7 @@ export default function AdminDashboard() {
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignmentMessage, setAssignmentMessage] = useState('');
   const [reassigningJudges, setReassigningJudges] = useState<Set<string>>(new Set());
+  const [unassigningJudges, setUnassigningJudges] = useState<Set<string>>(new Set());
 
   // Database cleaning state
   const [isCleaningDatabase, setIsCleaningDatabase] = useState(false);
@@ -428,11 +429,42 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleReassignJudge = async (assignment: JudgeAssignment) => {
-    // For event-based assignments, we don't need reassignment since each assignment is to a specific event
-    // We could remove this button or change it to "Remove Assignment"
-    setAssignmentMessage('Event-based assignments do not need reassignment. Each judge is assigned to a specific event.');
-    setTimeout(() => setAssignmentMessage(''), 3000);
+  const handleUnassignJudge = async (assignment: JudgeAssignment) => {
+    if (unassigningJudges.has(assignment.id)) return;
+    
+    showConfirm(
+      `Are you sure you want to unassign ${assignment.judgeName} from "${assignment.eventName}"?`,
+      async () => {
+        setUnassigningJudges(prev => new Set(prev).add(assignment.id));
+        
+        try {
+          const response = await fetch(`/api/judge-assignments/${assignment.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': 'Bearer admin',
+            },
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            success(result.message);
+            fetchData(); // Reload data
+          } else {
+            const errorData = await response.json();
+            error(`Failed to unassign judge: ${errorData.error}`);
+          }
+        } catch (err) {
+          console.error('Error unassigning judge:', err);
+          error('Failed to unassign judge');
+        } finally {
+          setUnassigningJudges(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(assignment.id);
+            return newSet;
+          });
+        }
+      }
+    );
   };
 
   const handleCleanDatabase = async () => {
@@ -1335,12 +1367,13 @@ export default function AdminDashboard() {
                           <td className="px-6 py-4 text-sm font-medium text-gray-600 hidden sm:table-cell">{assignment.judgeEmail}</td>
                           <td className="px-6 py-4">
                             <button
-                              onClick={() => handleReassignJudge(assignment)}
-                              className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-xs font-medium rounded-lg hover:from-red-600 hover:to-rose-700 transition-all duration-200 transform hover:scale-105 shadow-sm"
-                              title="Judge is assigned to this specific event"
+                              onClick={() => handleUnassignJudge(assignment)}
+                              disabled={unassigningJudges.has(assignment.id)}
+                              className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-xs font-medium rounded-lg hover:from-red-600 hover:to-rose-700 transition-all duration-200 transform hover:scale-105 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Remove this judge from the event"
                             >
-                              <span className="mr-1">ℹ️</span>
-                              <span className="hidden sm:inline">Event Assignment</span>
+                              <span className="mr-1">{unassigningJudges.has(assignment.id) ? '⏳' : '🗑️'}</span>
+                              <span className="hidden sm:inline">{unassigningJudges.has(assignment.id) ? 'Removing...' : 'Unassign'}</span>
                             </button>
                           </td>
                       </tr>

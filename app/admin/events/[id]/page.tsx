@@ -269,10 +269,22 @@ export default function EventParticipantsPage() {
 
       if (response.ok) {
         const result = await response.json();
+        
+        // Update the local state immediately to show the change
+        setEntries(prev => prev.map(entry => 
+          entry.id === entryId 
+            ? { ...entry, itemNumber: itemNumber }
+            : entry
+        ));
+        
         showAlert(result.message, 'success');
+        
+        // Clear editing state immediately so user sees the change
         setEditingItemNumber(null);
         setTempItemNumber('');
-        loadEventData(); // Reload data
+        
+        // Reload data in background to ensure consistency (don't await to avoid overwriting)
+        loadEventData().catch(console.error);
       } else {
         const error = await response.json();
         showAlert(`Failed to assign item number: ${error.error}`, 'error');
@@ -834,7 +846,7 @@ export default function EventParticipantsPage() {
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Item #</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Contestant</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Item Name</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Performance</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Payment</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">Submitted</th>
@@ -903,8 +915,8 @@ export default function EventParticipantsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <div className="text-sm font-bold text-gray-900">{entry.contestantName || 'Loading...'}</div>
-                          <div className="text-sm text-gray-700">{entry.eodsaId}</div>
+                          <div className="text-sm font-bold text-gray-900">{entry.itemName || 'Loading...'}</div>
+                          <div className="text-sm text-gray-700">{entry.contestantName} • {entry.eodsaId}</div>
                           {/* Show all participant names for trio/group entries */}
                           {performanceType !== 'Solo' && entry.participantNames && entry.participantNames.length > 1 && (
                             <div className="text-xs text-gray-600 mt-1">
@@ -915,7 +927,7 @@ export default function EventParticipantsPage() {
                             </div>
                           )}
                           <div className="text-xs text-gray-500 sm:hidden mt-1">
-                            {entry.itemName} • {entry.mastery}
+                            {entry.mastery} • {entry.choreographer}
                           </div>
                         </div>
                       </td>

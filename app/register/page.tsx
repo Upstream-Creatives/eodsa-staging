@@ -98,7 +98,7 @@ export default function RegisterPage() {
   const [dateValidationTimeout, setDateValidationTimeout] = useState<NodeJS.Timeout | null>(null);
   const [nameValidationTimeout, setNameValidationTimeout] = useState<NodeJS.Timeout | null>(null);
   const [guardianNameValidationTimeout, setGuardianNameValidationTimeout] = useState<NodeJS.Timeout | null>(null);
-  const { success, error, warning, info } = useToast();
+  const { success, error, warning, info, validationWarning, validationError } = useToast();
 
   // Cleanup timeouts on component unmount
   useEffect(() => {
@@ -207,7 +207,7 @@ export default function RegisterPage() {
         // Use a debounced timeout to avoid showing the warning immediately
         const newTimeout = setTimeout(() => {
           if (!cleanValue.includes(' ')) {
-            warning('Please enter your full name (first name and last name separated by a space).', 5000);
+            validationWarning('Please enter your full name (first name and last name separated by a space).', 5000);
           }
         }, 3000); // Increased timeout to 3 seconds
         setNameValidationTimeout(newTimeout);
@@ -314,7 +314,7 @@ export default function RegisterPage() {
       if (!hasSpace && cleanValue.length > 2) {
         const newTimeout = setTimeout(() => {
           if (!cleanValue.includes(' ')) {
-            warning('Please enter the guardian\'s full name (first name and last name separated by a space).', 5000);
+            validationWarning('Please enter the guardian\'s full name (first name and last name separated by a space).', 5000);
           }
         }, 3000); // Increased timeout to 3 seconds
         setGuardianNameValidationTimeout(newTimeout);
@@ -327,7 +327,7 @@ export default function RegisterPage() {
     if (field === 'email') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (value && !emailRegex.test(value)) {
-        warning('Please enter a valid guardian email address.', 4000);
+        validationWarning('Please enter a valid guardian email address.', 4000);
       }
     }
     
@@ -531,7 +531,7 @@ export default function RegisterPage() {
             
             <p className="text-gray-300 mb-8 leading-relaxed">
               Your dancer registration is now <strong>active</strong>! You can immediately start 
-              participating in competitions and applying to dance studios.
+              participating in competitions.
             </p>
             
             <div className="space-y-4">
@@ -544,8 +544,8 @@ export default function RegisterPage() {
                 </div>
                 <p className="text-blue-200 text-sm mt-1">
                   1. Wait for admin approval (you'll be notified)<br/>
-                  2. Once approved, browse and apply to dance studios<br/>
-                  3. Studios will review and accept/reject your application
+                  2. Once approved, studios can find and invite you<br/>
+                  3. You can accept or decline studio invitations
                 </p>
               </div>
               <Link 

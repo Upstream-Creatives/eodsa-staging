@@ -1363,6 +1363,17 @@ export const db = {
     }));
   },
 
+  async removeJudgeEventAssignment(assignmentId: string) {
+    const sqlClient = getSql();
+    
+    await sqlClient`
+      DELETE FROM judge_event_assignments 
+      WHERE id = ${assignmentId}
+    `;
+    
+    return { success: true };
+  },
+
   // NEW: Get judge assignments grouped by region
   async getJudgeAssignmentsByRegion() {
     const sqlClient = getSql();

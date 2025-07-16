@@ -10,11 +10,14 @@ interface Toast {
 }
 
 interface ToastContextType {
-  showToast: (type: Toast['type'], message: string, duration?: number) => void;
+  showToast: (type: Toast['type'], message: string, duration?: number, allowDuplicates?: boolean) => void;
   success: (message: string, duration?: number) => void;
   error: (message: string, duration?: number) => void;
   warning: (message: string, duration?: number) => void;
   info: (message: string, duration?: number) => void;
+  // Validation-specific methods that prevent duplicates
+  validationWarning: (message: string, duration?: number) => void;
+  validationError: (message: string, duration?: number) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -34,15 +37,37 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts(prev => prev.filter(toast => toast.id !== id));
   }, []);
 
-  const showToast = useCallback((type: Toast['type'], message: string, duration = 4000) => {
-    const id = Date.now().toString();
-    const toast = { id, type, message, duration };
-    
-    setToasts(prev => [...prev, toast]);
-
-    if (duration > 0) {
-      setTimeout(() => removeToast(id), duration);
-    }
+  const showToast = useCallback((type: Toast['type'], message: string, duration = 4000, allowDuplicates = false) => {
+    setToasts(prev => {
+      // Check for existing toast with same type and message
+      const existingIndex = prev.findIndex(toast => 
+        toast.type === type && toast.message === message
+      );
+      
+      if (existingIndex !== -1 && !allowDuplicates) {
+        // Replace existing toast with new one (resets timer)
+        const newToasts = [...prev];
+        const newId = Date.now().toString();
+        newToasts[existingIndex] = { id: newId, type, message, duration };
+        
+        // Set new timeout for the replaced toast
+        if (duration > 0) {
+          setTimeout(() => removeToast(newId), duration);
+        }
+        
+        return newToasts;
+      } else {
+        // Add new toast
+        const id = Date.now().toString();
+        const newToast = { id, type, message, duration };
+        
+        if (duration > 0) {
+          setTimeout(() => removeToast(id), duration);
+        }
+        
+        return [...prev, newToast];
+      }
+    });
   }, [removeToast]);
 
   const success = useCallback((message: string, duration?: number) => {
@@ -61,8 +86,17 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     showToast('info', message, duration);
   }, [showToast]);
 
+  // Validation-specific methods that prevent duplicates
+  const validationWarning = useCallback((message: string, duration?: number) => {
+    showToast('warning', message, duration, false); // false = no duplicates allowed
+  }, [showToast]);
+
+  const validationError = useCallback((message: string, duration?: number) => {
+    showToast('error', message, duration, false); // false = no duplicates allowed
+  }, [showToast]);
+
   return (
-    <ToastContext.Provider value={{ showToast, success, error, warning, info }}>
+    <ToastContext.Provider value={{ showToast, success, error, warning, info, validationWarning, validationError }}>
       {children}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </ToastContext.Provider>

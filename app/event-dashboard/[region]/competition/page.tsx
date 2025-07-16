@@ -64,7 +64,7 @@ export default function CompetitionEntryPage() {
   const searchParams = useSearchParams();
   const params = useParams();
   const router = useRouter();
-  const { success, error } = useToast();
+  const { success, error, validationError } = useToast();
   const region = decodeURIComponent(params?.region as string || '');
   const eodsaId = searchParams?.get('eodsaId') || '';
   const studioId = searchParams?.get('studioId') || '';
@@ -812,9 +812,9 @@ export default function CompetitionEntryPage() {
                         const value = e.target.value;
                         // Prevent empty strings with just spaces and enforce minimum length
                         if (value && value.trim().length > 0 && value.trim().length < 3) {
-                          error('Item name must be at least 3 characters long.');
+                          validationError('Item name must be at least 3 characters long.');
                         } else if (value && value.trim().length === 0) {
-                          error('Item name cannot be empty or contain only spaces.');
+                          validationError('Item name cannot be empty or contain only spaces.');
                         }
                         setCurrentForm({...currentForm, itemName: value});
                       }}
