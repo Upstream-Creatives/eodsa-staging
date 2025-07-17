@@ -211,7 +211,7 @@ export default function AdminRankingsPage() {
         rankingColor = 'bg-gradient-to-r from-yellow-500 to-yellow-700 text-white';
         break;
       case 'legend':
-        rankingColor = 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white';
+      rankingColor = 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white';
         break;
       case 'gold':
         rankingColor = 'bg-gradient-to-r from-yellow-300 to-yellow-500 text-white';
@@ -220,7 +220,7 @@ export default function AdminRankingsPage() {
         rankingColor = 'bg-gradient-to-r from-slate-300 to-slate-500 text-white';
         break;
       case 'silver':
-        rankingColor = 'bg-gradient-to-r from-gray-400 to-gray-600 text-white';
+      rankingColor = 'bg-gradient-to-r from-gray-400 to-gray-600 text-white';
         break;
       case 'bronze':
       default:

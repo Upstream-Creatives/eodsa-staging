@@ -25,8 +25,10 @@ Performances are now ranked by percentage with achievement levels:
 - **Bronze**: ≤69%
 - **Silver**: 70-74%
 - **Silver Plus**: 75-79%
-- **Gold**: 80-89%
-- **Pro Gold**: 90%+
+- **Gold**: 80-84%
+- **Legend**: 85-89% (Gold medal with Legend emblem)
+- **Opus**: 90-94% (Gold medal with Opus emblem)
+- **Elite**: 95%+ (Gold medal with Elite emblem)
 
 ## Database Migration Required
 

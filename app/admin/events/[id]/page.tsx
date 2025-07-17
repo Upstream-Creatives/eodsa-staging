@@ -938,10 +938,10 @@ export default function EventParticipantsPage() {
                               <div className="space-y-1">
                                 <div className="text-sm font-medium text-orange-600">
                                   Click to assign
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  Program Order
-                                </div>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Program Order
+                            </div>
                               </div>
                             )}
                           </div>

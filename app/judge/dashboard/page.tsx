@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAlert } from '@/components/ui/custom-alert';
@@ -53,6 +53,26 @@ interface PerformanceWithScore extends Performance {
 }
 
 export default function JudgeDashboard() {
+  // Force black text for all inputs
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .force-black-text input,
+      .force-black-text textarea,
+      .force-black-text select,
+      input,
+      textarea,
+      select {
+        color: black !important;
+        -webkit-text-fill-color: black !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [performances, setPerformances] = useState<PerformanceWithScore[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -247,6 +267,52 @@ export default function JudgeDashboard() {
     setCurrentScore(prev => ({ ...prev, [category]: value }));
   };
 
+  // Color theme based on mastery type
+  const getMasteryColorTheme = (mastery: string | undefined) => {
+    if (!mastery) return {
+      primary: 'purple-500',
+      secondary: 'pink-600',
+      light: 'purple-100',
+      ring: 'purple-500',
+      gradient: 'from-purple-500 to-pink-600',
+      bg: 'purple-50',
+      border: 'purple-200'
+    };
+
+    if (mastery.includes('Water')) {
+      return {
+        primary: 'blue-500',
+        secondary: 'cyan-600', 
+        light: 'blue-100',
+        ring: 'blue-500',
+        gradient: 'from-blue-500 to-cyan-600',
+        bg: 'blue-50',
+        border: 'blue-200'
+      };
+    } else if (mastery.includes('Fire')) {
+      return {
+        primary: 'red-500',
+        secondary: 'orange-600',
+        light: 'red-100', 
+        ring: 'red-500',
+        gradient: 'from-red-500 to-orange-600',
+        bg: 'red-50',
+        border: 'red-200'
+      };
+    }
+
+    // Default purple theme
+    return {
+      primary: 'purple-500',
+      secondary: 'pink-600',
+      light: 'purple-100',
+      ring: 'purple-500', 
+      gradient: 'from-purple-500 to-pink-600',
+      bg: 'purple-50',
+      border: 'purple-200'
+    };
+  };
+
   const handleSubmitScore = async () => {
     if (!selectedPerformance) return;
     
@@ -395,66 +461,69 @@ export default function JudgeDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Scoring Interface */}
         {viewMode === 'scoring' && selectedPerformance && (
-          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-            <div className="flex items-center justify-between mb-6">
-                              <h2 className="text-2xl font-bold text-black">
-                Score Performance
-              </h2>
-              <button
-                onClick={() => {
-                  setViewMode('list');
-                  setSelectedPerformance(null);
-                }}
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-              >
-                Back to List
-              </button>
-                  </div>
+          (() => {
+            const colorTheme = getMasteryColorTheme(selectedPerformance.mastery);
+            return (
+              <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-4xl font-black text-black">
+                    Score Performance
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setViewMode('list');
+                      setSelectedPerformance(null);
+                    }}
+                    className="px-8 py-4 bg-gray-600 text-white text-xl font-bold rounded-xl hover:bg-gray-700 transition-colors min-h-[60px] min-w-[180px]"
+                  >
+                    Back to List
+                  </button>
+                </div>
 
-            {/* Performance Details */}
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                    {selectedPerformance.itemNumber || '?'}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-black">
-                      {selectedPerformance.title}
-                    </h3>
+                {/* Performance Details */}
+                <div className={`bg-gradient-to-r from-${colorTheme.bg} to-${colorTheme.light} rounded-xl p-8 mb-8 border-4 border-${colorTheme.border}`}>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center space-x-6">
+                      <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-${colorTheme.primary} to-${colorTheme.secondary} flex items-center justify-center text-white font-black text-3xl shadow-xl border-4 border-white`}>
+                        {selectedPerformance.itemNumber || '?'}
+                      </div>
+                <div>
+                    <h3 className={`text-4xl font-black text-${colorTheme.primary} bg-${colorTheme.light} px-4 py-2 rounded-xl border-2 border-${colorTheme.border}`}>
+                    {selectedPerformance.title}
+                  </h3>
                     <p className="text-sm text-black font-medium">Item #{selectedPerformance.itemNumber || 'Unassigned'}</p>
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
                   {/* Solo indicator for multiple solos */}
                   {selectedPerformance.title.includes('(Solo ') && (
-                    <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 mb-3">
+                    <div className={`inline-flex items-center px-8 py-4 rounded-full text-2xl font-black bg-${colorTheme.light} text-${colorTheme.primary} border-3 border-${colorTheme.border} shadow-xl mb-6`}>
                       🎵 Multiple Solo Performance
                     </div>
                   )}
                   
-                  <div className="space-y-2 text-sm text-black">
-                    <p><span className="font-medium">Contestant:</span> {selectedPerformance.contestantName}</p>
-                    <p><span className="font-medium">Participants:</span> {selectedPerformance.participantNames.join(', ')}</p>
+                  <div className="space-y-4 text-xl text-black">
+                    <p><span className="font-black">Contestant:</span> <span className={`font-black text-2xl text-${colorTheme.primary} bg-${colorTheme.bg} px-3 py-1 rounded-lg border-2 border-${colorTheme.border}`}>{selectedPerformance.contestantName}</span></p>
+                    <p><span className="font-black">Participants:</span> <span className={`font-black text-2xl text-${colorTheme.primary} bg-${colorTheme.bg} px-3 py-1 rounded-lg border-2 border-${colorTheme.border}`}>{selectedPerformance.participantNames.join(', ')}</span></p>
                     {selectedPerformance.choreographer && (
-                      <p><span className="font-medium">Choreographer:</span> {selectedPerformance.choreographer}</p>
+                      <p><span className="font-black">Choreographer:</span> <span className={`font-black text-2xl text-${colorTheme.primary} bg-${colorTheme.bg} px-3 py-1 rounded-lg border-2 border-${colorTheme.border}`}>{selectedPerformance.choreographer}</span></p>
                     )}
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-black space-y-2">
+                  <div className="text-xl text-black space-y-4">
                     {selectedPerformance.itemNumber && (
-                      <p><span className="font-medium">Item #:</span> {selectedPerformance.itemNumber}</p>
+                      <p><span className="font-black">Item #:</span> <span className={`font-black text-3xl text-${colorTheme.primary} bg-${colorTheme.bg} px-4 py-2 rounded-lg border-2 border-${colorTheme.border} shadow-lg`}>#{selectedPerformance.itemNumber}</span></p>
                     )}
                     {selectedPerformance.itemStyle && (
-                      <p><span className="font-medium">Style:</span> {selectedPerformance.itemStyle}</p>
+                      <p><span className="font-black">Style:</span> <span className={`font-black text-2xl text-${colorTheme.primary} bg-${colorTheme.bg} px-3 py-1 rounded-lg border-2 border-${colorTheme.border}`}>{selectedPerformance.itemStyle}</span></p>
                     )}
                     {selectedPerformance.mastery && (
-                      <p><span className="font-medium">Mastery:</span> {selectedPerformance.mastery}</p>
+                      <p><span className="font-black">Mastery:</span> <span className={`font-black text-2xl text-${colorTheme.primary} bg-${colorTheme.bg} px-3 py-1 rounded-lg border-2 border-${colorTheme.border}`}>{selectedPerformance.mastery}</span></p>
                     )}
-                    <p><span className="font-medium">Duration:</span> {selectedPerformance.duration} minutes</p>
+                    <p><span className="font-black">Duration:</span> <span className={`font-black text-2xl text-${colorTheme.primary} bg-${colorTheme.bg} px-3 py-1 rounded-lg border-2 border-${colorTheme.border}`}>{selectedPerformance.duration} minutes</span></p>
                     
                     {/* Solo number extraction for multiple solos */}
                     {selectedPerformance.title.includes('(Solo ') && (
@@ -473,11 +542,11 @@ export default function JudgeDashboard() {
             </div>
 
             {/* Scoring Form */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <div className="space-y-10">
                 {/* Technique Score */}
                                             <div>
-                  <label className="block text-sm font-medium text-black mb-2">
+                  <label className="block text-2xl font-black text-black mb-4">
                     Technical Execution (0-20)
                         </label>
                   <input
@@ -487,13 +556,18 @@ export default function JudgeDashboard() {
                     step="0.1"
                     value={currentScore.technique}
                     onChange={(e) => handleScoreChange('technique', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className={`w-full px-6 py-6 border-4 border-gray-600 rounded-xl focus:ring-4 focus:ring-${colorTheme.ring} focus:border-${colorTheme.primary} text-3xl font-black text-center min-h-[80px] bg-white`}
+                    style={{ 
+                      color: '#000000 !important',
+                      backgroundColor: '#ffffff !important',
+                      WebkitTextFillColor: '#000000 !important'
+                    }}
                   />
                       </div>
                       
                 {/* Musicality Score */}
                 <div>
-                  <label className="block text-sm font-medium text-black mb-2">
+                  <label className="block text-2xl font-black text-black mb-4">
                     Musical Interpretation (0-20)
                   </label>
                          <input
@@ -503,13 +577,18 @@ export default function JudgeDashboard() {
                     step="0.1"
                     value={currentScore.musicality}
                     onChange={(e) => handleScoreChange('musicality', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className={`w-full px-6 py-6 border-4 border-gray-600 rounded-xl focus:ring-4 focus:ring-${colorTheme.ring} focus:border-${colorTheme.primary} text-3xl font-black text-center min-h-[80px] bg-white`}
+                    style={{ 
+                      color: '#000000 !important',
+                      backgroundColor: '#ffffff !important',
+                      WebkitTextFillColor: '#000000 !important'
+                    }}
                   />
                          </div>
 
                 {/* Performance Score */}
                       <div>
-                  <label className="block text-sm font-medium text-black mb-2">
+                  <label className="block text-2xl font-black text-black mb-4">
                     Performance Quality (0-20)
                   </label>
                   <input
@@ -519,15 +598,20 @@ export default function JudgeDashboard() {
                     step="0.1"
                     value={currentScore.performance}
                     onChange={(e) => handleScoreChange('performance', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className={`w-full px-6 py-6 border-4 border-gray-600 rounded-xl focus:ring-4 focus:ring-${colorTheme.ring} focus:border-${colorTheme.primary} text-3xl font-black text-center min-h-[80px] bg-white`}
+                    style={{ 
+                      color: '#000000 !important',
+                      backgroundColor: '#ffffff !important',
+                      WebkitTextFillColor: '#000000 !important'
+                    }}
                   />
                         </div>
                       </div>
 
-              <div className="space-y-6">
+              <div className="space-y-10">
                 {/* Styling Score */}
                       <div>
-                  <label className="block text-sm font-medium text-black mb-2">
+                  <label className="block text-2xl font-black text-black mb-4">
                     Styling & Presentation (0-20)
                   </label>
                   <input
@@ -537,13 +621,18 @@ export default function JudgeDashboard() {
                     step="0.1"
                     value={currentScore.styling}
                     onChange={(e) => handleScoreChange('styling', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className={`w-full px-6 py-6 border-4 border-gray-600 rounded-xl focus:ring-4 focus:ring-${colorTheme.ring} focus:border-${colorTheme.primary} text-3xl font-black text-center min-h-[80px] bg-white`}
+                    style={{ 
+                      color: '#000000 !important',
+                      backgroundColor: '#ffffff !important',
+                      WebkitTextFillColor: '#000000 !important'
+                    }}
                   />
                         </div>
 
                 {/* Overall Impression Score */}
                 <div>
-                  <label className="block text-sm font-medium text-black mb-2">
+                  <label className="block text-2xl font-black text-black mb-4">
                     Overall Impression (0-20)
                   </label>
                   <input
@@ -553,20 +642,30 @@ export default function JudgeDashboard() {
                     step="0.1"
                     value={currentScore.overallImpression}
                     onChange={(e) => handleScoreChange('overallImpression', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className={`w-full px-6 py-6 border-4 border-gray-600 rounded-xl focus:ring-4 focus:ring-${colorTheme.ring} focus:border-${colorTheme.primary} text-3xl font-black text-center min-h-[80px] bg-white`}
+                    style={{ 
+                      color: '#000000 !important',
+                      backgroundColor: '#ffffff !important',
+                      WebkitTextFillColor: '#000000 !important'
+                    }}
                   />
                   </div>
 
                   {/* Comments */}
                   <div>
-                  <label className="block text-sm font-medium text-black mb-2">
+                  <label className="block text-2xl font-black text-black mb-4">
                       Comments (Optional)
                     </label>
                     <textarea
                       value={currentScore.comments}
                       onChange={(e) => handleScoreChange('comments', e.target.value)}
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    rows={6}
+                    className={`w-full px-6 py-6 border-4 border-gray-600 rounded-xl focus:ring-4 focus:ring-${colorTheme.ring} focus:border-${colorTheme.primary} text-xl font-bold min-h-[120px] bg-white`}
+                    style={{ 
+                      color: '#000000 !important',
+                      backgroundColor: '#ffffff !important',
+                      WebkitTextFillColor: '#000000 !important'
+                    }}
                     placeholder="Add any additional comments about the performance..."
                   />
                 </div>
@@ -574,29 +673,31 @@ export default function JudgeDashboard() {
                   </div>
           
             {/* Total Score Display */}
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <div className={`mt-10 p-8 bg-${colorTheme.bg} rounded-2xl border-4 border-${colorTheme.border} shadow-xl`}>
               <div className="flex items-center justify-between">
-                <span className="text-lg font-semibold text-black">Total Score:</span>
-                <span className="text-2xl font-bold text-purple-600">
+                <span className="text-3xl font-black text-black">Total Score:</span>
+                <span className={`text-5xl font-black text-${colorTheme.primary}`}>
                   {(currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression).toFixed(1)}/100
                 </span>
                     </div>
-              <div className="mt-2 text-sm text-black">
+              <div className="mt-4 text-2xl font-bold text-black">
                 Percentage: {((currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression)).toFixed(1)}%
-              </div>
+                    </div>
             </div>
 
                   {/* Submit Button */}
-            <div className="mt-6 flex justify-end">
+            <div className="mt-10 flex justify-center">
                   <button
                     onClick={handleSubmitScore}
                 disabled={isSubmittingScore}
-                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 disabled:opacity-50 font-semibold transition-all duration-200"
+                className={`px-12 py-6 bg-gradient-to-r from-${colorTheme.primary} to-${colorTheme.secondary} text-white text-2xl font-black rounded-2xl hover:from-${colorTheme.primary} hover:to-${colorTheme.secondary} hover:opacity-90 disabled:opacity-50 transition-all duration-200 min-h-[80px] min-w-[300px] shadow-xl border-4 border-white`}
               >
                 {isSubmittingScore ? 'Submitting...' : (selectedPerformance.hasScore ? 'Update Score' : 'Submit Score')}
                   </button>
                 </div>
               </div>
+            );
+          })()
         )}
 
         {/* Main Dashboard */}
@@ -604,10 +705,10 @@ export default function JudgeDashboard() {
           <>
             {/* Assignment Overview */}
             <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-black">Your Event Assignments</h2>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-4xl font-black text-black">Your Event Assignments</h2>
             <div className="flex items-center space-x-4">
-                  <span className="text-sm text-black">
+                  <span className="text-xl font-bold text-black">
                     {getCompletionStats().scored} of {getCompletionStats().total} scored ({getCompletionStats().percentage}%)
                   </span>
                   <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -645,88 +746,80 @@ export default function JudgeDashboard() {
           )}
         </div>
             
-            {/* Quick Actions */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <h2 className="text-xl font-bold text-black mb-6">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center space-x-4">
-                  <label className="text-sm font-medium text-black">Jump to Item #:</label>
-                  <input
-                    type="number"
-                    value={itemNumberSearch}
-                    onChange={(e) => setItemNumberSearch(e.target.value)}
-                    onKeyPress={handleItemNumberSearchKeyPress}
-                    placeholder="Enter item number"
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                  <button
-                    onClick={() => {
-                      const itemNum = parseInt(itemNumberSearch);
-                      if (!isNaN(itemNum)) {
-                        loadPerformanceByItemNumber(itemNum);
-                      }
-                    }}
-                    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-                  >
-                    Go
-                  </button>
-                  </div>
-                  </div>
-                </div>
-                
-            {/* Filters */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <h2 className="text-xl font-bold text-black mb-6">Filter Performances</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">Status</label>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as 'all' | 'not_scored' | 'scored')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  >
-                    <option value="all">All Performances</option>
-                    <option value="not_scored">Not Scored by Me</option>
-                    <option value="scored">Fully Scored</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">Search</label>
-                    <input 
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by name or title..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        {/* Simple Controls - Collapsed by default for clean UI */}
+            <details className="bg-white rounded-2xl shadow-xl mb-8">
+              <summary className="p-6 cursor-pointer text-xl font-bold text-gray-600 hover:text-black transition-colors border-b border-gray-200">
+                ⚙️ Advanced Options (tap to expand)
+              </summary>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="flex items-center space-x-4">
+                    <label className="text-lg font-bold text-black">Jump to Item #:</label>
+                    <input
+                      type="number"
+                      value={itemNumberSearch}
+                      onChange={(e) => setItemNumberSearch(e.target.value)}
+                      onKeyPress={handleItemNumberSearchKeyPress}
+                      placeholder="Item #"
+                      className="px-4 py-2 border-2 border-gray-400 rounded-lg focus:ring-2 focus:ring-purple-500 text-lg font-bold"
                     />
+                    <button
+                      onClick={() => {
+                        const itemNum = parseInt(itemNumberSearch);
+                        if (!isNaN(itemNum)) {
+                          loadPerformanceByItemNumber(itemNum);
+                        }
+                      }}
+                      className="px-6 py-2 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700"
+                    >
+                      Go
+                    </button>
                   </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={() => {
-                      setFilterStatus('all');
-                      setSearchTerm('');
-                      setItemNumberSearch('');
-                    }}
-                    className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                  >
-                    Clear Filters
-                  </button>
+                  <div className="flex items-center space-x-4">
+                    <label className="text-lg font-bold text-black">Filter:</label>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value as 'all' | 'not_scored' | 'scored')}
+                      className="px-4 py-2 border-2 border-gray-400 rounded-lg focus:ring-2 focus:ring-purple-500 text-lg font-bold"
+                    >
+                      <option value="all">All Performances</option>
+                      <option value="not_scored">Not Scored</option>
+                      <option value="scored">Completed</option>
+                    </select>
+                  </div>
                 </div>
-                </div>
+                <input 
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search by name or title..."
+                  className="w-full px-4 py-2 border-2 border-gray-400 rounded-lg focus:ring-2 focus:ring-purple-500 text-lg font-bold mb-4"
+                />
+                <button
+                  onClick={() => {
+                    setFilterStatus('all');
+                    setSearchTerm('');
+                    setItemNumberSearch('');
+                  }}
+                  className="px-6 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600"
+                >
+                  Clear All
+                </button>
               </div>
+            </details>
 
             {/* Performances List */}
             <div className="bg-white rounded-2xl shadow-xl p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-black">Performances to Score</h2>
-                <span className="text-sm text-black">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-4xl font-black text-black">Performances to Score</h2>
+                <span className="text-xl font-bold text-black">
                   {filteredPerformances.length} performance{filteredPerformances.length !== 1 ? 's' : ''}
                 </span>
                   </div>
 
               {filteredPerformances.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-1 gap-6">
+                  <div className="grid grid-cols-1 gap-8">
                     {currentPerformances.map((performance) => {
                       // Check if this is part of a multiple solo performance
                       const isMultipleSolo = performance.title.includes('(Solo ');
@@ -739,41 +832,39 @@ export default function JudgeDashboard() {
                         p.title.includes('(Solo ')
                       ).length;
                       
+                      const colorTheme = getMasteryColorTheme(performance.mastery);
+                      
                       return (
                         <div 
                           key={performance.id} 
-                          className={`border rounded-xl p-6 hover:shadow-lg transition-shadow ${
+                          className={`border-4 rounded-2xl p-8 hover:shadow-xl transition-shadow ${
                             isMultipleSolo 
-                              ? 'border-purple-200 bg-gradient-to-r from-purple-50/50 to-pink-50/50' 
-                              : 'border-gray-200'
+                              ? `border-${colorTheme.border} bg-gradient-to-r from-${colorTheme.bg}/50 to-${colorTheme.light}/50` 
+                              : `border-${colorTheme.border} hover:bg-${colorTheme.bg}/30`
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center space-x-4">
-                              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl ${
-                                isMultipleSolo 
-                                  ? 'bg-gradient-to-br from-purple-500 to-pink-600' 
-                                  : 'bg-gradient-to-br from-purple-500 to-pink-600'
-                              } shadow-lg`}>
+                          <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center space-x-6">
+                              <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white font-black text-2xl bg-gradient-to-br from-${colorTheme.primary} to-${colorTheme.secondary} shadow-xl border-4 border-white`}>
                                 {performance.itemNumber || '?'}
                               </div>
                               <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="text-lg font-semibold text-black">
+                                <div className="flex items-center gap-4 mb-3">
+                                  <h3 className={`text-3xl font-black text-${colorTheme.primary} bg-${colorTheme.light} px-4 py-2 rounded-xl border-3 border-${colorTheme.border} shadow-lg`}>
                                     {isMultipleSolo 
                                       ? performance.title.replace(/ \(Solo \d+\)/, '') 
                                       : performance.title
                                     }
                                   </h3>
                                   {isMultipleSolo && (
-                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    <span className={`inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-${colorTheme.light} text-${colorTheme.primary} border-2 border-${colorTheme.border}`}>
                                       Solo {soloNumber}
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-sm text-black">{performance.contestantName}</p>
+                                <p className={`text-2xl font-black text-${colorTheme.primary} bg-${colorTheme.bg} px-4 py-2 rounded-lg border-2 border-${colorTheme.border} inline-block`}>{performance.contestantName}</p>
                                 {isMultipleSolo && sameContestantSolos > 1 && (
-                                  <p className="text-xs text-purple-600 font-medium">
+                                  <p className="text-lg text-purple-600 font-bold mt-1">
                                     Part of {sameContestantSolos} solo performance set
                                   </p>
                                 )}
@@ -791,27 +882,26 @@ export default function JudgeDashboard() {
                               )}
                               <button
                                 onClick={() => handleStartScoring(performance)}
-                                className={`px-4 py-2 text-white rounded-lg font-medium transition-all duration-200 ${
-                                  isMultipleSolo
-                                    ? 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
-                                    : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
-                                }`}
+                                className={`px-8 py-4 text-white text-xl font-black rounded-xl transition-all duration-200 min-h-[60px] min-w-[200px] shadow-lg border-2 border-white bg-gradient-to-r from-${colorTheme.primary} to-${colorTheme.secondary} hover:opacity-90`}
                               >
                                 {performance.hasScore ? 'Update Score' : 'Score Performance'}
                               </button>
                             </div>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-black">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-lg text-black">
                             <div>
-                              <span className="font-medium">Participants:</span> {performance.participantNames.join(', ')}
+                              <span className="font-black">Participants:</span> 
+                              <div className={`font-black text-xl text-${colorTheme.primary} bg-${colorTheme.bg} px-3 py-2 rounded-lg border-2 border-${colorTheme.border} mt-2 inline-block`}>
+                                {performance.participantNames.join(', ')}
+                              </div>
                             </div>
                             <div>
-                              <span className="font-medium">Duration:</span> {performance.duration} minutes
+                              <span className="font-black">Duration:</span> <span className="font-medium">{performance.duration} minutes</span>
                             </div>
                             <div>
-                              <span className="font-medium">Status:</span> {performance.isFullyScored ? 'Fully Scored' : 'In Progress'}
+                              <span className="font-black">Status:</span> <span className="font-medium">{performance.isFullyScored ? 'Fully Scored' : 'In Progress'}</span>
                               {isMultipleSolo && (
-                                <span className="ml-2 text-purple-600">• Multi-Solo</span>
+                                <span className="ml-2 text-purple-600 font-bold">• Multi-Solo</span>
                               )}
                             </div>
                           </div>

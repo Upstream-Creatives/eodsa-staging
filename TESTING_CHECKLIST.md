@@ -131,7 +131,7 @@
 ### **Scoring System**
 - [ ] 5 criteria × 20 points = 100 max
 - [ ] Percentage calculations accurate
-- [ ] Ranking levels correct (Bronze/Silver/Gold/Pro Gold)
+- [ ] Ranking levels correct (Bronze/Silver/Silver+/Gold/Legend/Opus/Elite)
 - [ ] "SCORED" only after ALL judges complete
 
 ---
