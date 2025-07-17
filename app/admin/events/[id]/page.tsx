@@ -698,6 +698,24 @@ export default function EventParticipantsPage() {
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">Event Details</h2>
               </div>
+              {/* Sync Item Numbers Button */}
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/admin/sync-item-numbers', { method: 'POST' });
+                    const result = await response.json();
+                    showAlert(result.message, 'success');
+                    loadEventData(); // Reload to show updated numbers
+                  } catch (error) {
+                    showAlert('Failed to sync item numbers', 'error');
+                  }
+                }}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
+              >
+                <span>🔄</span>
+                <span>Sync Item Numbers</span>
+              </button>
+              
               {/* Excel Export Button */}
               <button
                 onClick={exportToExcel}

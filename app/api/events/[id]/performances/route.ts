@@ -21,6 +21,13 @@ export async function GET(
     // Get all performances for this event
     const performances = await db.getPerformancesByEvent(eventId);
 
+    // Debug: Log what item numbers we're getting
+    console.log('Performances loaded for event', eventId, ':', performances.map(p => ({
+      id: p.id,
+      title: p.title,
+      itemNumber: p.itemNumber
+    })));
+
     return NextResponse.json({
       success: true,
       performances

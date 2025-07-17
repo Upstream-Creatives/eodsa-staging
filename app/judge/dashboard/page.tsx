@@ -318,7 +318,7 @@ export default function JudgeDashboard() {
           <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full mx-auto mb-6 flex items-center justify-center animate-pulse">
             <span className="text-white text-2xl">⚖️</span>
           </div>
-          <p className="text-gray-600 text-lg">Loading judge dashboard...</p>
+          <p className="text-black text-lg">Loading judge dashboard...</p>
         </div>
       </div>
     );
@@ -335,14 +335,14 @@ export default function JudgeDashboard() {
                 <span className="text-white text-xl">⚖️</span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Judge Dashboard</h1>
-                <p className="text-sm text-gray-600">Welcome back, {judgeName}</p>
+                <h1 className="text-2xl font-bold text-black">Judge Dashboard</h1>
+                <p className="text-sm text-black">Welcome back, {judgeName}</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <Link
                 href="/portal/judge"
-                className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium"
+                className="px-4 py-2 text-black hover:text-gray-600 font-medium"
               >
                 Portal
               </Link>
@@ -397,7 +397,7 @@ export default function JudgeDashboard() {
         {viewMode === 'scoring' && selectedPerformance && (
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
+                              <h2 className="text-2xl font-bold text-black">
                 Score Performance
               </h2>
               <button
@@ -413,12 +413,21 @@ export default function JudgeDashboard() {
 
             {/* Performance Details */}
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                    {selectedPerformance.itemNumber || '?'}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-black">
+                      {selectedPerformance.title}
+                    </h3>
+                    <p className="text-sm text-black font-medium">Item #{selectedPerformance.itemNumber || 'Unassigned'}</p>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {selectedPerformance.title}
-                  </h3>
-                  
                   {/* Solo indicator for multiple solos */}
                   {selectedPerformance.title.includes('(Solo ') && (
                     <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 mb-3">
@@ -426,7 +435,7 @@ export default function JudgeDashboard() {
                     </div>
                   )}
                   
-                  <div className="space-y-2 text-sm text-gray-600">
+                  <div className="space-y-2 text-sm text-black">
                     <p><span className="font-medium">Contestant:</span> {selectedPerformance.contestantName}</p>
                     <p><span className="font-medium">Participants:</span> {selectedPerformance.participantNames.join(', ')}</p>
                     {selectedPerformance.choreographer && (
@@ -435,7 +444,7 @@ export default function JudgeDashboard() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600 space-y-2">
+                  <div className="text-sm text-black space-y-2">
                     {selectedPerformance.itemNumber && (
                       <p><span className="font-medium">Item #:</span> {selectedPerformance.itemNumber}</p>
                     )}
@@ -468,13 +477,13 @@ export default function JudgeDashboard() {
             <div className="space-y-6">
                 {/* Technique Score */}
                                             <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Technical Execution (0-10)
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Technical Execution (0-20)
                         </label>
                   <input
                     type="number"
                     min="0"
-                    max="10"
+                    max="20"
                     step="0.1"
                     value={currentScore.technique}
                     onChange={(e) => handleScoreChange('technique', parseFloat(e.target.value) || 0)}
@@ -484,13 +493,13 @@ export default function JudgeDashboard() {
                       
                 {/* Musicality Score */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Musical Interpretation (0-10)
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Musical Interpretation (0-20)
                   </label>
                          <input
                            type="number"
                            min="0"
-                    max="10"
+                    max="20"
                     step="0.1"
                     value={currentScore.musicality}
                     onChange={(e) => handleScoreChange('musicality', parseFloat(e.target.value) || 0)}
@@ -500,13 +509,13 @@ export default function JudgeDashboard() {
 
                 {/* Performance Score */}
                       <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Performance Quality (0-10)
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Performance Quality (0-20)
                   </label>
                   <input
                     type="number"
                     min="0"
-                    max="10"
+                    max="20"
                     step="0.1"
                     value={currentScore.performance}
                     onChange={(e) => handleScoreChange('performance', parseFloat(e.target.value) || 0)}
@@ -518,13 +527,13 @@ export default function JudgeDashboard() {
               <div className="space-y-6">
                 {/* Styling Score */}
                       <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Styling & Presentation (0-10)
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Styling & Presentation (0-20)
                   </label>
                   <input
                     type="number"
                     min="0"
-                    max="10"
+                    max="20"
                     step="0.1"
                     value={currentScore.styling}
                     onChange={(e) => handleScoreChange('styling', parseFloat(e.target.value) || 0)}
@@ -534,13 +543,13 @@ export default function JudgeDashboard() {
 
                 {/* Overall Impression Score */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Overall Impression (0-10)
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Overall Impression (0-20)
                   </label>
                   <input
                     type="number"
                     min="0"
-                    max="10"
+                    max="20"
                     step="0.1"
                     value={currentScore.overallImpression}
                     onChange={(e) => handleScoreChange('overallImpression', parseFloat(e.target.value) || 0)}
@@ -550,7 +559,7 @@ export default function JudgeDashboard() {
 
                   {/* Comments */}
                   <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-black mb-2">
                       Comments (Optional)
                     </label>
                     <textarea
@@ -567,11 +576,14 @@ export default function JudgeDashboard() {
             {/* Total Score Display */}
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-lg font-semibold text-gray-900">Total Score:</span>
+                <span className="text-lg font-semibold text-black">Total Score:</span>
                 <span className="text-2xl font-bold text-purple-600">
-                  {(currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression).toFixed(1)}/50
+                  {(currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression).toFixed(1)}/100
                 </span>
                     </div>
+              <div className="mt-2 text-sm text-black">
+                Percentage: {((currentScore.technique + currentScore.musicality + currentScore.performance + currentScore.styling + currentScore.overallImpression)).toFixed(1)}%
+              </div>
             </div>
 
                   {/* Submit Button */}
@@ -593,9 +605,9 @@ export default function JudgeDashboard() {
             {/* Assignment Overview */}
             <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Your Event Assignments</h2>
+                <h2 className="text-2xl font-bold text-black">Your Event Assignments</h2>
             <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-black">
                     {getCompletionStats().scored} of {getCompletionStats().total} scored ({getCompletionStats().percentage}%)
                   </span>
                   <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -615,7 +627,7 @@ export default function JudgeDashboard() {
                         <h3 className="text-lg font-semibold text-gray-900">{assignment.event.name}</h3>
                         <span className="text-2xl">🎭</span>
                       </div>
-                      <div className="space-y-2 text-sm text-gray-600">
+                      <div className="space-y-2 text-sm text-black">
                         <p><span className="font-medium">Date:</span> {new Date(assignment.event.eventDate).toLocaleDateString()}</p>
                         <p><span className="font-medium">Venue:</span> {assignment.event.venue}</p>
                         <p><span className="font-medium">Region:</span> Nationals Competition</p>
@@ -627,18 +639,18 @@ export default function JudgeDashboard() {
           ) : (
                 <div className="text-center py-8">
                   <div className="text-6xl mb-4">📋</div>
-                  <p className="text-gray-600 text-lg">No assignments yet</p>
-                  <p className="text-gray-500 text-sm mt-2">You'll see your assigned events here once they're assigned by an admin</p>
+                  <p className="text-black text-lg">No assignments yet</p>
+                  <p className="text-black text-sm mt-2">You'll see your assigned events here once they're assigned by an admin</p>
             </div>
           )}
         </div>
             
             {/* Quick Actions */}
             <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+              <h2 className="text-xl font-bold text-black mb-6">Quick Actions</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex items-center space-x-4">
-                  <label className="text-sm font-medium text-gray-700">Jump to Item #:</label>
+                  <label className="text-sm font-medium text-black">Jump to Item #:</label>
                   <input
                     type="number"
                     value={itemNumberSearch}
@@ -664,10 +676,10 @@ export default function JudgeDashboard() {
                 
             {/* Filters */}
             <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Filter Performances</h2>
+              <h2 className="text-xl font-bold text-black mb-6">Filter Performances</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  <label className="block text-sm font-medium text-black mb-2">Status</label>
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value as 'all' | 'not_scored' | 'scored')}
@@ -679,7 +691,7 @@ export default function JudgeDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                  <label className="block text-sm font-medium text-black mb-2">Search</label>
                     <input 
                       type="text"
                       value={searchTerm}
@@ -706,8 +718,8 @@ export default function JudgeDashboard() {
             {/* Performances List */}
             <div className="bg-white rounded-2xl shadow-xl p-8">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Performances to Score</h2>
-                <span className="text-sm text-gray-600">
+                <h2 className="text-2xl font-bold text-black">Performances to Score</h2>
+                <span className="text-sm text-black">
                   {filteredPerformances.length} performance{filteredPerformances.length !== 1 ? 's' : ''}
                 </span>
                   </div>
@@ -738,16 +750,16 @@ export default function JudgeDashboard() {
                         >
                           <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center space-x-4">
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${
+                              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl ${
                                 isMultipleSolo 
                                   ? 'bg-gradient-to-br from-purple-500 to-pink-600' 
                                   : 'bg-gradient-to-br from-purple-500 to-pink-600'
-                              }`}>
+                              } shadow-lg`}>
                                 {performance.itemNumber || '?'}
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <h3 className="text-lg font-semibold text-gray-900">
+                                  <h3 className="text-lg font-semibold text-black">
                                     {isMultipleSolo 
                                       ? performance.title.replace(/ \(Solo \d+\)/, '') 
                                       : performance.title
@@ -759,7 +771,7 @@ export default function JudgeDashboard() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-sm text-gray-600">{performance.contestantName}</p>
+                                <p className="text-sm text-black">{performance.contestantName}</p>
                                 {isMultipleSolo && sameContestantSolos > 1 && (
                                   <p className="text-xs text-purple-600 font-medium">
                                     Part of {sameContestantSolos} solo performance set
@@ -789,7 +801,7 @@ export default function JudgeDashboard() {
                               </button>
                             </div>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-black">
                             <div>
                               <span className="font-medium">Participants:</span> {performance.participantNames.join(', ')}
                             </div>
@@ -815,7 +827,7 @@ export default function JudgeDashboard() {
                       <button
                           onClick={() => setCurrentPage(currentPage - 1)}
                         disabled={currentPage === 1}
-                          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                          className="px-3 py-2 text-sm font-medium text-black bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                             >
                         Previous
                       </button>
@@ -826,7 +838,7 @@ export default function JudgeDashboard() {
                             className={`px-3 py-2 text-sm font-medium rounded-lg ${
                               currentPage === index + 1
                                 ? 'bg-purple-500 text-white'
-                                : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
+                                : 'text-black bg-white border border-gray-300 hover:bg-gray-50'
                             }`}
                           >
                             {index + 1}
@@ -835,7 +847,7 @@ export default function JudgeDashboard() {
                       <button
                           onClick={() => setCurrentPage(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                          className="px-3 py-2 text-sm font-medium text-black bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                       >
                         Next
                       </button>
@@ -846,8 +858,8 @@ export default function JudgeDashboard() {
               ) : (
                 <div className="text-center py-12">
                   <div className="text-6xl mb-4">🎯</div>
-                  <p className="text-gray-600 text-lg">No performances to score</p>
-                  <p className="text-gray-500 text-sm mt-2">
+                  <p className="text-black text-lg">No performances to score</p>
+                  <p className="text-black text-sm mt-2">
                     {filterStatus === 'not_scored' ? 'All performances have been scored!' : 'Performances will appear here once events are created'}
                   </p>
                 </div>

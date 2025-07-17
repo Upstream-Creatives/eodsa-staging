@@ -58,12 +58,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return newToasts;
       } else {
         // Add new toast
-        const id = Date.now().toString();
+    const id = Date.now().toString();
         const newToast = { id, type, message, duration };
-        
-        if (duration > 0) {
-          setTimeout(() => removeToast(id), duration);
-        }
+
+    if (duration > 0) {
+      setTimeout(() => removeToast(id), duration);
+    }
         
         return [...prev, newToast];
       }

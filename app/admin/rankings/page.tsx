@@ -201,25 +201,35 @@ export default function AdminRankingsPage() {
     
     let rankingLevel = '';
     let rankingColor = '';
+    let medalEmoji = '';
     
-    if (percentage >= 90) {
+    if (percentage >= 95) {
+      rankingLevel = 'Platinum';
+      rankingColor = 'bg-gradient-to-r from-purple-400 to-purple-600 text-white';
+      medalEmoji = '💎';
+    } else if (percentage >= 85) {
       rankingLevel = 'Pro Gold';
-      rankingColor = 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white';
+      rankingColor = 'bg-gradient-to-r from-orange-400 to-orange-600 text-white';
+      medalEmoji = '🏆';
     } else if (percentage >= 80) {
       rankingLevel = 'Gold';
       rankingColor = 'bg-gradient-to-r from-yellow-500 to-yellow-700 text-white';
+      medalEmoji = '🥇';
     } else if (percentage >= 75) {
-      rankingLevel = 'Silver Plus';
-      rankingColor = 'bg-gradient-to-r from-gray-300 to-gray-500 text-white';
+      rankingLevel = 'Silver+';
+      rankingColor = 'bg-gradient-to-r from-slate-300 to-slate-500 text-white';
+      medalEmoji = '🥈+';
     } else if (percentage >= 70) {
       rankingLevel = 'Silver';
       rankingColor = 'bg-gradient-to-r from-gray-400 to-gray-600 text-white';
+      medalEmoji = '🥈';
     } else {
       rankingLevel = 'Bronze';
-      rankingColor = 'bg-gradient-to-r from-orange-400 to-orange-600 text-white';
+      rankingColor = 'bg-gradient-to-r from-amber-500 to-amber-700 text-white';
+      medalEmoji = '🥉';
     }
     
-    return { percentage: Math.round(percentage * 10) / 10, rankingLevel, rankingColor };
+    return { percentage: Math.round(percentage * 10) / 10, rankingLevel, rankingColor, medalEmoji };
   };
 
   if (isLoading) {
@@ -536,7 +546,7 @@ export default function AdminRankingsPage() {
                   </thead>
                   <tbody>
                     {filteredRankings.map((ranking, index) => {
-                      const { percentage, rankingLevel, rankingColor } = calculatePercentageAndRanking(ranking.totalScore, ranking.judgeCount);
+                      const { percentage, rankingLevel, rankingColor, medalEmoji } = calculatePercentageAndRanking(ranking.totalScore, ranking.judgeCount);
                       return (
                         <tr key={ranking.performanceId} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                           <td className="py-4 px-6">
@@ -565,6 +575,7 @@ export default function AdminRankingsPage() {
                           </td>
                           <td className="py-4 px-6">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${rankingColor}`}>
+                              <span className="mr-1">{medalEmoji}</span>
                               {rankingLevel}
                             </span>
                           </td>

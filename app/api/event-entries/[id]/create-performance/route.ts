@@ -62,6 +62,7 @@ export async function POST(
       title: entry.itemName,
       participantNames,
       duration: entry.estimatedDuration,
+      itemNumber: entry.itemNumber, // Copy item number from entry
       choreographer: entry.choreographer,
       mastery: entry.mastery,
       itemStyle: entry.itemStyle,

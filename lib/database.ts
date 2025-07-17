@@ -48,6 +48,7 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE event_entries ADD COLUMN IF NOT EXISTS qualified_for_nationals BOOLEAN DEFAULT FALSE`;
     await sqlClient`ALTER TABLE event_entries ADD COLUMN IF NOT EXISTS item_number INTEGER`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS event_end_date TEXT`;
+    await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS item_number INTEGER`;
     
     // Fix performance type constraint to allow 'All' - FORCE UPDATE
     try {
@@ -488,6 +489,7 @@ export const db = {
       title: row.title,
       participantNames: JSON.parse(row.participant_names),
       duration: row.duration,
+      itemNumber: row.item_number,
       choreographer: row.choreographer,
       mastery: row.mastery,
       itemStyle: row.item_style,
@@ -517,6 +519,7 @@ export const db = {
       title: row.title,
       participantNames: JSON.parse(row.participant_names),
       duration: row.duration,
+      itemNumber: row.item_number,
       choreographer: row.choreographer,
       mastery: row.mastery,
       itemStyle: row.item_style,
@@ -1424,6 +1427,7 @@ export const db = {
       title: row.title,
       participantNames: JSON.parse(row.participant_names),
       duration: row.duration,
+      itemNumber: row.item_number,
       choreographer: row.choreographer,
       mastery: row.mastery,
       itemStyle: row.item_style,
@@ -2555,6 +2559,16 @@ export const db = {
     await sqlClient`DELETE FROM studios WHERE is_admin = false`;
     
     console.log('✅ Studios cleaned successfully - Admin user and fee schedule preserved');
+  },
+
+  async updatePerformanceItemNumber(performanceId: string, itemNumber: number) {
+    const sqlClient = getSql();
+    await sqlClient`
+      UPDATE performances 
+      SET item_number = ${itemNumber}
+      WHERE id = ${performanceId}
+    `;
+    return { success: true };
   }
 };
 

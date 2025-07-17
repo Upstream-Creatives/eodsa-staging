@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/data';
+import { db } from '@/lib/database';
 
 export async function POST(request: Request) {
   try {
