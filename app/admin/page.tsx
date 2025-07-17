@@ -2060,45 +2060,6 @@ export default function AdminDashboard() {
                     💡 This will automatically create separate events for Solo, Duet, Trio, and Group performances.
                   </p>
                 </div>
-
-                <div className="lg:col-span-2">
-                  <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
-                    <h3 className="text-lg font-bold text-blue-900 mb-4">💰 Fee Structure Information</h3>
-                    
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div className="bg-white p-4 rounded-lg border border-orange-200">
-                        <h4 className="font-bold text-orange-800 mb-3 flex items-center">
-                          💧 Water (Competition)
-                        </h4>
-                        <div className="space-y-2 text-sm">
-                          <div><strong>Registration:</strong> R{EODSA_FEES.REGISTRATION['Water (Competitive)']} per person</div>
-                          <div><strong>Solo:</strong> R{EODSA_FEES.PERFORMANCE.Solo} (packages available)</div>
-                          <div><strong>Duet/Trio:</strong> R{EODSA_FEES.PERFORMANCE.Duet} per person</div>
-                          <div><strong>Groups:</strong> R{EODSA_FEES.PERFORMANCE.SmallGroup} per person</div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white p-4 rounded-lg border border-red-200">
-                        <h4 className="font-bold text-red-800 mb-3 flex items-center">
-                          🔥 Fire (Advanced)
-                        </h4>
-                        <div className="space-y-2 text-sm">
-                          <div><strong>Registration:</strong> R{EODSA_FEES.REGISTRATION['Fire (Advanced)']} per person</div>
-                          <div><strong>Solo:</strong> R{EODSA_FEES.PERFORMANCE.Solo} (packages available)</div>
-                          <div><strong>Duet/Trio:</strong> R{EODSA_FEES.PERFORMANCE.Duet} per person</div>
-                          <div><strong>Groups:</strong> R{EODSA_FEES.PERFORMANCE.SmallGroup} per person</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 p-3 bg-blue-100 rounded-lg">
-                      <p className="text-sm text-blue-800">
-                        <strong>Note:</strong> Events automatically accept all performance types (Solo, Duet, Trio, Group). 
-                        Fees are calculated based on the participant's selected mastery level.
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {createEventMessage && (
