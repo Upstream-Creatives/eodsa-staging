@@ -782,12 +782,18 @@ export default function EventParticipantsPage() {
               <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '0.3s'}}></div>
               <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{animationDelay: '0.6s'}}></div>
             </div>
-                  </div>
+          </div>
+        </div>
       </div>
-    </div>
+    );
+  }
 
-    {/* Scores Management Modal */}
-    {showScoresModal && (
+  return (
+    <>
+      {/* Main Component Content would go here */}
+      
+      {/* Scores Management Modal */}
+      {showScoresModal && (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <div className="p-6 border-b border-gray-200">
@@ -931,8 +937,6 @@ export default function EventParticipantsPage() {
         </div>
       </div>
     )}
-  );
-}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
@@ -1607,5 +1611,6 @@ export default function EventParticipantsPage() {
         </div>
       </div>
     )}
+    </>
   );
 } 
