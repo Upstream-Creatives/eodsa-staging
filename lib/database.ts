@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import type { Contestant, Performance, Judge, Score, Dancer, EventEntry, Ranking, Event } from './types';
+import { getMedalFromPercentage } from './types';
 
 // Create database connection using Neon serverless driver
 // Only initialize if we have a DATABASE_URL (server-side only)
@@ -668,11 +669,8 @@ export const db = {
         const maxPossibleScore = judgeCount * 100; // Each judge can give max 100 points
         const percentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
         
-        let rankingLevel = 'Bronze';
-        if (percentage >= 90) rankingLevel = 'Pro Gold';
-        else if (percentage >= 80) rankingLevel = 'Gold';
-        else if (percentage >= 75) rankingLevel = 'Silver Plus';
-        else if (percentage >= 70) rankingLevel = 'Silver';
+        const medalInfo = getMedalFromPercentage(percentage);
+        const rankingLevel = medalInfo.label;
         
         return {
           performanceId: row.performance_id,

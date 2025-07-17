@@ -11,6 +11,9 @@ export async function POST() {
     
     // For each entry with an item number, update its performance
     for (const entry of entriesWithItemNumbers) {
+      // Ensure item number is defined
+      if (!entry.itemNumber) continue;
+      
       // Find the performance for this entry
       const allPerformances = await db.getAllPerformances();
       const performance = allPerformances.find(p => p.eventEntryId === entry.id);

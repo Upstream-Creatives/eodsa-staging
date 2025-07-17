@@ -411,7 +411,7 @@ export interface StudioSession {
 } 
 
 // Nationals Medal System
-export type MedalType = 'bronze' | 'silver' | 'silver_plus' | 'gold' | 'pro_gold' | 'platinum';
+export type MedalType = 'bronze' | 'silver' | 'silver_plus' | 'gold' | 'legend' | 'opus' | 'elite';
 
 export interface MedalInfo {
   type: MedalType;
@@ -459,23 +459,32 @@ export const getMedalFromPercentage = (percentage: number): MedalInfo => {
       borderColor: 'border-yellow-300',
       emoji: '🥇'
     };
-  } else if (percentage >= 85 && percentage <= 94) {
+  } else if (percentage >= 85 && percentage <= 89) {
     return {
-      type: 'pro_gold',
-      label: 'Pro Gold',
-      color: 'text-orange-700',
-      bgColor: 'bg-orange-100',
-      borderColor: 'border-orange-300',
-      emoji: '🏆'
+      type: 'legend',
+      label: 'Legend',
+      color: 'text-yellow-700',
+      bgColor: 'bg-yellow-100',
+      borderColor: 'border-yellow-300',
+      emoji: '🏅'
+    };
+  } else if (percentage >= 90 && percentage <= 94) {
+    return {
+      type: 'opus',
+      label: 'Opus',
+      color: 'text-yellow-700',
+      bgColor: 'bg-yellow-100',
+      borderColor: 'border-yellow-300',
+      emoji: '🎖️'
     };
   } else {
     return {
-      type: 'platinum',
-      label: 'Platinum',
-      color: 'text-purple-700',
-      bgColor: 'bg-purple-100',
-      borderColor: 'border-purple-300',
-      emoji: '💎'
+      type: 'elite',
+      label: 'Elite',
+      color: 'text-yellow-700',
+      bgColor: 'bg-yellow-100',
+      borderColor: 'border-yellow-300',
+      emoji: '🏆'
     };
   }
 }; 

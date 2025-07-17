@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { REGIONS } from '@/lib/types';
+import { REGIONS, getMedalFromPercentage } from '@/lib/types';
 
 interface RankingData {
   performanceId: string;
@@ -199,37 +199,41 @@ export default function AdminRankingsPage() {
     const maxPossibleScore = judgeCount * 100; // Each judge can give max 100 points (5 criteria × 20 each)
     const percentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
     
-    let rankingLevel = '';
+    const medalInfo = getMedalFromPercentage(percentage);
     let rankingColor = '';
-    let medalEmoji = '';
     
-    if (percentage >= 95) {
-      rankingLevel = 'Platinum';
-      rankingColor = 'bg-gradient-to-r from-purple-400 to-purple-600 text-white';
-      medalEmoji = '💎';
-    } else if (percentage >= 85) {
-      rankingLevel = 'Pro Gold';
-      rankingColor = 'bg-gradient-to-r from-orange-400 to-orange-600 text-white';
-      medalEmoji = '🏆';
-    } else if (percentage >= 80) {
-      rankingLevel = 'Gold';
-      rankingColor = 'bg-gradient-to-r from-yellow-500 to-yellow-700 text-white';
-      medalEmoji = '🥇';
-    } else if (percentage >= 75) {
-      rankingLevel = 'Silver+';
-      rankingColor = 'bg-gradient-to-r from-slate-300 to-slate-500 text-white';
-      medalEmoji = '🥈+';
-    } else if (percentage >= 70) {
-      rankingLevel = 'Silver';
-      rankingColor = 'bg-gradient-to-r from-gray-400 to-gray-600 text-white';
-      medalEmoji = '🥈';
-    } else {
-      rankingLevel = 'Bronze';
-      rankingColor = 'bg-gradient-to-r from-amber-500 to-amber-700 text-white';
-      medalEmoji = '🥉';
+    // Use gradient colors for better visual appeal while keeping the new medal structure
+    switch (medalInfo.type) {
+      case 'elite':
+        rankingColor = 'bg-gradient-to-r from-yellow-600 to-yellow-800 text-white';
+        break;
+      case 'opus':
+        rankingColor = 'bg-gradient-to-r from-yellow-500 to-yellow-700 text-white';
+        break;
+      case 'legend':
+        rankingColor = 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white';
+        break;
+      case 'gold':
+        rankingColor = 'bg-gradient-to-r from-yellow-300 to-yellow-500 text-white';
+        break;
+      case 'silver_plus':
+        rankingColor = 'bg-gradient-to-r from-slate-300 to-slate-500 text-white';
+        break;
+      case 'silver':
+        rankingColor = 'bg-gradient-to-r from-gray-400 to-gray-600 text-white';
+        break;
+      case 'bronze':
+      default:
+        rankingColor = 'bg-gradient-to-r from-amber-500 to-amber-700 text-white';
+        break;
     }
     
-    return { percentage: Math.round(percentage * 10) / 10, rankingLevel, rankingColor, medalEmoji };
+    return { 
+      percentage: Math.round(percentage * 10) / 10, 
+      rankingLevel: medalInfo.label, 
+      rankingColor, 
+      medalEmoji: medalInfo.emoji 
+    };
   };
 
   if (isLoading) {
