@@ -31,31 +31,11 @@ export async function POST(request: Request) {
 
     let score;
     if (existingScore) {
-      // Update existing score
-      await db.updateScore(existingScore.id, {
-        technicalScore: Number(technique),
-        musicalScore: Number(musicality),
-        performanceScore: Number(performance),
-        stylingScore: Number(styling),
-        overallImpressionScore: Number(overallImpression),
-        comments: comments || ''
-      });
-      
-      score = {
-        ...existingScore,
-        technicalScore: Number(technique),
-        musicalScore: Number(musicality),
-        performanceScore: Number(performance),
-        stylingScore: Number(styling),
-        overallImpressionScore: Number(overallImpression),
-        comments: comments || ''
-      };
-      
-      return NextResponse.json({ 
-        success: true, 
-        score,
-        message: 'Score updated successfully'
-      });
+      // SECURITY: Prevent judges from editing submitted scores
+      return NextResponse.json(
+        { success: false, error: 'Score already submitted. Judges cannot edit submitted scores. Contact admin if changes are needed.' },
+        { status: 403 }
+      );
     } else {
       // Create new score
       score = await db.createScore({

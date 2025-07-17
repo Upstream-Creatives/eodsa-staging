@@ -50,6 +50,7 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE event_entries ADD COLUMN IF NOT EXISTS item_number INTEGER`;
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS event_end_date TEXT`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS item_number INTEGER`;
+    await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS withdrawn_from_judging BOOLEAN DEFAULT FALSE`;
     
     // Fix performance type constraint to allow 'All' - FORCE UPDATE
     try {
@@ -491,6 +492,7 @@ export const db = {
       participantNames: JSON.parse(row.participant_names),
       duration: row.duration,
       itemNumber: row.item_number,
+      withdrawnFromJudging: row.withdrawn_from_judging || false,
       choreographer: row.choreographer,
       mastery: row.mastery,
       itemStyle: row.item_style,
@@ -521,6 +523,7 @@ export const db = {
       participantNames: JSON.parse(row.participant_names),
       duration: row.duration,
       itemNumber: row.item_number,
+      withdrawnFromJudging: row.withdrawn_from_judging || false,
       choreographer: row.choreographer,
       mastery: row.mastery,
       itemStyle: row.item_style,
@@ -528,6 +531,27 @@ export const db = {
       status: row.status,
       contestantName: row.contestant_name
     } as Performance & { contestantName: string };
+  },
+
+  // Withdrawal management
+  async withdrawPerformanceFromJudging(performanceId: string) {
+    const sqlClient = getSql();
+    await sqlClient`
+      UPDATE performances 
+      SET withdrawn_from_judging = true 
+      WHERE id = ${performanceId}
+    `;
+    return true;
+  },
+
+  async restorePerformanceToJudging(performanceId: string) {
+    const sqlClient = getSql();
+    await sqlClient`
+      UPDATE performances 
+      SET withdrawn_from_judging = false 
+      WHERE id = ${performanceId}
+    `;
+    return true;
   },
 
   // Rankings and Tabulation
@@ -1141,6 +1165,13 @@ export const db = {
     `;
   },
 
+  async deleteScore(id: string) {
+    const sqlClient = getSql();
+    await sqlClient`
+      DELETE FROM scores WHERE id = ${id}
+    `;
+  },
+
   async getScoreByJudgeAndPerformance(judgeId: string, performanceId: string) {
     const sqlClient = getSql();
     const result = await sqlClient`
@@ -1426,6 +1457,7 @@ export const db = {
       participantNames: JSON.parse(row.participant_names),
       duration: row.duration,
       itemNumber: row.item_number,
+      withdrawnFromJudging: row.withdrawn_from_judging || false,
       choreographer: row.choreographer,
       mastery: row.mastery,
       itemStyle: row.item_style,

@@ -58,6 +58,7 @@ interface Performance {
   scheduledTime?: string;
   status: string;
   contestantName?: string;
+  withdrawnFromJudging?: boolean;
 }
 
 export default function EventParticipantsPage() {
@@ -78,6 +79,10 @@ export default function EventParticipantsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [deletingEntries, setDeletingEntries] = useState<Set<string>>(new Set());
   const [performanceTypeFilter, setPerformanceTypeFilter] = useState<string>('all');
+  const [withdrawingPerformances, setWithdrawingPerformances] = useState<Set<string>>(new Set());
+  const [selectedPerformanceScores, setSelectedPerformanceScores] = useState<any>(null);
+  const [showScoresModal, setShowScoresModal] = useState(false);
+  const [loadingScores, setLoadingScores] = useState(false);
   const { showAlert } = useAlert();
 
   // Determine performance type from participant count
@@ -624,6 +629,130 @@ export default function EventParticipantsPage() {
     }
   };
 
+  // Withdrawal management functions
+  const handleWithdrawPerformance = async (performanceId: string, title: string) => {
+    if (withdrawingPerformances.has(performanceId)) return;
+    
+    const performance = performances.find(p => p.id === performanceId);
+    const isWithdrawn = performance?.withdrawnFromJudging;
+    
+    const action = isWithdrawn ? 'restore' : 'withdraw';
+    const actionText = isWithdrawn ? 'restore to judging' : 'withdraw from judging';
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to ${actionText} "${title}"?\n\n${
+        isWithdrawn 
+          ? 'This will make the performance visible to judges again.'
+          : 'This will hide the performance from judges and show it as unscored in admin view.'
+      }`
+    );
+    
+    if (!confirmed) return;
+    
+    setWithdrawingPerformances(prev => new Set(prev).add(performanceId));
+    
+    try {
+      const response = await fetch(`/api/admin/performances/${performanceId}/withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action }),
+      });
+
+      if (response.ok) {
+        // Update local state optimistically
+        setPerformances(prev => prev.map(p => 
+          p.id === performanceId 
+            ? { ...p, withdrawnFromJudging: action === 'withdraw' }
+            : p
+        ));
+        
+        showAlert(
+          `Performance ${action === 'withdraw' ? 'withdrawn from' : 'restored to'} judging successfully!`, 
+          'success'
+        );
+      } else {
+        const error = await response.json();
+        showAlert(`Failed to ${actionText}: ${error.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error updating withdrawal status:', error);
+      showAlert(`Failed to ${actionText}`, 'error');
+    } finally {
+      setWithdrawingPerformances(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(performanceId);
+        return newSet;
+      });
+    }
+  };
+
+  // Score management functions
+  const handleViewScores = async (performanceId: string, performanceTitle: string) => {
+    setLoadingScores(true);
+    setShowScoresModal(true);
+    
+    try {
+      // Get scoring status for this performance
+      const response = await fetch(`/api/scores/performance/${performanceId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedPerformanceScores({
+          performanceId,
+          performanceTitle,
+          ...data.scoringStatus
+        });
+      } else {
+        showAlert('Failed to load performance scores', 'error');
+        setShowScoresModal(false);
+      }
+    } catch (error) {
+      console.error('Error loading scores:', error);
+      showAlert('Failed to load performance scores', 'error');
+      setShowScoresModal(false);
+    } finally {
+      setLoadingScores(false);
+    }
+  };
+
+  const handleEditScore = async (performanceId: string, judgeId: string, judgeName: string) => {
+    // This could open a score editing modal - for now just show a placeholder
+    showAlert(`Score editing for ${judgeName} - Feature coming soon!`, 'info');
+  };
+
+  const handleDeleteScore = async (performanceId: string, judgeId: string, judgeName: string) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${judgeName}'s score for this performance?\n\nThis action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const response = await fetch(`/api/admin/scores/${performanceId}/${judgeId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adminReason: 'Score deleted by admin'
+        }),
+      });
+
+      if (response.ok) {
+        showAlert(`${judgeName}'s score deleted successfully`, 'success');
+        // Refresh the scores view
+        handleViewScores(performanceId, selectedPerformanceScores?.performanceTitle || '');
+      } else {
+        const error = await response.json();
+        showAlert(`Failed to delete score: ${error.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting score:', error);
+      showAlert('Failed to delete score', 'error');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
@@ -653,11 +782,157 @@ export default function EventParticipantsPage() {
               <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '0.3s'}}></div>
               <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{animationDelay: '0.6s'}}></div>
             </div>
+                  </div>
+      </div>
+    </div>
+
+    {/* Scores Management Modal */}
+    {showScoresModal && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <span className="text-white text-lg">🎯</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Performance Scores</h2>
+                  <p className="text-gray-600">{selectedPerformanceScores?.performanceTitle}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowScoresModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <span className="text-2xl">×</span>
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {loadingScores ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading scores...</p>
+              </div>
+            ) : selectedPerformanceScores ? (
+              <div className="space-y-6">
+                {/* Scoring Overview */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-blue-600">{selectedPerformanceScores.totalJudges}</div>
+                      <div className="text-sm text-gray-600">Total Judges</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-green-600">{selectedPerformanceScores.scoredJudges}</div>
+                      <div className="text-sm text-gray-600">Scored</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-orange-600">{selectedPerformanceScores.pendingJudgeIds?.length || 0}</div>
+                      <div className="text-sm text-gray-600">Pending</div>
+                    </div>
+                    <div>
+                      <div className={`text-2xl font-bold ${selectedPerformanceScores.isFullyScored ? 'text-green-600' : 'text-red-600'}`}>
+                        {selectedPerformanceScores.isFullyScored ? '✓' : '✗'}
+                      </div>
+                      <div className="text-sm text-gray-600">Complete</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Individual Scores */}
+                {selectedPerformanceScores.scores && selectedPerformanceScores.scores.length > 0 ? (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Individual Judge Scores</h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Judge</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Score</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {selectedPerformanceScores.scores.map((score: any) => (
+                            <tr key={score.judgeId} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{score.judgeName}</div>
+                                <div className="text-sm text-gray-500">ID: {score.judgeId}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-lg font-bold text-gray-900">{score.totalScore.toFixed(1)}/100</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{((score.totalScore / 100) * 100).toFixed(1)}%</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-500">
+                                  {new Date(score.submittedAt).toLocaleDateString()} {new Date(score.submittedAt).toLocaleTimeString()}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleEditScore(selectedPerformanceScores.performanceId, score.judgeId, score.judgeName)}
+                                    className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-200 transition-colors"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteScore(selectedPerformanceScores.performanceId, score.judgeId, score.judgeName)}
+                                    className="px-3 py-1 text-xs font-medium rounded-lg bg-red-100 text-red-800 hover:bg-red-200 border border-red-200 transition-colors"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 text-4xl mb-4">📝</div>
+                    <p className="text-gray-600">No scores submitted yet</p>
+                  </div>
+                )}
+
+                {/* Pending Judges */}
+                {selectedPerformanceScores.pendingJudgeIds && selectedPerformanceScores.pendingJudgeIds.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Pending Judges</h3>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-yellow-800 text-sm mb-2">The following judges have not submitted scores yet:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPerformanceScores.pendingJudgeIds.map((judgeId: string) => (
+                          <span key={judgeId} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Judge ID: {judgeId}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-red-400 text-4xl mb-4">⚠️</div>
+                <p className="text-gray-600">Failed to load scores</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    );
-  }
+    )}
+  );
+}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
@@ -1100,6 +1375,8 @@ export default function EventParticipantsPage() {
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Duration</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">Choreographer</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Scores</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -1124,14 +1401,56 @@ export default function EventParticipantsPage() {
                         {performance.choreographer}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full border ${
-                          performance.status === 'scheduled' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                          performance.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                          performance.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
-                          'bg-gray-100 text-gray-800 border-gray-200'
-                        }`}>
-                          {performance.status.replace('_', ' ').toUpperCase()}
-                        </span>
+                        <div className="flex flex-col space-y-1">
+                          <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full border ${
+                            performance.withdrawnFromJudging 
+                              ? 'bg-red-100 text-red-800 border-red-200'
+                              : performance.status === 'scheduled' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                                performance.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                performance.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
+                                'bg-gray-100 text-gray-800 border-gray-200'
+                          }`}>
+                            {performance.withdrawnFromJudging 
+                              ? 'WITHDRAWN' 
+                              : performance.status.replace('_', ' ').toUpperCase()
+                            }
+                          </span>
+                          {performance.withdrawnFromJudging && (
+                            <span className="text-xs text-gray-500">
+                              (Shows as unscored)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleWithdrawPerformance(performance.id, performance.title)}
+                          disabled={withdrawingPerformances.has(performance.id)}
+                          className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                            performance.withdrawnFromJudging
+                              ? 'bg-green-100 text-green-800 hover:bg-green-200 border border-green-200'
+                              : 'bg-red-100 text-red-800 hover:bg-red-200 border border-red-200'
+                          } ${
+                            withdrawingPerformances.has(performance.id)
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'hover:shadow-sm'
+                          }`}
+                        >
+                          {withdrawingPerformances.has(performance.id)
+                            ? 'Processing...'
+                            : performance.withdrawnFromJudging
+                              ? 'Restore'
+                              : 'Withdraw'
+                          }
+                        </button>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleViewScores(performance.id, performance.title)}
+                          className="px-3 py-1 text-xs font-medium rounded-lg transition-colors bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-200 hover:shadow-sm"
+                        >
+                          View Scores
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1142,5 +1461,151 @@ export default function EventParticipantsPage() {
         </div>
       </div>
     </div>
+
+    {/* Scores Management Modal */}
+    {showScoresModal && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <span className="text-white text-lg">🎯</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Performance Scores</h2>
+                  <p className="text-gray-600">{selectedPerformanceScores?.performanceTitle}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowScoresModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <span className="text-2xl">×</span>
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {loadingScores ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading scores...</p>
+              </div>
+            ) : selectedPerformanceScores ? (
+              <div className="space-y-6">
+                {/* Scoring Overview */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-blue-600">{selectedPerformanceScores.totalJudges}</div>
+                      <div className="text-sm text-gray-600">Total Judges</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-green-600">{selectedPerformanceScores.scoredJudges}</div>
+                      <div className="text-sm text-gray-600">Scored</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-orange-600">{selectedPerformanceScores.pendingJudgeIds?.length || 0}</div>
+                      <div className="text-sm text-gray-600">Pending</div>
+                    </div>
+                    <div>
+                      <div className={`text-2xl font-bold ${selectedPerformanceScores.isFullyScored ? 'text-green-600' : 'text-red-600'}`}>
+                        {selectedPerformanceScores.isFullyScored ? '✓' : '✗'}
+                      </div>
+                      <div className="text-sm text-gray-600">Complete</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Individual Scores */}
+                {selectedPerformanceScores.scores && selectedPerformanceScores.scores.length > 0 ? (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Individual Judge Scores</h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Judge</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Score</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {selectedPerformanceScores.scores.map((score: any) => (
+                            <tr key={score.judgeId} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{score.judgeName}</div>
+                                <div className="text-sm text-gray-500">ID: {score.judgeId}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-lg font-bold text-gray-900">{score.totalScore.toFixed(1)}/100</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{((score.totalScore / 100) * 100).toFixed(1)}%</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-500">
+                                  {new Date(score.submittedAt).toLocaleDateString()} {new Date(score.submittedAt).toLocaleTimeString()}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleEditScore(selectedPerformanceScores.performanceId, score.judgeId, score.judgeName)}
+                                    className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-200 transition-colors"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteScore(selectedPerformanceScores.performanceId, score.judgeId, score.judgeName)}
+                                    className="px-3 py-1 text-xs font-medium rounded-lg bg-red-100 text-red-800 hover:bg-red-200 border border-red-200 transition-colors"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 text-4xl mb-4">📝</div>
+                    <p className="text-gray-600">No scores submitted yet</p>
+                  </div>
+                )}
+
+                {/* Pending Judges */}
+                {selectedPerformanceScores.pendingJudgeIds && selectedPerformanceScores.pendingJudgeIds.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Pending Judges</h3>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-yellow-800 text-sm mb-2">The following judges have not submitted scores yet:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPerformanceScores.pendingJudgeIds.map((judgeId: string) => (
+                          <span key={judgeId} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Judge ID: {judgeId}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-red-400 text-4xl mb-4">⚠️</div>
+                <p className="text-gray-600">Failed to load scores</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
   );
 } 

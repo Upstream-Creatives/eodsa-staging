@@ -112,6 +112,7 @@ export interface Performance {
   itemNumber?: number; // NEW: Item Number for program order
   scheduledTime?: string;
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  withdrawnFromJudging?: boolean; // NEW: Admin can withdraw items from judging
   // EODSA Nationals Entry Form fields
   choreographer: string;
   mastery: string; // UPDATED: New mastery levels

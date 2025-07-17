@@ -22,6 +22,8 @@ interface RankingData {
   judgeCount: number;
   percentage: number;
   rankingLevel: string;
+  itemNumber?: number; // Item number for program order
+  mastery?: string; // Mastery level
 }
 
 interface EventWithScores {
@@ -541,6 +543,7 @@ export default function AdminRankingsPage() {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-4 px-6 font-bold text-gray-900">Rank</th>
+                      <th className="text-left py-4 px-6 font-bold text-gray-900">Item #</th>
                       <th className="text-left py-4 px-6 font-bold text-gray-900">Performance</th>
                       <th className="text-left py-4 px-6 font-bold text-gray-900">Contestant</th>
                       <th className="text-left py-4 px-6 font-bold text-gray-900">Region</th>
@@ -559,13 +562,25 @@ export default function AdminRankingsPage() {
                             </div>
                           </td>
                           <td className="py-4 px-6">
+                            <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-blue-500 to-purple-600 text-white border border-blue-300 shadow-md">
+                              {ranking.itemNumber ? `Item ${ranking.itemNumber}` : 'Unassigned'}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
                             <div className="font-semibold text-gray-900">{ranking.title}</div>
-                            <div className="text-sm text-gray-600">{ranking.itemStyle} • {ranking.ageCategory} • {ranking.performanceType}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-sm text-gray-600">{ranking.itemStyle}</span>
+                              {ranking.mastery && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                  {ranking.mastery}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-4 px-6">
                             <div className="font-medium text-gray-900">{ranking.contestantName}</div>
                             {ranking.studioName && (
-                              <div className="text-sm text-gray-600">{ranking.studioName}</div>
+                              <div className="text-xs text-gray-500 mt-1">{ranking.studioName}</div>
                             )}
                           </td>
                           <td className="py-4 px-6">
