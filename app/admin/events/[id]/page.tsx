@@ -1719,13 +1719,13 @@ export default function EventParticipantsPage() {
                   <span className="text-white text-lg">💳</span>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Payment Management</h2>
-                  <p className="text-gray-600 text-sm">{selectedEntry.itemName}</p>
+                  <h2 className="text-xl font-bold text-black">Payment Management</h2>
+                  <p className="text-black text-sm font-bold">{selectedEntry.itemName}</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowPaymentModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="text-black hover:text-black p-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 <span className="text-2xl">×</span>
               </button>
@@ -1735,28 +1735,28 @@ export default function EventParticipantsPage() {
           <div className="p-6 space-y-6">
             {/* Current Payment Info */}
             <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Current Status</h3>
+              <h3 className="text-sm font-bold text-black mb-3">Current Status</h3>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Entry Fee:</span>
-                  <span className="text-sm font-medium text-gray-900">R{selectedEntry.calculatedFee.toFixed(2)}</span>
+                  <span className="text-sm font-bold text-black">Entry Fee:</span>
+                  <span className="text-sm font-bold text-black">R{selectedEntry.calculatedFee.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Status:</span>
+                  <span className="text-sm font-bold text-black">Status:</span>
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(selectedEntry.paymentStatus)}`}>
                     {selectedEntry.paymentStatus.toUpperCase()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Outstanding:</span>
+                  <span className="text-sm font-bold text-black">Outstanding:</span>
                   <span className={`text-sm font-bold ${getOutstandingBalance(selectedEntry) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     R{getOutstandingBalance(selectedEntry).toFixed(2)}
                   </span>
                 </div>
                 {selectedEntry.paymentReference && (
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Reference:</span>
-                    <span className="text-sm text-gray-900">{selectedEntry.paymentReference}</span>
+                    <span className="text-sm font-bold text-black">Reference:</span>
+                    <span className="text-sm font-bold text-black">{selectedEntry.paymentReference}</span>
                   </div>
                 )}
               </div>
@@ -1765,7 +1765,7 @@ export default function EventParticipantsPage() {
             {/* Payment Form */}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+                <label className="block text-sm font-bold text-black mb-2">Payment Method</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
@@ -1778,7 +1778,7 @@ export default function EventParticipantsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Reference</label>
+                <label className="block text-sm font-bold text-black mb-2">Payment Reference</label>
                 <input
                   type="text"
                   value={paymentReference}
@@ -1786,7 +1786,7 @@ export default function EventParticipantsPage() {
                   placeholder="Transaction ID, Check number, etc."
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">Enter payment reference when marking as paid</p>
+                <p className="text-xs text-black mt-1">Enter payment reference when marking as paid</p>
               </div>
             </div>
 
@@ -1822,7 +1822,7 @@ export default function EventParticipantsPage() {
             <div className="pt-4 border-t border-gray-200">
               <button
                 onClick={() => setShowPaymentModal(false)}
-                className="w-full px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors font-medium"
+                className="w-full px-4 py-2 text-black hover:text-black transition-colors font-bold"
               >
                 Cancel
               </button>
