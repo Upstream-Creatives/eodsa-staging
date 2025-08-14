@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           ...MUSIC_UPLOAD_PRESET,
           public_id: publicId,
         },
-        (error, result) => {
+        (error: any, result: any) => {
           if (error) reject(error);
           else resolve(result);
         }

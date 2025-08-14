@@ -1496,9 +1496,17 @@ export const db = {
   async getPerformancesByEvent(eventId: string) {
     const sqlClient = getSql();
     const result = await sqlClient`
-      SELECT p.*, c.name as contestant_name 
+      SELECT 
+        p.*, 
+        c.name as contestant_name,
+        ee.entry_type,
+        ee.music_file_url,
+        ee.music_file_name,
+        ee.video_external_url,
+        ee.video_external_type
       FROM performances p 
       JOIN contestants c ON p.contestant_id = c.id 
+      LEFT JOIN event_entries ee ON p.event_entry_id = ee.id
       WHERE p.event_id = ${eventId}
       ORDER BY p.scheduled_time ASC
     ` as any[];
@@ -1518,7 +1526,13 @@ export const db = {
       itemStyle: row.item_style,
       scheduledTime: row.scheduled_time,
       status: row.status,
-      contestantName: row.contestant_name
+      contestantName: row.contestant_name,
+      // PHASE 2: Live vs Virtual Entry Support
+      entryType: row.entry_type || 'live',
+      musicFileUrl: row.music_file_url,
+      musicFileName: row.music_file_name,
+      videoExternalUrl: row.video_external_url,
+      videoExternalType: row.video_external_type
     })) as (Performance & { contestantName: string })[];
   },
 
