@@ -288,8 +288,20 @@ export const db = {
 
     try {
       await sqlClient`
-        INSERT INTO event_entries (id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration)
-        VALUES (${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration})
+        INSERT INTO event_entries (
+          id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, payment_status, submitted_at, 
+          approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, item_style, estimated_duration,
+          entry_type, music_file_url, music_file_name, video_file_url, video_file_name, video_external_url, video_external_type
+        )
+        VALUES (
+          ${id}, ${eventEntry.eventId}, ${eventEntry.contestantId}, ${eventEntry.eodsaId}, ${JSON.stringify(eventEntry.participantIds)}, 
+          ${eventEntry.calculatedFee}, ${eventEntry.paymentStatus}, ${submittedAt}, ${eventEntry.approved}, 
+          ${eventEntry.qualifiedForNationals || false}, ${eventEntry.itemNumber || null}, ${eventEntry.itemName}, 
+          ${eventEntry.choreographer}, ${eventEntry.mastery}, ${eventEntry.itemStyle}, ${eventEntry.estimatedDuration},
+          ${eventEntry.entryType || 'live'}, ${eventEntry.musicFileUrl || null}, ${eventEntry.musicFileName || null},
+          ${eventEntry.videoFileUrl || null}, ${eventEntry.videoFileName || null}, ${eventEntry.videoExternalUrl || null}, 
+          ${eventEntry.videoExternalType || null}
+        )
       `;
       
       console.log(`✅ Event entry ${id} created successfully for contestant ${eventEntry.contestantId}`);
@@ -404,7 +416,15 @@ export const db = {
       choreographer: row.choreographer,
       mastery: row.mastery,
       itemStyle: row.item_style,
-      estimatedDuration: row.estimated_duration
+      estimatedDuration: row.estimated_duration,
+      // PHASE 2: Live vs Virtual Entry Support
+      entryType: row.entry_type || 'live',
+      musicFileUrl: row.music_file_url,
+      musicFileName: row.music_file_name,
+      videoFileUrl: row.video_file_url,
+      videoFileName: row.video_file_name,
+      videoExternalUrl: row.video_external_url,
+      videoExternalType: row.video_external_type
     })) as EventEntry[];
   },
 

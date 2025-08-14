@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { PERFORMANCE_TYPES, MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
 import { useToast } from '@/components/ui/simple-toast';
+import MusicUpload from '@/components/MusicUpload';
 
 interface Event {
   id: string;
@@ -58,6 +59,12 @@ interface PerformanceEntry {
   participants: any[];
   ageCategory: string;
   fee: number;
+  // PHASE 2: Live vs Virtual Entry Support
+  entryType: 'live' | 'virtual';
+  musicFileUrl?: string;
+  musicFileName?: string;
+  videoExternalUrl?: string;
+  videoExternalType?: 'youtube' | 'vimeo' | 'other';
 }
 
 export default function CompetitionEntryPage() {
@@ -85,7 +92,15 @@ export default function CompetitionEntryPage() {
     itemStyle: '',
     estimatedDuration: '',
     participantIds: [] as string[],
-    ageCategory: 'All'
+    ageCategory: 'All',
+    // PHASE 2: Live vs Virtual Entry Support
+    entryType: 'live' as 'live' | 'virtual',
+    // For Live entries - music file
+    musicFileUrl: '',
+    musicFileName: '',
+    // For Virtual entries - video file or URL
+    videoExternalUrl: '',
+    videoExternalType: 'youtube' as 'youtube' | 'vimeo' | 'other'
   });
   const [savedForms, setSavedForms] = useState<Record<string, typeof currentForm>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -443,7 +458,12 @@ export default function CompetitionEntryPage() {
         itemStyle: '',
         estimatedDuration: '',
         participantIds: [],
-        ageCategory: 'All'
+        ageCategory: 'All',
+        entryType: 'live' as 'live' | 'virtual',
+        musicFileUrl: '',
+        musicFileName: '',
+        videoExternalUrl: '',
+        videoExternalType: 'youtube' as 'youtube' | 'vimeo' | 'other'
       });
     }
   };
@@ -461,6 +481,17 @@ export default function CompetitionEntryPage() {
         required: `${limits.min}-${limits.max}`,
         performanceType: showAddForm
       });
+      return;
+    }
+
+    // PHASE 2: Validate entry type requirements
+    if (currentForm.entryType === 'live' && !currentForm.musicFileUrl) {
+      validationError('Please upload a music file for live performances.');
+      return;
+    }
+    
+    if (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl) {
+      validationError('Please provide a video URL for virtual performances.');
       return;
     }
 
@@ -558,7 +589,13 @@ export default function CompetitionEntryPage() {
           choreographer: entry.choreographer,
           mastery: entry.mastery,
           itemStyle: entry.itemStyle,
-          estimatedDuration: parseFloat(entry.estimatedDuration.replace(':', '.')) || 2
+          estimatedDuration: parseFloat(entry.estimatedDuration.replace(':', '.')) || 2,
+          // PHASE 2: Live vs Virtual Entry Support
+          entryType: entry.entryType,
+          musicFileUrl: entry.musicFileUrl || null,
+          musicFileName: entry.musicFileName || null,
+          videoExternalUrl: entry.videoExternalUrl || null,
+          videoExternalType: entry.videoExternalType || null
         };
 
         try {
@@ -910,6 +947,132 @@ export default function CompetitionEntryPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* PHASE 2: Live vs Virtual Entry Toggle */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-3">Entry Type *</label>
+                    <div className="flex space-x-4">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentForm({...currentForm, entryType: 'live', videoExternalUrl: '', musicFileUrl: currentForm.entryType === 'virtual' ? '' : currentForm.musicFileUrl})}
+                        className={`flex-1 p-4 rounded-lg border-2 transition-all duration-200 ${
+                          currentForm.entryType === 'live'
+                            ? 'border-purple-500 bg-purple-500/20 text-purple-300'
+                            : 'border-slate-600 bg-slate-700/30 text-slate-400 hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="flex flex-col items-center space-y-2">
+                          <span className="text-2xl">🎵</span>
+                          <span className="font-medium">Live Performance</span>
+                          <span className="text-xs text-center opacity-75">
+                            Upload music file for live performance
+                          </span>
+                        </div>
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => setCurrentForm({...currentForm, entryType: 'virtual', musicFileUrl: '', musicFileName: ''})}
+                        className={`flex-1 p-4 rounded-lg border-2 transition-all duration-200 ${
+                          currentForm.entryType === 'virtual'
+                            ? 'border-purple-500 bg-purple-500/20 text-purple-300'
+                            : 'border-slate-600 bg-slate-700/30 text-slate-400 hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="flex flex-col items-center space-y-2">
+                          <span className="text-2xl">📹</span>
+                          <span className="font-medium">Virtual Performance</span>
+                          <span className="text-xs text-center opacity-75">
+                            Provide video URL (YouTube/Vimeo)
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Conditional Fields Based on Entry Type */}
+                  {currentForm.entryType === 'live' && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-3">
+                        Music File Upload *
+                        <span className="text-xs text-slate-400 block mt-1">Upload the music file for your live performance</span>
+                      </label>
+                      <MusicUpload
+                        onUploadSuccess={(fileData) => {
+                          setCurrentForm({
+                            ...currentForm,
+                            musicFileUrl: fileData.url,
+                            musicFileName: fileData.originalFilename
+                          });
+                        }}
+                        onUploadError={(error) => {
+                          console.error('Music upload error:', error);
+                          // You can add toast notification here if needed
+                        }}
+                        currentFile={currentForm.musicFileUrl ? {
+                          url: currentForm.musicFileUrl,
+                          filename: currentForm.musicFileName
+                        } : null}
+                      />
+                    </div>
+                  )}
+
+                  {currentForm.entryType === 'virtual' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                          Video Platform *
+                        </label>
+                        <select
+                          value={currentForm.videoExternalType}
+                          onChange={(e) => setCurrentForm({...currentForm, videoExternalType: e.target.value as 'youtube' | 'vimeo' | 'other'})}
+                          className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="youtube">YouTube</option>
+                          <option value="vimeo">Vimeo</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                          Video URL *
+                          <span className="text-xs text-slate-400 block mt-1">
+                            Paste the full URL to your performance video
+                          </span>
+                        </label>
+                        <input
+                          type="url"
+                          value={currentForm.videoExternalUrl}
+                          onChange={(e) => setCurrentForm({...currentForm, videoExternalUrl: e.target.value})}
+                          placeholder={
+                            currentForm.videoExternalType === 'youtube' 
+                              ? 'https://www.youtube.com/watch?v=...' 
+                              : currentForm.videoExternalType === 'vimeo'
+                              ? 'https://vimeo.com/...'
+                              : 'https://...'
+                          }
+                          className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        {currentForm.videoExternalUrl && (
+                          <div className="mt-2 p-2 bg-green-900/20 border border-green-500/30 rounded-lg">
+                            <div className="text-green-300 text-sm flex items-center space-x-2">
+                              <span>✅</span>
+                              <span>Video URL provided</span>
+                              <a 
+                                href={currentForm.videoExternalUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-green-400 hover:text-green-300 underline"
+                              >
+                                Preview
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                                  <div className="mt-4">
@@ -1069,13 +1232,17 @@ export default function CompetitionEntryPage() {
                        !currentForm.itemName || 
                        currentForm.participantIds.length === 0 ||
                        currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
-                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max ||
+                       (currentForm.entryType === 'live' && !currentForm.musicFileUrl) ||
+                       (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl)
                      }
                      className={`px-6 py-2 text-white rounded-lg transition-all duration-300 ${
                        !currentForm.itemName || 
                        currentForm.participantIds.length === 0 ||
                        currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
-                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max
+                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max ||
+                       (currentForm.entryType === 'live' && !currentForm.musicFileUrl) ||
+                       (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl)
                          ? 'bg-slate-500 cursor-not-allowed'
                          : 'bg-purple-600 hover:bg-purple-500 hover:scale-105'
                      }`}
@@ -1086,6 +1253,8 @@ export default function CompetitionEntryPage() {
                         `Need ${getParticipantLimits(showAddForm).min - currentForm.participantIds.length} More` :
                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max ? 
                         `Remove ${currentForm.participantIds.length - getParticipantLimits(showAddForm).max}` :
+                      (currentForm.entryType === 'live' && !currentForm.musicFileUrl) ? 'Upload Music File' :
+                      (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl) ? 'Enter Video URL' :
                       `Add Entry ${previewFee > 0 ? `(R${previewFee})` : ''}`}
                    </button>
                  </div>
