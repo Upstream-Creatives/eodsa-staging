@@ -397,8 +397,8 @@ export default function CompetitionEntryPage() {
       case 'Solo': return { min: 1, max: 1 };
       case 'Duet': return { min: 2, max: 2 };
       case 'Trio': return { min: 3, max: 3 };
-      case 'Group': return { min: 4, max: 10 };
-      default: return { min: 1, max: 10 };
+      case 'Group': return { min: 4, max: 30 };
+      default: return { min: 1, max: 30 };
     }
   };
 
