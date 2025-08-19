@@ -488,52 +488,52 @@ export const db = {
       `;
     }
     
-    // PHASE 2: Handle music file updates
+        // PHASE 2: Handle music file updates
     if (updates.musicFileUrl !== undefined) {
       await sqlClient`
         UPDATE event_entries 
-        SET music_file_url = ${updates.musicFileUrl}
+        SET music_file_url = ${updates.musicFileUrl || null}
         WHERE id = ${id}
       `;
     }
-    
+
     if (updates.musicFileName !== undefined) {
       await sqlClient`
         UPDATE event_entries 
-        SET music_file_name = ${updates.musicFileName}
+        SET music_file_name = ${updates.musicFileName || null}
         WHERE id = ${id}
       `;
     }
     
-    // Handle video file updates for virtual entries
+        // Handle video file updates for virtual entries
     if (updates.videoFileUrl !== undefined) {
       await sqlClient`
         UPDATE event_entries 
-        SET video_file_url = ${updates.videoFileUrl}
+        SET video_file_url = ${updates.videoFileUrl || null}
         WHERE id = ${id}
       `;
     }
-    
+
     if (updates.videoFileName !== undefined) {
       await sqlClient`
         UPDATE event_entries 
-        SET video_file_name = ${updates.videoFileName}
+        SET video_file_name = ${updates.videoFileName || null}
         WHERE id = ${id}
       `;
     }
-    
+
     if (updates.videoExternalUrl !== undefined) {
       await sqlClient`
         UPDATE event_entries 
-        SET video_external_url = ${updates.videoExternalUrl}
+        SET video_external_url = ${updates.videoExternalUrl || null}
         WHERE id = ${id}
       `;
     }
-    
+
     if (updates.videoExternalType !== undefined) {
       await sqlClient`
         UPDATE event_entries 
-        SET video_external_type = ${updates.videoExternalType}
+        SET video_external_type = ${updates.videoExternalType || null}
         WHERE id = ${id}
       `;
     }
@@ -3614,10 +3614,10 @@ export const unifiedDb = {
     
     // PHASE 2: Handle music file updates for studio music uploads
     if (updates.musicFileUrl !== undefined) {
-      await sqlClient`UPDATE event_entries SET music_file_url = ${updates.musicFileUrl} WHERE id = ${entryId}`;
+      await sqlClient`UPDATE event_entries SET music_file_url = ${updates.musicFileUrl || null} WHERE id = ${entryId}`;
     }
     if (updates.musicFileName !== undefined) {
-      await sqlClient`UPDATE event_entries SET music_file_name = ${updates.musicFileName} WHERE id = ${entryId}`;
+      await sqlClient`UPDATE event_entries SET music_file_name = ${updates.musicFileName || null} WHERE id = ${entryId}`;
     }
     
     return { success: true, message: 'Entry updated successfully' };
