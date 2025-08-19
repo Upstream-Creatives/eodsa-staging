@@ -42,8 +42,12 @@ export async function PUT(
 
     // Remove music file information from the entry
     await db.updateEventEntry(entryId, {
-      musicFileUrl: undefined,
-      musicFileName: undefined
+      musicFileUrl: null,
+      musicFileName: null,
+      videoFileUrl: null,
+      videoFileName: null,
+      videoExternalUrl: null,
+      videoExternalType: null
     });
     
     return NextResponse.json({
