@@ -279,7 +279,15 @@ export async function POST(request: NextRequest) {
       choreographer: body.choreographer,
       mastery: body.mastery,
       itemStyle: body.itemStyle,
-      estimatedDuration: body.estimatedDuration
+      estimatedDuration: body.estimatedDuration,
+      // PHASE 2: Live vs Virtual Entry Support
+      entryType: body.entryType || 'live',
+      musicFileUrl: body.musicFileUrl || null,
+      musicFileName: body.musicFileName || null,
+      videoFileUrl: body.videoFileUrl || null,
+      videoFileName: body.videoFileName || null,
+      videoExternalUrl: body.videoExternalUrl || null,
+      videoExternalType: body.videoExternalType || null
     });
 
     // Email system disabled for Phase 1

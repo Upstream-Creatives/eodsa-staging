@@ -110,7 +110,7 @@ export default function AdminDashboard() {
   const [studioApplications, setStudioApplications] = useState<StudioApplication[]>([]);
   const [verificationDancers, setVerificationDancers] = useState<Dancer[]>([]);
   const [verificationStudios, setVerificationStudios] = useState<Studio[]>([]);
-  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'verification'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'verification' | 'sound-tech'>('events');
   const [isLoading, setIsLoading] = useState(true);
   const { success, error, warning, info } = useToast();
   const { showAlert, showConfirm, showPrompt } = useAlert();
@@ -1187,7 +1187,8 @@ export default function AdminDashboard() {
               { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' },
               { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' },
               { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' },
-              { id: 'verification', label: 'Pending Verification', icon: '🔍', color: 'emerald' }
+              { id: 'verification', label: 'Pending Verification', icon: '🔍', color: 'emerald' },
+              { id: 'sound-tech', label: 'Sound Tech', icon: '🎵', color: 'blue' }
             ].map((tab) => (
                 <button
                   key={tab.id}
@@ -2112,6 +2113,114 @@ export default function AdminDashboard() {
                     <p className="text-gray-500">No accounts pending verification in the last 48 hours.</p>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sound Tech Tab */}
+        {activeTab === 'sound-tech' && (
+          <div className="space-y-8 animate-fadeIn">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-blue-100">
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-b border-blue-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-sm">🎵</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900">Sound Tech Dashboard</h2>
+                  </div>
+                  <button
+                    onClick={() => window.open('/admin/sound-tech', '_blank')}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 font-medium"
+                  >
+                    Open Full Dashboard
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <span className="text-green-600 text-lg">🎵</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Live Performances</p>
+                        <p className="text-2xl font-bold text-gray-900">Coming Soon</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span className="text-blue-600 text-lg">📹</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Virtual Performances</p>
+                        <p className="text-2xl font-bold text-gray-900">Coming Soon</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <span className="text-purple-600 text-lg">⬇️</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Music Downloads</p>
+                        <p className="text-2xl font-bold text-gray-900">Available</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center">
+                    <span className="mr-2">🎵</span>
+                    Sound Tech Features
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-500">✅</span>
+                        <span className="text-sm text-blue-800">Access all uploaded music files</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-500">✅</span>
+                        <span className="text-sm text-blue-800">Play music with full controls</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-500">✅</span>
+                        <span className="text-sm text-blue-800">Download individual or all music files</span>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-500">✅</span>
+                        <span className="text-sm text-blue-800">Filter by event and performance type</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-500">✅</span>
+                        <span className="text-sm text-blue-800">View performance details and item numbers</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-500">✅</span>
+                        <span className="text-sm text-blue-800">Access virtual performance video links</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 p-4 bg-white border border-blue-300 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      <strong>For Sound Techs:</strong> Use the full dashboard to access all music files, organize by performance order, 
+                      and prepare audio for live events. Download all music files at once for offline preparation.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

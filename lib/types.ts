@@ -101,6 +101,16 @@ export interface EventEntry {
   mastery: string; // UPDATED: New mastery levels
   itemStyle: string;
   estimatedDuration: number; // in minutes
+  // PHASE 2: Live vs Virtual Entry Support
+  entryType: 'live' | 'virtual';
+  // For Live entries - music file
+  musicFileUrl?: string; // Cloudinary URL for MP3/WAV files
+  musicFileName?: string;
+  // For Virtual entries - video file or URL
+  videoFileUrl?: string; // Cloudinary URL for video files
+  videoFileName?: string;
+  videoExternalUrl?: string; // YouTube/Vimeo URL
+  videoExternalType?: 'youtube' | 'vimeo' | 'other';
 }
 
 export interface Performance {

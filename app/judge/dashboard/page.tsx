@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import MusicPlayer from '@/components/MusicPlayer';
+import VideoPlayer from '@/components/VideoPlayer';
 import Link from 'next/link';
 import { useAlert } from '@/components/ui/custom-alert';
 
@@ -34,6 +36,12 @@ interface Performance {
   itemStyle?: string;
   mastery?: string;
   itemNumber?: number;
+  // PHASE 2: Live vs Virtual Entry Support
+  entryType?: 'live' | 'virtual';
+  musicFileUrl?: string;
+  musicFileName?: string;
+  videoExternalUrl?: string;
+  videoExternalType?: 'youtube' | 'vimeo' | 'other';
 }
 
 interface Score {
@@ -740,7 +748,57 @@ export default function JudgeDashboard() {
                       <p className="text-gray-600">Duration</p>
                       <p className="font-semibold text-gray-900">{selectedPerformance.duration} minutes</p>
                     </div>
+                    <div>
+                      <p className="text-gray-600">Entry Type</p>
+                      <p className="font-semibold text-gray-900 flex items-center">
+                        {selectedPerformance.entryType === 'virtual' ? (
+                          <>
+                            <span className="mr-1">📹</span>
+                            Virtual Performance
+                          </>
+                        ) : (
+                          <>
+                            <span className="mr-1">🎵</span>
+                            Live Performance
+                          </>
+                        )}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* PHASE 2: Media Display for Live/Virtual Entries */}
+                  {selectedPerformance.entryType === 'virtual' && selectedPerformance.videoExternalUrl && (
+                    <div className="mt-6">
+                      <VideoPlayer
+                        videoUrl={selectedPerformance.videoExternalUrl}
+                        videoType={selectedPerformance.videoExternalType || 'other'}
+                        title={selectedPerformance.title}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+
+                  {selectedPerformance.entryType === 'live' && selectedPerformance.musicFileUrl && (
+                    <div className="mt-6">
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <h3 className="text-lg font-semibold text-black flex items-center mb-3">
+                          <span className="mr-2">🎵</span>
+                          Performance Music
+                        </h3>
+                        <MusicPlayer
+                          musicUrl={selectedPerformance.musicFileUrl}
+                          filename={selectedPerformance.musicFileName || 'performance-music.mp3'}
+                          className="w-full"
+                          showDownload={true}
+                        />
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                          <p className="text-sm text-gray-700">
+                            <strong>Judge Instructions:</strong> Listen to the performance music to understand timing, rhythm, and musical interpretation for accurate scoring.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Scoring Form */}
