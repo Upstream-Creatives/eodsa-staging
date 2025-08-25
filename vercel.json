@@ -9,6 +9,5 @@
     "app/api/studios/upload-music/route.ts": {
       "maxDuration": 60
     }
-  },
-  "regions": ["all"]
+  }
 }
