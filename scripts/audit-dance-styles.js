@@ -5,6 +5,7 @@ const VALID_STYLES = [
   'Ballet Repertoire', 
   'Lyrical',
   'Contemporary',
+  'Modern',
   'Jazz',
   'Hip-Hop',
   'Freestyle/Disco',

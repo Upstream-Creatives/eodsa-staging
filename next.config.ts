@@ -1,12 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Configure API route settings for file uploads
-  experimental: {
-    serverComponentsExternalPackages: [],
-    // Enable large payload support
-    isrMemoryCacheSize: 0,
-  },
   // Increase server timeout for large file uploads
   serverRuntimeConfig: {
     bodyParser: {
@@ -62,9 +56,10 @@ const nextConfig: NextConfig = {
       }
     ];
   },
+  // External packages for server components
+  serverExternalPackages: [],
   // Add experimental features for better performance and compatibility
   experimental: {
-    optimizeCss: true,
     scrollRestoration: true
   },
   // Configure how external resources are handled
