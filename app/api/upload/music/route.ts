@@ -1,110 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cloudinary, MUSIC_UPLOAD_PRESET } from '@/lib/cloudinary';
+import { cloudinary } from '@/lib/cloudinary';
 
-// Configure route settings for large file uploads
-export const maxDuration = 60; // seconds
+// Lightweight signature generation for direct Cloudinary uploads
 export const dynamic = 'force-dynamic';
-
-// Note: Body size limits are configured in vercel.json maxRequestBodySize
-// This route handles file uploads up to 250MB
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const body = await request.json();
+    const { filename, fileSize } = body;
     
-    if (!file) {
+    if (!filename) {
       return NextResponse.json(
-        { success: false, error: 'No file provided' },
-        { status: 400 }
-      );
-    }
-
-    // Validate file type - check both MIME type and file extension for better browser compatibility
-    const allowedTypes = [
-      'audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/x-wav', 'audio/aac', 'audio/mp4', 
-      'audio/flac', 'audio/ogg', 'audio/x-ms-wma', 'audio/webm', 'audio/vnd.wav',
-      'audio/x-aac', 'audio/x-m4a', 'audio/x-flac', 'audio/mpeg3', 'audio/mp4a-latm',
-      'audio/x-audio', 'audio/basic', '' // Some browsers don't provide MIME type
-    ];
-    
-    const fileExtension = file.name.toLowerCase().split('.').pop();
-    const allowedExtensions = ['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg', 'wma', 'webm'];
-    
-    const isValidType = allowedTypes.includes(file.type) || allowedExtensions.includes(fileExtension || '');
-    
-    if (!isValidType) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid file type. Please upload audio files with extensions: MP3, WAV, AAC, M4A, FLAC, OGG, WMA, or WebM.' },
+        { success: false, error: 'Filename is required' },
         { status: 400 }
       );
     }
 
     // Validate file size (200MB limit)
-    if (file.size > 200000000) {
+    if (fileSize && fileSize > 200000000) {
       return NextResponse.json(
         { success: false, error: 'File too large. Maximum size is 200MB.' },
         { status: 400 }
       );
     }
 
-    // Convert file to buffer
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Validate file type
+    const fileExtension = filename.toLowerCase().split('.').pop();
+    const allowedExtensions = ['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg', 'wma', 'webm'];
+    
+    if (!allowedExtensions.includes(fileExtension || '')) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid file type. Please upload audio files with extensions: MP3, WAV, AAC, M4A, FLAC, OGG, WMA, or WebM.' },
+        { status: 400 }
+      );
+    }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const originalName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
-    const publicId = `eodsa/music/${timestamp}_${originalName}`;
+    // Generate unique public ID
+    const fileTimestamp = Date.now();
+    const originalName = filename.replace(/\.[^/.]+$/, ""); // Remove extension
+    const publicId = `eodsa/music/${fileTimestamp}_${originalName}`;
 
-    // Upload to Cloudinary
-    const uploadResult = await new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        {
-          ...MUSIC_UPLOAD_PRESET,
-          public_id: publicId,
-        },
-        (error: any, result: any) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      ).end(buffer);
-    }) as any;
+    // Generate upload signature (no upload preset needed for signed uploads)
+    const timestamp = Math.round(Date.now() / 1000);
+    const paramsToSign = {
+      public_id: publicId,
+      timestamp: timestamp,
+    };
+
+    console.log('🔐 Generating signature with params:', paramsToSign);
+    console.log('🔑 API Key:', process.env.CLOUDINARY_API_KEY);
+    console.log('☁️ Cloud Name:', process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME);
+
+    const signature = cloudinary.utils.api_sign_request(
+      paramsToSign,
+      process.env.CLOUDINARY_API_SECRET!
+    );
+
+    console.log('✍️ Generated signature:', signature);
 
     return NextResponse.json({
       success: true,
       data: {
-        publicId: uploadResult.public_id,
-        url: uploadResult.secure_url,
-        originalFilename: file.name,
-        fileSize: file.size,
-        duration: uploadResult.duration, // Duration in seconds
-        format: uploadResult.format,
-        resourceType: uploadResult.resource_type,
-        createdAt: uploadResult.created_at
+        signature,
+        timestamp,
+        public_id: publicId,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+        resource_type: 'video'
       }
     });
 
   } catch (error: any) {
-    console.error('Music upload error:', error);
-    
-    // Handle specific Cloudinary errors
-    if (error.http_code === 400) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid file format or corrupted file' },
-        { status: 400 }
-      );
-    }
-    
-    if (error.http_code === 413) {
-      return NextResponse.json(
-        { success: false, error: 'File too large for upload' },
-        { status: 413 }
-      );
-    }
-
+    console.error('Signature generation error:', error);
     return NextResponse.json(
-      { success: false, error: 'Upload failed. Please try again.' },
+      { success: false, error: 'Failed to generate upload signature' },
       { status: 500 }
     );
   }

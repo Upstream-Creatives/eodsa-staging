@@ -61,41 +61,101 @@ export default function MusicUpload({
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/upload/music', {
+      // Step 1: Get signature from our endpoint
+      const signatureResponse = await fetch('/api/upload/music', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          fileSize: file.size
+        }),
       });
 
-      // Check if response is ok
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      if (!signatureResponse.ok) {
+        throw new Error(`Signature error: ${signatureResponse.status}`);
       }
 
-      let result;
-      try {
-        result = await response.json();
-      } catch (parseError) {
-        console.error('Failed to parse server response:', parseError);
-        throw new Error('Invalid server response. Please try again or contact support.');
+      const signatureData = await signatureResponse.json();
+      
+      if (!signatureData.success) {
+        throw new Error(signatureData.error || 'Failed to get upload signature');
       }
 
-      if (result.success) {
-        onUploadSuccess(result.data);
-        setUploadProgress(100);
-      } else {
-        onUploadError(result.error || 'Upload failed');
-      }
+      console.log('📝 Signature data received:', signatureData.data);
+      setUploadProgress(10);
+
+      // Step 2: Upload directly to Cloudinary
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', signatureData.data.api_key);
+      formData.append('timestamp', signatureData.data.timestamp.toString());
+      formData.append('signature', signatureData.data.signature);
+      formData.append('public_id', signatureData.data.public_id);
+
+      const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${signatureData.data.cloud_name}/${signatureData.data.resource_type}/upload`;
+      console.log('🌐 Uploading to:', cloudinaryUrl);
+      console.log('📤 Form data keys:', Array.from(formData.keys()));
+
+      // Create XMLHttpRequest for progress tracking
+      const uploadPromise = new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const progress = 10 + Math.round((e.loaded / e.total) * 80); // 10-90%
+            setUploadProgress(progress);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            try {
+              const result = JSON.parse(xhr.responseText);
+              resolve(result);
+            } catch (e) {
+              reject(new Error('Invalid response from Cloudinary'));
+            }
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error during upload'));
+        });
+
+        xhr.open('POST', cloudinaryUrl);
+        xhr.send(formData);
+      });
+
+      const cloudinaryResult = await uploadPromise as any;
+      setUploadProgress(95);
+
+      // Step 3: Format response to match expected structure
+      const result = {
+        publicId: cloudinaryResult.public_id,
+        url: cloudinaryResult.secure_url,
+        originalFilename: file.name,
+        fileSize: file.size,
+        duration: cloudinaryResult.duration, // Duration in seconds
+        format: cloudinaryResult.format,
+        resourceType: cloudinaryResult.resource_type,
+        createdAt: cloudinaryResult.created_at
+      };
+
+      onUploadSuccess(result);
+      setUploadProgress(100);
+
     } catch (error: any) {
       console.error('Upload error:', error);
       
-      if (error.message?.includes('Failed to fetch')) {
+      if (error.message?.includes('Network error')) {
         onUploadError('Network error. Please check your internet connection and try again.');
-      } else if (error.message?.includes('Invalid server response')) {
-        onUploadError('Server error. Please try again in a moment.');
-      } else if (error.message?.includes('Server error')) {
+      } else if (error.message?.includes('Signature error')) {
+        onUploadError('Upload validation failed. Please try again.');
+      } else if (error.message?.includes('Upload failed')) {
         onUploadError(`Upload failed: ${error.message}`);
       } else {
         onUploadError('Upload failed. Please try again.');
