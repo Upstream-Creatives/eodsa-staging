@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, unifiedDb } from '@/lib/database';
+import { db, unifiedDb, getSql } from '@/lib/database';
 import { EODSA_FEES } from '@/lib/types';
 
 export async function GET(
@@ -9,14 +9,41 @@ export async function GET(
   try {
     const { eodsaId } = await params;
     
-    // Get the dancer info
-    const dancer = await unifiedDb.getDancerByEodsaId(eodsaId);
-    if (!dancer) {
+    // Get the dancer info with registration fee data
+    const sqlClient = getSql();
+    const dancerResult = await sqlClient`
+      SELECT * FROM dancers WHERE eodsa_id = ${eodsaId}
+    ` as any[];
+    
+    if (dancerResult.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Dancer not found' },
         { status: 404 }
       );
     }
+    
+    const row = dancerResult[0];
+    const dancer = {
+      id: row.id,
+      eodsaId: row.eodsa_id,
+      name: row.name,
+      age: row.age,
+      dateOfBirth: row.date_of_birth,
+      nationalId: row.national_id,
+      email: row.email,
+      phone: row.phone,
+      guardianName: row.guardian_name,
+      guardianEmail: row.guardian_email,
+      guardianPhone: row.guardian_phone,
+      approved: row.approved,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at,
+      registrationFeePaid: row.registration_fee_paid || false,
+      registrationFeePaidAt: row.registration_fee_paid_at,
+      registrationFeeMasteryLevel: row.registration_fee_mastery_level
+    };
 
     // Get all event entries
     const allEntries = await db.getAllEventEntries();
