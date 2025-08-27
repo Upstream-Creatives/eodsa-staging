@@ -87,8 +87,8 @@ export interface EventEntry {
   eodsaId: string;
   participantIds: string[]; // E-O-D-S-A-IDs of participating dancers
   calculatedFee: number;
-  paymentStatus: 'pending' | 'paid' | 'failed';
-  paymentMethod?: 'credit_card' | 'bank_transfer' | 'invoice';
+  paymentStatus: 'pending' | 'paid' | 'failed' | 'cancelled';
+  paymentMethod?: 'credit_card' | 'bank_transfer' | 'invoice' | 'payfast';
   paymentReference?: string; // Payment reference number/transaction ID
   paymentDate?: string; // Date when payment was processed
   submittedAt: string;
