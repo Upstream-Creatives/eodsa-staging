@@ -1442,29 +1442,10 @@ export default function CompetitionEntryPage() {
                  
                  <div className="border-t border-slate-600 pt-2">
                    <div className="flex justify-between font-semibold text-lg text-emerald-400">
-                     <span>Competition Total:</span>
+                     <span>Total:</span>
                      <span className="transition-all duration-300 transform hover:scale-110">
                        R{feeCalculation.total}
                      </span>
-                   </div>
-                 </div>
-
-                 {/* PayFast Processing Fee Breakdown */}
-                 <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mt-3">
-                   <div className="text-sm text-orange-300 font-medium mb-2">💳 Payment Processing</div>
-                   <div className="flex justify-between text-sm text-slate-300 mb-1">
-                     <span>Subtotal:</span>
-                     <span>R{feeCalculation.total}</span>
-                   </div>
-                   <div className="flex justify-between text-sm text-slate-300 mb-2">
-                     <span>PayFast Processing Fee (3.5%):</span>
-                     <span>R{Math.max(feeCalculation.total * 0.035, 2.00).toFixed(2)}</span>
-                   </div>
-                   <div className="border-t border-orange-500/20 pt-2">
-                     <div className="flex justify-between font-semibold text-white">
-                       <span>Final Payment Amount:</span>
-                       <span className="text-green-400">R{(feeCalculation.total + Math.max(feeCalculation.total * 0.035, 2.00)).toFixed(2)}</span>
-                     </div>
                    </div>
                  </div>
                </div>
