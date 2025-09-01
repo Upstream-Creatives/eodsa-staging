@@ -106,6 +106,10 @@ export default function CompetitionEntryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<{entries: number, totalFee: number} | null>(null);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'payfast' | 'eft' | null>(null);
+  const [showEftModal, setShowEftModal] = useState(false);
+  const [eftInvoiceNumber, setEftInvoiceNumber] = useState('');
 
   useEffect(() => {
     if (region && eventId) {
@@ -569,7 +573,23 @@ export default function CompetitionEntryPage() {
 
   const handleProceedToPayment = async () => {
     if (entries.length === 0 || isSubmitting) return;
+    setShowPaymentMethodModal(true);
+  };
 
+  const handlePaymentMethodSelection = async (method: 'payfast' | 'eft') => {
+    setSelectedPaymentMethod(method);
+    setShowPaymentMethodModal(false);
+
+    if (method === 'eft') {
+      setShowEftModal(true);
+      return;
+    }
+
+    // Handle PayFast payment (existing logic)
+    await processPayFastPayment();
+  };
+
+  const processPayFastPayment = async () => {
     setIsSubmitting(true);
 
     try {
@@ -665,6 +685,96 @@ export default function CompetitionEntryPage() {
     } catch (paymentError: any) {
       console.error('Payment error:', paymentError);
       error(`Failed to initiate payment: ${paymentError.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEftPayment = async () => {
+    if (!eftInvoiceNumber.trim()) {
+      validationError('Please enter a payment reference number to continue with EFT payment.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const totalFee = calculateTotalFee().total;
+      
+      // Create entry data for EFT payment - submit entries immediately as pending
+      const batchEntryData = entries.map(entry => ({
+        eventId: eventId,
+        contestantId: isStudioMode ? studioInfo?.id : contestant?.id,
+        eodsaId: isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId,
+        participantIds: entry.participantIds,
+        calculatedFee: entry.fee,
+        itemName: entry.itemName,
+        choreographer: entry.choreographer,
+        mastery: entry.mastery,
+        itemStyle: entry.itemStyle,
+        estimatedDuration: parseFloat(entry.estimatedDuration.replace(':', '.')) || 2,
+        entryType: entry.entryType,
+        musicFileUrl: entry.musicFileUrl || undefined,
+        musicFileName: entry.musicFileName || undefined,
+        videoExternalUrl: entry.videoExternalUrl || undefined,
+        videoExternalType: entry.videoExternalType || undefined,
+        performanceType: entry.performanceType
+      }));
+
+      const userName = isStudioMode ? 
+        (studioInfo?.name || 'Studio Manager') : 
+        (contestant?.name || 'Contestant');
+      
+      const userEmail = isStudioMode ? 
+        (studioInfo?.email || 'studio@example.com') : 
+        (contestant?.email || 'contestant@example.com');
+
+      const eftPaymentData = {
+        eventId: eventId,
+        userId: isStudioMode ? studioInfo?.id : contestant?.id,
+        userEmail: userEmail,
+        userName: userName,
+        eodsaId: isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId,
+        amount: totalFee,
+        invoiceNumber: eftInvoiceNumber.trim(),
+        itemDescription: entries.map(e => `${e.performanceType}: ${e.itemName}`).join(', '),
+        entries: batchEntryData,
+        // NEW: Immediately submit entries as pending
+        submitImmediately: true
+      };
+
+      // Submit EFT payment and entries directly
+      const response = await fetch('/api/payments/eft', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eftPaymentData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Close EFT modal and show success
+          setShowEftModal(false);
+          setEftInvoiceNumber('');
+          setSubmissionResult({ entries: entries.length, totalFee });
+          setShowSuccessModal(true);
+          setEntries([]); // Clear entries after successful submission
+          
+          // Note: User will email chenique@elementscentral.com manually after payment
+          
+          success('EFT payment submitted successfully! Your entries are pending payment verification.');
+        } else {
+          throw new Error(result.error || 'Failed to submit EFT payment');
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit EFT payment');
+      }
+    } catch (eftError: any) {
+      console.error('EFT payment error:', eftError);
+      error(`Failed to submit EFT payment: ${eftError.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1531,11 +1641,20 @@ export default function CompetitionEntryPage() {
             {/* Next Steps */}
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
               <h4 className="text-blue-400 font-semibold mb-2">Next Steps:</h4>
-              <ul className="text-sm text-slate-300 space-y-1">
-                <li>• Payment invoice will be sent to your email</li>
-                <li>• Complete payment to confirm your entries</li>
-                <li>• Check your dashboard for updates</li>
-              </ul>
+              {selectedPaymentMethod === 'eft' ? (
+                <ul className="text-sm text-slate-300 space-y-2">
+                  <li>• ✅ Your entries are now submitted as "pending payment verification"</li>
+                  <li>• 🏦 Make your EFT payment to Elements of Dance (FNB: 63122779094)</li>
+                  <li>• 📧 <strong className="text-emerald-300">After making payment, email chenique@elementscentral.com with your payment reference for entry approval</strong></li>
+                  <li>• 📊 Check your dashboard for updates</li>
+                </ul>
+              ) : (
+                <ul className="text-sm text-slate-300 space-y-1">
+                  <li>• Payment will be processed automatically</li>
+                  <li>• Confirmation email will be sent to you</li>
+                  <li>• Check your dashboard for updates</li>
+                </ul>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -1581,6 +1700,184 @@ export default function CompetitionEntryPage() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method Selection Modal */}
+      {showPaymentMethodModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-700/50 p-8 max-w-lg w-full">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-white mb-2">💳 Select Payment Method</h2>
+              <p className="text-slate-300">Choose how you'd like to pay for your competition entries</p>
+              
+              <div className="mt-4 p-4 bg-slate-700/50 rounded-lg">
+                <div className="text-slate-300 text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span>Total Amount:</span>
+                    <span className="text-emerald-400 font-semibold text-lg">R{calculateTotalFee().total}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Entries:</span>
+                    <span>{entries.length} performance{entries.length > 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* PayFast Option */}
+              <button
+                onClick={() => handlePaymentMethodSelection('payfast')}
+                className="w-full p-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-blue-500/25"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="text-3xl">💳</div>
+                  <div className="text-left">
+                    <h3 className="text-lg font-semibold">PayFast - Instant Payment</h3>
+                    <p className="text-sm opacity-90">Pay instantly with credit card or bank transfer</p>
+                    <p className="text-xs opacity-75 mt-1">✓ Instant approval • ✓ Secure payment gateway</p>
+                  </div>
+                </div>
+              </button>
+
+              {/* EFT Option */}
+              <button
+                onClick={() => handlePaymentMethodSelection('eft')}
+                className="w-full p-6 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-green-500/25"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="text-3xl">🏦</div>
+                  <div className="text-left">
+                    <h3 className="text-lg font-semibold">EFT - Bank Transfer</h3>
+                    <p className="text-sm opacity-90">Manual bank transfer - submit entries immediately</p>
+                    <p className="text-xs opacity-75 mt-1">⏳ Entries pending verification • 📧 You email chenique after payment</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => setShowPaymentMethodModal(false)}
+                className="px-6 py-2 text-slate-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EFT Payment Modal */}
+      {showEftModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-700/50 p-8 max-w-lg w-full">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-white mb-2">🏦 EFT Payment Details</h2>
+              <p className="text-slate-300">Make your payment using the banking details below</p>
+            </div>
+
+            {/* Banking Details */}
+            <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 border border-green-500/30 rounded-lg p-6 mb-6">
+              <h3 className="text-green-300 font-semibold mb-4 flex items-center">
+                <span className="text-2xl mr-2">🏦</span>
+                Banking Details
+              </h3>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Account Name:</span>
+                  <span className="text-white font-semibold">Elements of Dance</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Bank:</span>
+                  <span className="text-white font-semibold">FNB</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Account Number:</span>
+                  <span className="text-white font-mono font-semibold bg-slate-700/50 px-3 py-1 rounded">63122779094</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Reference:</span>
+                  <span className="text-emerald-400 font-mono font-semibold bg-slate-700/50 px-3 py-1 rounded">
+                    {isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Amount:</span>
+                  <span className="text-emerald-400 font-semibold text-lg">R{calculateTotalFee().total}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Reference Input */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-slate-300 mb-3">
+                📋 Payment Reference Number *
+              </label>
+              <input
+                type="text"
+                value={eftInvoiceNumber}
+                onChange={(e) => setEftInvoiceNumber(e.target.value)}
+                placeholder="Enter your banking reference or transaction number"
+                className="w-full p-4 bg-slate-700/50 border-2 border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                Use your banking reference or any unique transaction identifier from your transfer.
+              </p>
+            </div>
+
+            {/* Updated Payment Process Notice */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+              <div className="flex items-start space-x-2">
+                <span className="text-blue-400 text-xl">📋</span>
+                <div>
+                  <h4 className="text-blue-300 font-semibold">Payment Process</h4>
+                  <div className="text-blue-200 text-sm mt-2 space-y-2">
+                    <p>1. Your entries will be submitted immediately as "pending payment verification"</p>
+                    <p>2. Make your EFT payment using the banking details above</p>
+                    <p>3. <strong className="text-emerald-300">Email chenique@elementscentral.com with your payment reference for approval</strong></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowEftModal(false);
+                  setEftInvoiceNumber('');
+                }}
+                className="flex-1 px-4 py-3 bg-slate-600 text-white rounded-xl hover:bg-slate-500 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEftPayment}
+                disabled={!eftInvoiceNumber.trim() || isSubmitting}
+                className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 ${
+                  !eftInvoiceNumber.trim() || isSubmitting
+                    ? 'bg-slate-500 cursor-not-allowed text-slate-300'
+                    : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-green-500/25'
+                }`}
+              >
+                {isSubmitting ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Submitting...</span>
+                  </div>
+                ) : (
+                  'Submit Entry & Payment Info'
+                )}
+              </button>
             </div>
           </div>
         </div>

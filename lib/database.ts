@@ -54,6 +54,26 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS item_number INTEGER`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS withdrawn_from_judging BOOLEAN DEFAULT FALSE`;
     
+    // Create EFT payment logs table for tracking manual payments
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS eft_payment_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        user_email TEXT,
+        user_name TEXT,
+        eodsa_id TEXT,
+        amount DECIMAL(10,2),
+        invoice_number TEXT,
+        item_description TEXT,
+        entries_count INTEGER DEFAULT 0,
+        submitted_at TEXT,
+        status TEXT DEFAULT 'pending_verification',
+        verified_by TEXT,
+        verified_at TEXT,
+        notes TEXT
+      )
+    `;
+    
     // Fix performance type constraint to allow 'All' - FORCE UPDATE
     try {
       console.log('🔧 Updating performance type constraint...');
