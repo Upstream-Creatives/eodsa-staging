@@ -94,6 +94,16 @@ body {
     background-color: rgb(148 163 184);
   }
 
+  /* Hide scrollbars completely */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Glass morphism effect */
   .glass {
     backdrop-filter: blur(16px) saturate(180%);

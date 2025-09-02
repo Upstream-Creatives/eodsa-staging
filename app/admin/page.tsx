@@ -66,6 +66,10 @@ interface Dancer {
   registrationFeePaid?: boolean;
   registrationFeePaidAt?: string;
   registrationFeeMasteryLevel?: string;
+  // Studio information
+  studioName?: string;
+  studioId?: string;
+  studioEmail?: string;
 }
 
 interface Studio {
@@ -1159,6 +1163,7 @@ export default function AdminDashboard() {
               <button
                 onClick={handleCleanDatabase}
                 disabled={isCleaningDatabase}
+                style={{ display: 'none' }}
                 className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg sm:rounded-xl hover:from-red-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base"
               >
                 {isCleaningDatabase ? (
@@ -1665,6 +1670,7 @@ export default function AdminDashboard() {
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Name</th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Age</th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Contact</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Studio</th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Guardian</th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
@@ -1688,6 +1694,24 @@ export default function AdminDashboard() {
                             <td className="px-6 py-4">
                               <div className="text-sm font-medium text-gray-900">{dancer.email || 'N/A'}</div>
                               <div className="text-xs text-gray-500">{dancer.phone || 'N/A'}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {dancer.studioName ? (
+                                <div>
+                                  <div className="text-sm font-medium text-blue-600">🏢 {dancer.studioName}</div>
+                                  <div className="text-xs text-gray-500">{dancer.studioEmail}</div>
+                                  <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                                    Studio Dancer
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <div className="text-sm font-medium text-purple-600">🕺 Independent</div>
+                                  <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mt-1">
+                                    Individual
+                                  </div>
+                                </div>
+                              )}
                             </td>
                             <td className="px-6 py-4">
                               {dancer.guardianName ? (

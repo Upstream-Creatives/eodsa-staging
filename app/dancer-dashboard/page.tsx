@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import MusicUpload from '@/components/MusicUpload';
+import VideoUpload from '@/components/VideoUpload';
 
 interface DancerSession {
   id: string;
@@ -207,6 +208,195 @@ function MusicUploadSection({ dancerSession }: { dancerSession: DancerSession })
   );
 }
 
+// Video Upload Section Component
+function VideoUploadSection({ dancerSession }: { dancerSession: DancerSession }) {
+  const [videoEntries, setVideoEntries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [uploadingEntryId, setUploadingEntryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadVideoEntries();
+  }, [dancerSession.eodsaId]);
+
+  const loadVideoEntries = async () => {
+    try {
+      const response = await fetch(`/api/contestants/video-entries?eodsaId=${dancerSession.eodsaId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setVideoEntries(data.entries);
+      } else {
+        setError(data.error || 'Failed to load entries');
+      }
+    } catch (error) {
+      console.error('Error loading video entries:', error);
+      setError('Failed to load entries');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVideoUpload = async (entryId: string, fileData: any) => {
+    try {
+      setUploadingEntryId(entryId);
+      
+      const response = await fetch('/api/contestants/upload-video', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entryId,
+          videoFileUrl: fileData.url,
+          videoFileName: fileData.originalFilename,
+          eodsaId: dancerSession.eodsaId
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Refresh the entries list
+        await loadVideoEntries();
+      } else {
+        setError(result.error || 'Failed to upload video');
+      }
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      setError('Failed to upload video');
+    } finally {
+      setUploadingEntryId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 p-6">
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+          <span className="ml-3 text-gray-300">Loading video upload requirements...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+      <div className="p-6 border-b border-gray-700">
+        <h3 className="text-xl font-bold text-white">📹 Video Uploads Required</h3>
+        <p className="text-gray-400 text-sm mt-1">Upload video files for your virtual performance entries</p>
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-500/20 border-b border-red-500/30 text-red-200">
+          {error}
+        </div>
+      )}
+
+      {videoEntries.length === 0 ? (
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">📹</span>
+          </div>
+          <p className="text-gray-400 mb-2">No video uploads required</p>
+          <p className="text-gray-500 text-sm">
+            All your virtual entries already have videos uploaded, or you don't have any virtual entries yet.
+          </p>
+        </div>
+      ) : (
+        <div className="p-6">
+          <div className="space-y-6">
+            {videoEntries.map((entry) => {
+              const isGroupEntry = entry.participantIds && entry.participantIds.length > 1;
+              const isOwner = entry.eodsaId === dancerSession.eodsaId;
+              const performanceType = isGroupEntry 
+                ? entry.participantIds.length === 2 ? 'Duet'
+                : entry.participantIds.length === 3 ? 'Trio' 
+                : 'Group'
+                : 'Solo';
+              
+              return (
+                <div key={entry.id} className="bg-gray-700/50 rounded-xl p-4 sm:p-6 border border-gray-600 hover:border-purple-500 transition-all duration-300">
+                  <div className="mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
+                      <h4 className="text-lg sm:text-xl font-bold text-white mb-2 sm:mb-0">{entry.itemName}</h4>
+                      
+                      {/* Performance Type Badge */}
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          isGroupEntry 
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        }`}>
+                          {isGroupEntry ? `👥 ${performanceType}` : '🕺 Solo'}
+                        </span>
+                        
+                        {/* Virtual Badge */}
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                          📹 Virtual
+                        </span>
+                        
+                        {/* Access Type Badge */}
+                        {isGroupEntry && (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            isOwner 
+                              ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                              : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                          }`}>
+                            {isOwner ? '👑 Owner' : '🤝 Participant'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                      <p className="text-gray-300">Event: <span className="text-white font-medium">{entry.eventName}</span></p>
+                      <p className="text-gray-300">Style: <span className="text-white font-medium">{entry.itemStyle}</span></p>
+                      <p className="text-gray-300">Mastery: <span className="text-white font-medium">{entry.mastery}</span></p>
+                      <p className="text-gray-300">Duration: <span className="text-white font-medium">{entry.estimatedDuration} min</span></p>
+                    </div>
+                    
+                    {/* Group Info */}
+                    {isGroupEntry && (
+                      <div className="mt-3 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                        <p className="text-purple-300 text-sm font-medium mb-1">
+                          🎭 Group Performance ({entry.participantIds.length} dancers)
+                        </p>
+                        <p className="text-purple-200 text-xs">
+                          {isOwner 
+                            ? 'You registered this group entry. Any group member can upload video.'
+                            : 'You\'re a participant in this group. You can upload video for the entire group.'
+                          }
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="border-t border-gray-600 pt-4 mt-4">
+                      <p className="text-sm text-gray-400 mb-3">Upload video file for this virtual performance:</p>
+                      <VideoUpload
+                        onUploadSuccess={(fileData) => handleVideoUpload(entry.id, fileData)}
+                        onUploadError={(error) => setError(error)}
+                        disabled={uploadingEntryId === entry.id}
+                      />
+                      {uploadingEntryId === entry.id && (
+                        <div className="mt-2 text-sm text-blue-400 flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400 mr-2"></div>
+                          Saving video file...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DancerDashboardPage() {
   const [dancerSession, setDancerSession] = useState<DancerSession | null>(null);
   const [applications, setApplications] = useState<StudioApplication[]>([]);
@@ -381,6 +571,9 @@ export default function DancerDashboardPage() {
 
         {/* Music Upload Section */}
         <MusicUploadSection dancerSession={dancerSession} />
+
+        {/* Video Upload Section */}
+        <VideoUploadSection dancerSession={dancerSession} />
 
       </div>
     </div>

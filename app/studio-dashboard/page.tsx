@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { RecaptchaV2 } from '@/components/RecaptchaV2';
 import { MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
 import MusicUpload from '@/components/MusicUpload';
+import VideoUpload from '@/components/VideoUpload';
 
 // Studio session interface
 interface StudioSession {
@@ -97,7 +98,8 @@ export default function StudioDashboardPage() {
   const [acceptedDancers, setAcceptedDancers] = useState<AcceptedDancer[]>([]);
   const [competitionEntries, setCompetitionEntries] = useState<CompetitionEntry[]>([]);
   const [musicEntries, setMusicEntries] = useState<MusicEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<'dancers' | 'entries' | 'music'>('dancers');
+  const [videoEntries, setVideoEntries] = useState<MusicEntry[]>([]);
+  const [activeTab, setActiveTab] = useState<'dancers' | 'entries' | 'music' | 'video'>('dancers');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAddDancerModal, setShowAddDancerModal] = useState(false);
@@ -152,6 +154,7 @@ export default function StudioDashboardPage() {
   
   // Music upload state
   const [uploadingMusicForEntry, setUploadingMusicForEntry] = useState<string | null>(null);
+  const [uploadingVideoForEntry, setUploadingVideoForEntry] = useState<string | null>(null);
   
   // Pagination and filtering state
   const [currentPage, setCurrentPage] = useState(1);
@@ -202,16 +205,18 @@ export default function StudioDashboardPage() {
     try {
       setIsLoading(true);
       
-      // Load accepted dancers, competition entries, and music entries
-      const [dancersResponse, entriesResponse, musicEntriesResponse] = await Promise.all([
+      // Load accepted dancers, competition entries, music entries, and video entries
+      const [dancersResponse, entriesResponse, musicEntriesResponse, videoEntriesResponse] = await Promise.all([
         fetch(`/api/studios/dancers-new?studioId=${studioId}`),
         fetch(`/api/studios/entries?studioId=${studioId}`),
-        fetch(`/api/studios/music-entries?studioId=${studioId}`)
+        fetch(`/api/studios/music-entries?studioId=${studioId}`),
+        fetch(`/api/studios/video-entries?studioId=${studioId}`)
       ]);
 
       const dancersData = await dancersResponse.json();
       const entriesData = await entriesResponse.json();
       const musicEntriesData = await musicEntriesResponse.json();
+      const videoEntriesData = await videoEntriesResponse.json();
 
       if (dancersData.success) {
         setAcceptedDancers(dancersData.dancers);
@@ -231,6 +236,13 @@ export default function StudioDashboardPage() {
       } else {
         console.error('Failed to load music entries:', musicEntriesData.error);
         setMusicEntries([]);
+      }
+
+      if (videoEntriesData.success) {
+        setVideoEntries(videoEntriesData.entries);
+      } else {
+        console.error('Failed to load video entries:', videoEntriesData.error);
+        setVideoEntries([]);
       }
     } catch (error) {
       console.error('Load data error:', error);
@@ -599,6 +611,52 @@ export default function StudioDashboardPage() {
       setError('Failed to upload music');
     } finally {
       setUploadingMusicForEntry(null);
+    }
+  };
+
+  // Handle video upload for studio entries
+  const handleVideoUpload = async (entryId: string, fileData: { url: string; originalFilename: string }) => {
+    if (!studioSession) return;
+
+    try {
+      setUploadingVideoForEntry(entryId);
+      setError('');
+
+      // Find the entry name for better feedback
+      const entry = videoEntries.find(e => e.id === entryId);
+      const entryName = entry?.itemName || 'entry';
+
+      const response = await fetch('/api/studios/upload-video', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          studioId: studioSession.id,
+          entryId: entryId,
+          videoFileUrl: fileData.url,
+          videoFileName: fileData.originalFilename
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccessMessage(`📹 Video uploaded successfully for "${entryName}"! The entry has been updated and is now ready for the virtual performance.`);
+        
+        // Reload data to reflect changes (entry should disappear from video uploads tab)
+        await loadData(studioSession.id);
+        
+        // Clear success message after 7 seconds (longer to read the full message)
+        setTimeout(() => setSuccessMessage(''), 7000);
+      } else {
+        setError(data.error || 'Failed to upload video');
+      }
+    } catch (error) {
+      console.error('Video upload error:', error);
+      setError('Failed to upload video');
+    } finally {
+      setUploadingVideoForEntry(null);
     }
   };
 
@@ -994,6 +1052,16 @@ export default function StudioDashboardPage() {
               }`}
             >
               🎵 Music Uploads ({musicEntries.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('video')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'video'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              📹 Video Uploads ({videoEntries.length})
             </button>
           </div>
         </div>
@@ -1520,6 +1588,140 @@ export default function StudioDashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Video Uploads Tab */}
+        {activeTab === 'video' && (
+          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold text-white">📹 Video Uploads</h3>
+                  <p className="text-gray-400 text-sm mt-1">Upload video files for your dancers' virtual performance entries</p>
+                </div>
+                <div className="flex items-center space-x-2 text-sm text-gray-400">
+                  <span className="inline-flex items-center px-2 py-1 bg-indigo-900/30 text-indigo-300 rounded-full text-xs">
+                    💡 Studio managers can upload videos on behalf of dancers
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {videoEntries.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-20 h-20 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="text-3xl">📹</span>
+                </div>
+                <h4 className="text-xl font-semibold text-white mb-2">No Video Uploads Required</h4>
+                <p className="text-gray-400 max-w-md mx-auto leading-relaxed">
+                  All virtual entries already have videos uploaded, or there are no virtual entries yet. Virtual entries that still need videos will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="p-6">
+                <div className="grid gap-6">
+                  {videoEntries.map((entry) => (
+                    <div key={entry.id} className="bg-gray-700/50 rounded-xl p-6 border border-gray-600 hover:border-indigo-500 transition-colors">
+                      <div className="flex flex-col lg:flex-row lg:items-start space-y-6 lg:space-y-0 lg:space-x-8">
+                        
+                        {/* Entry Information */}
+                        <div className="flex-1">
+                          <div className="mb-4">
+                            <h5 className="text-lg font-bold text-white mb-2">{entry.itemName}</h5>
+                            
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                entry.isGroupEntry 
+                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              }`}>
+                                {entry.isGroupEntry ? `👥 ${entry.performanceType}` : '🕺 Solo'}
+                              </span>
+                              
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                📹 Virtual
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-400">Event:</span>
+                                <span className="text-white ml-2">{entry.eventName}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Style:</span>
+                                <span className="text-white ml-2">{entry.itemStyle}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Mastery:</span>
+                                <span className="text-white ml-2">{entry.mastery}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Duration:</span>
+                                <span className="text-white ml-2">{entry.estimatedDuration} min</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Contestant:</span>
+                                <span className="text-white ml-2">{entry.contestantName}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Submitted:</span>
+                                <span className="text-white ml-2">{new Date(entry.submittedAt).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            
+                            {/* Participants for group entries */}
+                            {entry.isGroupEntry && entry.participantNames && (
+                              <div className="mt-4 p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                                <p className="text-purple-300 text-sm font-medium mb-2">
+                                  🎭 Group Performance ({entry.participantIds.length} dancers)
+                                </p>
+                                <p className="text-purple-200 text-xs mb-2">
+                                  Participants: {entry.participantNames.join(', ')}
+                                </p>
+                                <p className="text-purple-200 text-xs">
+                                  As the studio manager, you can upload video for this group entry on behalf of all participants.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="w-full lg:w-96">
+                          <div className="bg-slate-800/60 rounded-xl p-4 border border-gray-600">
+                            <h5 className="text-white font-medium mb-4 flex items-center text-lg">
+                              📹 Upload Video File
+                            </h5>
+                            <VideoUpload
+                              onUploadSuccess={(fileData) => handleVideoUpload(entry.id, fileData)}
+                              onUploadError={(error) => setError(error)}
+                              disabled={uploadingVideoForEntry === entry.id}
+                            />
+                            {uploadingVideoForEntry === entry.id && (
+                              <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                                <div className="flex items-center">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent mr-3"></div>
+                                  <div>
+                                    <p className="text-blue-300 font-medium">Uploading Video...</p>
+                                    <p className="text-blue-300 text-sm mt-1">
+                                      ⚡ {entry.itemName} - {entry.contestantName}
+                                    </p>
+                                  </div>
+                                </div>
+                                <p className="text-blue-300 text-sm mt-2">
+                                  📱 Please wait while we save the video file to this entry. The page will refresh automatically when complete.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

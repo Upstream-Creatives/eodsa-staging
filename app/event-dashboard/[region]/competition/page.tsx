@@ -494,10 +494,8 @@ export default function CompetitionEntryPage() {
       return;
     }
     
-    if (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl) {
-      validationError('Please provide a video URL for virtual performances.');
-      return;
-    }
+    // Note: Video uploads for virtual entries are now optional during initial entry creation
+    // Users can upload videos later through their dashboard
 
     const participants = availableDancers.filter(dancer => 
       currentForm.participantIds.includes(dancer.id)
@@ -1224,9 +1222,9 @@ export default function CompetitionEntryPage() {
                       
                       <div>
                         <label className="block text-sm font-semibold text-slate-300 mb-3">
-                          🔗 Video URL *
+                          🔗 Video URL (Optional)
                           <span className="text-xs text-slate-400 block mt-1 font-normal">
-                            Paste the full URL to your performance video
+                            You can upload your video later through your dashboard
                           </span>
                         </label>
                         <input
@@ -1424,16 +1422,14 @@ export default function CompetitionEntryPage() {
                        currentForm.participantIds.length === 0 ||
                        currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
                        currentForm.participantIds.length > getParticipantLimits(showAddForm).max ||
-                       (currentForm.entryType === 'live' && !currentForm.musicFileUrl) ||
-                       (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl)
+                       (currentForm.entryType === 'live' && !currentForm.musicFileUrl)
                      }
                      className={`w-full sm:w-auto px-6 py-3 text-white rounded-xl transition-all duration-300 font-semibold text-base min-h-[48px] sm:min-h-auto order-1 sm:order-2 ${
                        !currentForm.itemName || 
                        currentForm.participantIds.length === 0 ||
                        currentForm.participantIds.length < getParticipantLimits(showAddForm).min ||
                        currentForm.participantIds.length > getParticipantLimits(showAddForm).max ||
-                       (currentForm.entryType === 'live' && !currentForm.musicFileUrl) ||
-                       (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl)
+                       (currentForm.entryType === 'live' && !currentForm.musicFileUrl)
                          ? 'bg-slate-500 cursor-not-allowed'
                          : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 hover:scale-105 shadow-lg hover:shadow-purple-500/25'
                      }`}
@@ -1445,7 +1441,6 @@ export default function CompetitionEntryPage() {
                       currentForm.participantIds.length > getParticipantLimits(showAddForm).max ? 
                         `➖ Remove ${currentForm.participantIds.length - getParticipantLimits(showAddForm).max}` :
                       (currentForm.entryType === 'live' && !currentForm.musicFileUrl) ? '🎵 Upload Music File' :
-                      (currentForm.entryType === 'virtual' && !currentForm.videoExternalUrl) ? '📹 Enter Video URL' :
                       `✅ Add Entry ${previewFee > 0 ? `(R${previewFee})` : ''}`}
                    </button>
                  </div>
@@ -1752,7 +1747,7 @@ export default function CompetitionEntryPage() {
                   <div className="text-3xl">🏦</div>
                   <div className="text-left">
                     <h3 className="text-lg font-semibold">EFT - Bank Transfer</h3>
-                    <p className="text-sm opacity-90">Manual bank transfer - submit entries immediately</p>
+                    <p className="text-sm opacity-90">Pay via EFT using the banking details provided.</p>
                     <p className="text-xs opacity-75 mt-1">⏳ Entries pending verification • 📧 You email chenique after payment</p>
                   </div>
                 </div>
@@ -1771,113 +1766,129 @@ export default function CompetitionEntryPage() {
         </div>
       )}
 
-      {/* EFT Payment Modal */}
+      {/* EFT Payment Modal - Mobile Optimized */}
       {showEftModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-700/50 p-8 max-w-lg w-full">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-white mb-2">🏦 EFT Payment Details</h2>
-              <p className="text-slate-300">Make your payment using the banking details below</p>
-            </div>
-
-            {/* Banking Details */}
-            <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 border border-green-500/30 rounded-lg p-6 mb-6">
-              <h3 className="text-green-300 font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">🏦</span>
-                Banking Details
-              </h3>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+          {/* Mobile: Full height scrollable container */}
+          <div className="w-full h-full sm:h-auto sm:max-w-lg sm:w-full relative">
+            <div className="bg-slate-800/98 backdrop-blur-xl shadow-2xl border-t sm:border border-slate-700/50 w-full h-full sm:h-auto sm:rounded-3xl overflow-y-auto scrollbar-hide flex flex-col">
               
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300">Account Name:</span>
-                  <span className="text-white font-semibold">Elements of Dance</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300">Bank:</span>
-                  <span className="text-white font-semibold">FNB</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300">Account Number:</span>
-                  <span className="text-white font-mono font-semibold bg-slate-700/50 px-3 py-1 rounded">63122779094</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300">Reference:</span>
-                  <span className="text-emerald-400 font-mono font-semibold bg-slate-700/50 px-3 py-1 rounded">
-                    {isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300">Amount:</span>
-                  <span className="text-emerald-400 font-semibold text-lg">R{calculateTotalFee().total}</span>
+              {/* Fixed Header */}
+              <div className="sticky top-0 bg-slate-800/95 backdrop-blur-xl border-b border-slate-700/50 p-4 sm:p-6 z-10">
+                <div className="text-center">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">🏦 EFT Payment Details</h2>
+                  <p className="text-slate-300 text-sm sm:text-base">Make your payment using the banking details below</p>
                 </div>
               </div>
-            </div>
 
-            {/* Payment Reference Input */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-slate-300 mb-3">
-                📋 Payment Reference Number *
-              </label>
-              <input
-                type="text"
-                value={eftInvoiceNumber}
-                onChange={(e) => setEftInvoiceNumber(e.target.value)}
-                placeholder="Enter your banking reference or transaction number"
-                className="w-full p-4 bg-slate-700/50 border-2 border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-              />
-              <p className="text-xs text-slate-400 mt-2">
-                Use your banking reference or any unique transaction identifier from your transfer.
-              </p>
-            </div>
+              {/* Scrollable Content */}
+              <div className="flex-1 p-4 sm:p-6 pb-6 space-y-6 min-h-0">
+                
+                {/* Banking Details - Mobile Optimized */}
+                <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 border border-green-500/30 rounded-xl p-4 sm:p-6">
+                  <h3 className="text-green-300 font-semibold mb-4 flex items-center text-lg">
+                    <span className="text-2xl mr-2">🏦</span>
+                    Banking Details
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="bg-slate-800/40 rounded-lg p-3">
+                      <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Account Name</div>
+                      <div className="text-white font-semibold text-base">Elements of Dance</div>
+                    </div>
+                    
+                    <div className="bg-slate-800/40 rounded-lg p-3">
+                      <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Bank</div>
+                      <div className="text-white font-semibold text-base">FNB</div>
+                    </div>
+                    
+                    <div className="bg-slate-800/40 rounded-lg p-3">
+                      <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Account Number</div>
+                      <div className="text-white font-mono font-bold text-lg bg-slate-700/60 px-3 py-2 rounded-lg border border-slate-600/50">
+                        63122779094
+                      </div>
+                    </div>
+                    
+                    <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-lg p-3">
+                      <div className="text-emerald-300 text-xs uppercase tracking-wide mb-1">Reference</div>
+                      <div className="text-emerald-200 font-mono font-bold text-lg bg-emerald-800/40 px-3 py-2 rounded-lg">
+                        {isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId}
+                      </div>
+                    </div>
+                    
+                    <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-lg p-3">
+                      <div className="text-emerald-300 text-xs uppercase tracking-wide mb-1">Amount</div>
+                      <div className="text-emerald-200 font-bold text-xl">R{calculateTotalFee().total}</div>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Updated Payment Process Notice */}
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
-              <div className="flex items-start space-x-2">
-                <span className="text-blue-400 text-xl">📋</span>
-                <div>
-                  <h4 className="text-blue-300 font-semibold">Payment Process</h4>
-                  <div className="text-blue-200 text-sm mt-2 space-y-2">
-                    <p>1. Your entries will be submitted immediately as "pending payment verification"</p>
-                    <p>2. Make your EFT payment using the banking details above</p>
-                    <p>3. <strong className="text-emerald-300">Email chenique@elementscentral.com with your payment reference for approval</strong></p>
+                {/* Payment Reference Input */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-semibold text-slate-300">
+                    📋 Payment Reference Number (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={eftInvoiceNumber}
+                    onChange={(e) => setEftInvoiceNumber(e.target.value)}
+                    placeholder="Enter your banking reference or transaction number"
+                    className="w-full p-4 bg-slate-700/50 border-2 border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-base"
+                  />
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Optional: Add your banking reference if you've already made the payment, or leave blank to pay later
+                  </p>
+                </div>
+
+                {/* Payment Process Notice - Mobile Optimized */}
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-blue-400 text-xl">📋</span>
+                      <h4 className="text-blue-300 font-semibold">Payment Process</h4>
+                    </div>
+                    
+                    <div className="text-blue-200 text-sm leading-relaxed">
+                      <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3">
+                        <div className="font-medium text-emerald-200">Email your proof of payment + reference to chenique@elementscentral.com</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setShowEftModal(false);
-                  setEftInvoiceNumber('');
-                }}
-                className="flex-1 px-4 py-3 bg-slate-600 text-white rounded-xl hover:bg-slate-500 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEftPayment}
-                disabled={!eftInvoiceNumber.trim() || isSubmitting}
-                className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                  !eftInvoiceNumber.trim() || isSubmitting
-                    ? 'bg-slate-500 cursor-not-allowed text-slate-300'
-                    : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-green-500/25'
-                }`}
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Submitting...</span>
-                  </div>
-                ) : (
-                  'Submit Entry & Payment Info'
-                )}
-              </button>
+              {/* Sticky Footer with Buttons */}
+              <div className="sticky bottom-0 bg-slate-800/95 backdrop-blur-xl border-t border-slate-700/50 p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowEftModal(false);
+                      setEftInvoiceNumber('');
+                    }}
+                    className="w-full sm:flex-1 px-4 py-4 bg-slate-600 text-white rounded-xl hover:bg-slate-500 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEftPayment}
+                    disabled={isSubmitting}
+                    className={`w-full sm:flex-1 px-4 py-4 rounded-xl font-semibold transition-all duration-300 ${
+                      isSubmitting
+                        ? 'bg-slate-500 cursor-not-allowed text-slate-300'
+                        : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-green-500/25'
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Submitting...</span>
+                      </div>
+                    ) : (
+                      'Submit Entry & Payment Info'
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

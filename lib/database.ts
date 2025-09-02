@@ -3218,33 +3218,45 @@ export const unifiedDb = {
     
     if (status === 'pending') {
       result = await sqlClient`
-        SELECT d.*, j.name as approved_by_name 
+        SELECT d.*, j.name as approved_by_name,
+               s.name as studio_name, s.id as studio_id, s.email as studio_email
         FROM dancers d 
         LEFT JOIN judges j ON d.approved_by = j.id
+        LEFT JOIN studio_applications sa ON d.id = sa.dancer_id AND sa.status = 'accepted'
+        LEFT JOIN studios s ON sa.studio_id = s.id
         WHERE d.approved = false AND d.rejection_reason IS NULL
         ORDER BY d.created_at DESC
       ` as any[];
     } else if (status === 'approved') {
       result = await sqlClient`
-        SELECT d.*, j.name as approved_by_name 
+        SELECT d.*, j.name as approved_by_name,
+               s.name as studio_name, s.id as studio_id, s.email as studio_email
         FROM dancers d 
         LEFT JOIN judges j ON d.approved_by = j.id
+        LEFT JOIN studio_applications sa ON d.id = sa.dancer_id AND sa.status = 'accepted'
+        LEFT JOIN studios s ON sa.studio_id = s.id
         WHERE d.approved = true
         ORDER BY d.created_at DESC
       ` as any[];
     } else if (status === 'rejected') {
       result = await sqlClient`
-        SELECT d.*, j.name as approved_by_name 
+        SELECT d.*, j.name as approved_by_name,
+               s.name as studio_name, s.id as studio_id, s.email as studio_email
         FROM dancers d 
         LEFT JOIN judges j ON d.approved_by = j.id
+        LEFT JOIN studio_applications sa ON d.id = sa.dancer_id AND sa.status = 'accepted'
+        LEFT JOIN studios s ON sa.studio_id = s.id
         WHERE d.approved = false AND d.rejection_reason IS NOT NULL
         ORDER BY d.created_at DESC
       ` as any[];
     } else {
       result = await sqlClient`
-        SELECT d.*, j.name as approved_by_name 
+        SELECT d.*, j.name as approved_by_name,
+               s.name as studio_name, s.id as studio_id, s.email as studio_email
         FROM dancers d 
         LEFT JOIN judges j ON d.approved_by = j.id
+        LEFT JOIN studio_applications sa ON d.id = sa.dancer_id AND sa.status = 'accepted'
+        LEFT JOIN studios s ON sa.studio_id = s.id
         ORDER BY d.created_at DESC
       ` as any[];
     }
@@ -3270,7 +3282,11 @@ export const unifiedDb = {
       // Registration fee tracking fields
       registrationFeePaid: row.registration_fee_paid || false,
       registrationFeePaidAt: row.registration_fee_paid_at,
-      registrationFeeMasteryLevel: row.registration_fee_mastery_level
+      registrationFeeMasteryLevel: row.registration_fee_mastery_level,
+      // Studio information
+      studioName: row.studio_name,
+      studioId: row.studio_id,
+      studioEmail: row.studio_email
     }));
   },
 
@@ -3566,6 +3582,8 @@ export const unifiedDb = {
     participantIds?: string[];
     musicFileUrl?: string;
     musicFileName?: string;
+    videoFileUrl?: string;
+    videoFileName?: string;
   }) {
     const sqlClient = getSql();
     
