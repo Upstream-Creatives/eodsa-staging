@@ -84,6 +84,25 @@ export const initializeDatabase = async () => {
       console.error('❌ Error updating performance type constraint:', error);
     }
 
+    // Fix payment method constraint to allow 'eft' - FORCE UPDATE
+    try {
+      console.log('🔧 Updating payment method constraint...');
+      await sqlClient`ALTER TABLE event_entries DROP CONSTRAINT IF EXISTS event_entries_payment_method_check`;
+      await sqlClient`ALTER TABLE event_entries ADD CONSTRAINT event_entries_payment_method_check CHECK (payment_method IN ('credit_card', 'bank_transfer', 'invoice', 'payfast', 'eft'))`;
+      console.log('✅ Payment method constraint updated successfully');
+    } catch (error) {
+      console.error('❌ Error updating payment method constraint:', error);
+    }
+
+    // Remove foreign key constraint for contestant_id since it can reference both contestants and dancers
+    try {
+      console.log('🔧 Removing contestant_id foreign key constraint...');
+      await sqlClient`ALTER TABLE event_entries DROP CONSTRAINT IF EXISTS event_entries_contestant_id_fkey`;
+      console.log('✅ Contestant ID foreign key constraint removed successfully');
+    } catch (error) {
+      console.error('❌ Error removing contestant_id foreign key constraint:', error);
+    }
+
     // 🏆 NATIONALS TABLES - REMOVED
     // The nationals system has been removed. Regional competitions are now referred to as "Nationals".
 
