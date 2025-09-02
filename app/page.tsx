@@ -137,7 +137,7 @@ export default function HomePage() {
               <div className="space-y-3">
                 <input
                   type="text"
-                  placeholder="Enter EODSA ID (e.g. E123456)"
+                  placeholder="Enter Element of Dance ID or Studio ID (e.g. E123456)"
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   id="eodsa-id-input"
                 />

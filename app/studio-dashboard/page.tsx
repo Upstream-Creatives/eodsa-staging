@@ -1090,7 +1090,7 @@ export default function StudioDashboardPage() {
                           type="text"
                           value={dancerSearchQuery}
                           onChange={(e) => setDancerSearchQuery(e.target.value)}
-                          placeholder="Search by name, EODSA ID, National ID, or email..."
+                          placeholder="Search by name, Element of Dance ID, National ID, or email..."
                           className="w-full px-4 py-2 pl-10 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                         />
                         <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1732,8 +1732,8 @@ export default function StudioDashboardPage() {
       {showAddDancerModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-gray-800 rounded-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-white mb-4">Add Dancer by EODSA ID</h3>
-            <p className="text-gray-300 mb-4">Enter the EODSA ID of a dancer to add them to your studio.</p>
+            <h3 className="text-xl font-bold text-white mb-4">Add Dancer by Element of Dance ID</h3>
+            <p className="text-gray-300 mb-4">Enter the Element of Dance ID of a dancer to add them to your studio.</p>
             
             {/* Error Message Display */}
             {error && (
@@ -1751,7 +1751,7 @@ export default function StudioDashboardPage() {
               type="text"
               value={addDancerEodsaId}
               onChange={(e) => setAddDancerEodsaId(e.target.value.toUpperCase())}
-              placeholder="e.g., EODSA00123"
+              placeholder="e.g., E123456"
               className="w-full px-4 py-2 border border-gray-600 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 mb-4"
             />
             

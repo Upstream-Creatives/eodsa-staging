@@ -1772,12 +1772,12 @@ export default function CompetitionEntryPage() {
         </div>
       )}
 
-      {/* EFT Payment Modal - Mobile Optimized */}
+      {/* EFT Payment Modal - Mobile & PC Optimized */}
       {showEftModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
-          {/* Mobile: Full height scrollable container */}
-          <div className="w-full h-full sm:h-auto sm:max-w-lg sm:w-full relative">
-            <div className="bg-slate-800/98 backdrop-blur-xl shadow-2xl border-t sm:border border-slate-700/50 w-full h-full sm:h-auto sm:rounded-3xl overflow-y-auto scrollbar-hide flex flex-col">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center overflow-y-auto">
+          {/* Mobile: Full height, PC: Centered with max height and scrolling */}
+          <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:w-full relative sm:my-4">
+            <div className="bg-slate-800/98 backdrop-blur-xl shadow-2xl border-t sm:border border-slate-700/50 w-full h-full sm:h-auto sm:max-h-[90vh] sm:rounded-3xl overflow-y-auto scrollbar-hide flex flex-col">
               
               {/* Fixed Header */}
               <div className="sticky top-0 bg-slate-800/95 backdrop-blur-xl border-b border-slate-700/50 p-4 sm:p-6 z-10">
@@ -1846,17 +1846,31 @@ export default function CompetitionEntryPage() {
                   </p>
                 </div>
 
-                {/* Payment Process Notice - Mobile Optimized */}
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-blue-400 text-xl">📋</span>
-                      <h4 className="text-blue-300 font-semibold">Payment Process</h4>
+                {/* Payment Process Notice - Improved Design */}
+                <div className="bg-gradient-to-r from-blue-900/20 to-emerald-900/20 border border-blue-500/30 rounded-xl p-5">
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-blue-400 text-2xl">📋</span>
+                      <h4 className="text-blue-300 font-bold text-lg">Next Steps</h4>
                     </div>
                     
-                    <div className="text-blue-200 text-sm leading-relaxed">
-                      <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3">
-                        <div className="font-medium text-emerald-200">Email your proof of payment + reference to chenique@elementscentral.com</div>
+                    <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-xl p-4">
+                      <div className="flex items-start space-x-3">
+                        <span className="text-emerald-400 text-xl mt-0.5">📧</span>
+                        <div>
+                          <h5 className="text-emerald-300 font-semibold mb-2">After Payment</h5>
+                          <p className="text-emerald-200 text-sm leading-relaxed">
+                            Email your <span className="font-semibold">proof of payment + reference</span> to:
+                          </p>
+                          <div className="mt-2 p-3 bg-emerald-800/40 rounded-lg">
+                            <a 
+                              href="mailto:chenique@elementscentral.com" 
+                              className="text-emerald-100 font-semibold hover:text-white transition-colors"
+                            >
+                              chenique@elementscentral.com
+                            </a>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
