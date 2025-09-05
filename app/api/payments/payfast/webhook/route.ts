@@ -3,7 +3,8 @@
 // Handles PayFast payment notifications (ITN - Instant Transaction Notification)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyPayFastSignature, validatePayFastHost, PayFastWebhookData } from '@/lib/payfast';
+import { validatePayFastHost, PayFastWebhookData, PAYFAST_CONFIG } from '@/lib/payfast';
+import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -21,6 +22,29 @@ export async function POST(request: NextRequest) {
     if (!await validatePayFastHost(clientIP)) {
       console.warn(`⚠️ Invalid PayFast host: ${clientIP}`);
       return NextResponse.json({ error: 'Invalid host' }, { status: 403 });
+    }
+
+    // Compute signature from RAW body to preserve exact param order and encoding
+    const rawClone = request.clone();
+    const rawBody = await rawClone.text();
+
+    // Extract received signature and rebuild the parameter string WITHOUT the signature
+    const receivedSignature = (new URLSearchParams(rawBody)).get('signature') || '';
+    const pfParamString = rawBody
+      .split('&')
+      .filter(pair => !pair.toLowerCase().startsWith('signature='))
+      .join('&');
+
+    // Append passphrase if configured
+    const stringToHash = PAYFAST_CONFIG.passphrase
+      ? `${pfParamString}&passphrase=${encodeURIComponent(PAYFAST_CONFIG.passphrase.trim()).replace(/%20/g, '+')}`
+      : pfParamString;
+    const calculatedSignature = crypto.createHash('md5').update(stringToHash).digest('hex');
+
+    // Early reject if signature doesn't match
+    if (calculatedSignature !== receivedSignature) {
+      console.error('❌ Invalid PayFast signature');
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
     }
 
     // Parse form data from PayFast
@@ -99,22 +123,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Verify PayFast signature
-    if (!verifyPayFastSignature(webhookData as PayFastWebhookData)) {
-      console.error('❌ Invalid PayFast signature');
-      
-      // Log failed verification attempt
-      await sql`
-        INSERT INTO payment_logs (payment_id, event_type, event_data, ip_address, user_agent)
-        VALUES (
-          ${webhookData.m_payment_id}, 'verification_failed',
-          ${JSON.stringify({ error: 'Invalid signature', webhookData })},
-          ${clientIP}, ${request.headers.get('user-agent') || 'unknown'}
-        )
-      `;
-      
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
-    }
+    // Signature already validated using raw body above
 
     // Find the payment record
     const [payment] = await sql`
