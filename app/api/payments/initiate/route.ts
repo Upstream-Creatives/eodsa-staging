@@ -18,12 +18,13 @@ interface PaymentRequest {
   itemName?: string;
   itemDescription?: string;
   isBatchPayment?: boolean; // Flag for batch payments where entries don't exist yet
+  pendingEntries?: any[]; // For batch payments, store the pending entries data
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: PaymentRequest = await request.json();
-    const { entryId, eventId, userId, userFirstName, userLastName, userEmail, amount, itemName, itemDescription, isBatchPayment } = body;
+    const { entryId, eventId, userId, userFirstName, userLastName, userEmail, amount, itemName, itemDescription, isBatchPayment, pendingEntries } = body;
 
     // Validate required fields
     if (!entryId || !eventId || !userId || !userFirstName || !userLastName || !userEmail) {
@@ -101,18 +102,20 @@ export async function POST(request: NextRequest) {
     // Create payment record - exclude entry_id for batch payments to avoid foreign key constraint
     let payment;
     if (isBatchPayment) {
-      // For batch payments, don't include entry_id to avoid foreign key constraint
+      // For batch payments, store pending entries data in the database for webhook access
+      const pendingEntriesJson = pendingEntries ? JSON.stringify(pendingEntries) : null;
+      
       [payment] = await sql`
         INSERT INTO payments (
           payment_id, event_id, user_id, amount, currency,
-          description, status, ip_address, user_agent
+          description, status, ip_address, user_agent, pending_entries_data
         )
         VALUES (
           ${paymentReference}, ${eventId}, ${userId || 'unknown'}, 
           ${fees.total}, 'ZAR',
           ${`Payment for ${entry.item_name} - ${event.name}`}, 'pending',
           ${request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'},
-          ${request.headers.get('user-agent') || 'unknown'}
+          ${request.headers.get('user-agent') || 'unknown'}, ${pendingEntriesJson}
         )
         RETURNING payment_id, amount
       `;

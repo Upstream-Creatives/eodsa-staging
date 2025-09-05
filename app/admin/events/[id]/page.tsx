@@ -52,6 +52,11 @@ interface EventEntry {
   videoFileName?: string;
   videoExternalUrl?: string;
   videoExternalType?: 'youtube' | 'vimeo' | 'other';
+  // Studio information
+  studioName?: string;
+  studioId?: string;
+  studioEmail?: string;
+  participantStudios?: string[];
 }
 
 interface Performance {
@@ -1381,12 +1386,25 @@ export default function EventParticipantsPage() {
                         <div>
                           <div className="text-sm font-bold text-gray-900">{entry.itemName || 'Loading...'}</div>
                           <div className="text-sm text-gray-700">{entry.contestantName} • {entry.eodsaId}</div>
+                          {/* Show studio information */}
+                          <div className="text-xs text-blue-600 mt-1">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-800 font-medium">
+                              🏢 {entry.studioName || 'Independent'}
+                            </span>
+                          </div>
                           {/* Show all participant names for trio/group entries */}
                           {performanceType !== 'Solo' && entry.participantNames && entry.participantNames.length > 1 && (
                             <div className="text-xs text-gray-600 mt-1">
                               <span className="font-medium">Participants:</span>
                               <div className="text-gray-500">
-                                {entry.participantNames.join(', ')}
+                                {entry.participantNames.map((name, index) => (
+                                  <div key={index} className="flex items-center justify-between">
+                                    <span>{name}</span>
+                                    <span className="text-blue-600 text-xs">
+                                      {entry.participantStudios?.[index] || 'Independent'}
+                                    </span>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           )}
@@ -1400,15 +1418,28 @@ export default function EventParticipantsPage() {
                           <div className="text-sm font-medium text-gray-900">{entry.itemName}</div>
                           <div className="text-sm text-gray-700">{entry.choreographer}</div>
                           <div className="text-xs text-gray-500">{entry.mastery} • {entry.itemStyle}</div>
+                          
+                          {/* Show studio information */}
+                          <div className="text-xs mt-2">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-800 font-medium">
+                              🏢 {entry.studioName || 'Independent'}
+                            </span>
+                          </div>
+                          
                           {/* Show all participant names for multi-person entries */}
                           {performanceType !== 'Solo' && entry.participantNames && entry.participantNames.length > 0 && (
-                            <div className="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded">
-                              <span className="font-medium text-gray-700">Dancers:</span>
-                              <div className="text-gray-600 mt-1">
+                            <div className="text-xs text-gray-600 mt-2 p-3 bg-gray-50 rounded">
+                              <span className="font-medium text-gray-700">Dancers & Studios:</span>
+                              <div className="text-gray-600 mt-1 space-y-1">
                                 {entry.participantNames.map((name, index) => (
-                                  <div key={index} className="flex items-center space-x-1">
-                                    <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                                    <span>{name}</span>
+                                  <div key={index} className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                      <span className="font-medium">{name}</span>
+                                    </div>
+                                    <span className="text-blue-600 text-xs px-2 py-1 bg-blue-50 rounded">
+                                      {entry.participantStudios?.[index] || 'Independent'}
+                                    </span>
                                   </div>
                                 ))}
                               </div>

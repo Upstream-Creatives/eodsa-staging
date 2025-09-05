@@ -33,15 +33,26 @@ export async function GET(
             // This is a unified system dancer
             console.log(`Found unified dancer: ${dancer.name} (${dancer.eodsaId})`);
             
-            // Get all participant names for this entry
-            const participantNames = await Promise.all(
+            // Get studio information for the main contestant
+            const allDancers = await unifiedDb.getAllDancers();
+            const dancerWithStudio = allDancers.find(d => d.id === entry.contestantId);
+            
+            // Get all participant names and studio info for this entry
+            const participantDetails = await Promise.all(
               entry.participantIds.map(async (participantId) => {
                 try {
                   const participant = await unifiedDb.getDancerById(participantId);
-                  return participant ? participant.name : 'Unknown Dancer';
+                  const participantWithStudio = allDancers.find(d => d.id === participantId);
+                  return {
+                    name: participant ? participant.name : 'Unknown Dancer',
+                    studioName: participantWithStudio?.studioName || null
+                  };
                 } catch (error) {
                   console.error(`Error fetching participant ${participantId}:`, error);
-                  return 'Unknown Dancer';
+                  return {
+                    name: 'Unknown Dancer',
+                    studioName: null
+                  };
                 }
               })
             );
@@ -50,7 +61,12 @@ export async function GET(
               ...entry,
               contestantName: dancer.name,
               contestantEmail: dancer.email || '',
-              participantNames: participantNames
+              participantNames: participantDetails.map(p => p.name),
+              // Add studio information
+              studioName: dancerWithStudio?.studioName || 'Independent',
+              studioId: dancerWithStudio?.studioId || null,
+              studioEmail: dancerWithStudio?.studioEmail || null,
+              participantStudios: participantDetails.map(p => p.studioName || 'Independent')
             };
           } else {
             // Try legacy contestant system
@@ -64,7 +80,12 @@ export async function GET(
                 participantNames: entry.participantIds.map(id => {
                   const dancer = contestant.dancers.find(d => d.id === id);
                   return dancer?.name || 'Unknown Dancer';
-                })
+                }),
+                // Legacy system - studio info may not be available
+                studioName: 'Legacy Entry',
+                studioId: null,
+                studioEmail: null,
+                participantStudios: entry.participantIds.map(() => 'Legacy Entry')
               };
             } else {
               console.error(`Could not find contestant or dancer for ID: ${entry.contestantId}`);
@@ -72,7 +93,11 @@ export async function GET(
                 ...entry,
                 contestantName: 'Unknown (Not Found)',
                 contestantEmail: '',
-                participantNames: ['Unknown Dancer']
+                participantNames: ['Unknown Dancer'],
+                studioName: 'Unknown',
+                studioId: null,
+                studioEmail: null,
+                participantStudios: ['Unknown']
               };
             }
           }
@@ -82,7 +107,11 @@ export async function GET(
             ...entry,
             contestantName: 'Error loading',
             contestantEmail: '',
-            participantNames: ['Error loading dancers']
+            participantNames: ['Error loading dancers'],
+            studioName: 'Error loading',
+            studioId: null,
+            studioEmail: null,
+            participantStudios: ['Error loading']
           };
         }
       })

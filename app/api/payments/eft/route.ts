@@ -38,17 +38,18 @@ export async function POST(request: NextRequest) {
             INSERT INTO event_entries (
               id, event_id, contestant_id, eodsa_id, participant_ids, calculated_fee, 
               payment_status, payment_method, payment_reference, submitted_at, 
-              approved, qualified_for_nationals, item_name, choreographer, mastery, 
+              approved, qualified_for_nationals, item_number, item_name, choreographer, mastery, 
               item_style, estimated_duration, entry_type, music_file_url, music_file_name, 
-              video_external_url, video_external_type
+              video_file_url, video_file_name, video_external_url, video_external_type
             )
             VALUES (
               ${entryId}, ${entry.eventId}, ${entry.contestantId}, ${entry.eodsaId}, 
               ${JSON.stringify(entry.participantIds)}, ${entry.calculatedFee}, 
               'pending', 'eft', ${invoiceNumber}, ${new Date().toISOString()}, 
-              false, true, ${entry.itemName}, ${entry.choreographer}, ${entry.mastery}, 
+              false, true, ${entry.itemNumber || null}, ${entry.itemName}, ${entry.choreographer}, ${entry.mastery}, 
               ${entry.itemStyle}, ${entry.estimatedDuration}, ${entry.entryType || 'live'}, 
               ${entry.musicFileUrl || null}, ${entry.musicFileName || null}, 
+              ${entry.videoFileUrl || null}, ${entry.videoFileName || null},
               ${entry.videoExternalUrl || null}, ${entry.videoExternalType || null}
             )
           `;
