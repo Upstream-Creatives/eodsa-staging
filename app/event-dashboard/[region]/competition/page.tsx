@@ -1978,12 +1978,7 @@ export default function CompetitionEntryPage() {
                       </div>
                     </div>
                     
-                    <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-lg p-3">
-                      <div className="text-emerald-300 text-xs uppercase tracking-wide mb-1">Reference</div>
-                      <div className="text-emerald-200 font-mono font-bold text-lg bg-emerald-800/40 px-3 py-2 rounded-lg">
-                        {isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId}
-                      </div>
-                    </div>
+                    {/* Reference removed from EFT modal */}
                     
                     <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-lg p-3">
                       <div className="text-emerald-300 text-xs uppercase tracking-wide mb-1">Amount</div>
