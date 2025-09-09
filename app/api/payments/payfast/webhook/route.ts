@@ -206,6 +206,21 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Payment completed: ${webhookData.m_payment_id}`);
       console.log(`🎯 Auto-approving entries for payment: ${webhookData.m_payment_id}`);
       
+      // Idempotency guard: if entries already exist for this payment, skip auto-creation
+      const priorEntries = await sql`
+        SELECT id FROM event_entries WHERE payment_id = ${webhookData.m_payment_id} LIMIT 1
+      `;
+      if (priorEntries.length > 0) {
+        console.log(`🛑 Entries already exist for payment ${webhookData.m_payment_id}. Skipping auto-creation.`);
+        await sql`
+          INSERT INTO payment_logs (payment_id, event_type, event_data, ip_address, user_agent)
+          VALUES (
+            ${webhookData.m_payment_id}, 'duplicate_webhook_skipped',
+            ${JSON.stringify({ reason: 'entries already exist for this payment_id' })},
+            ${clientIP}, ${request.headers.get('user-agent') || 'webhook'}
+          )
+        `;
+      } else {
       // Check if this is a batch payment with pending entries that need to be created
       const pendingEntries = await sql`
         SELECT pending_entries_data FROM payments 
@@ -313,6 +328,7 @@ export async function POST(request: NextRequest) {
             )
           `;
         }
+      }
       }
       
       // Additional logic:
