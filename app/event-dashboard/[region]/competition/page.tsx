@@ -7,6 +7,7 @@ import { PERFORMANCE_TYPES, MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
 import { useToast } from '@/components/ui/simple-toast';
 import MusicUpload from '@/components/MusicUpload';
+import { checkGroupRegistrationStatus } from '@/lib/registration-fee-tracker';
 import React from 'react';
 
 function TourOverlay({
@@ -186,6 +187,8 @@ export default function CompetitionEntryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [entries, setEntries] = useState<PerformanceEntry[]>([]);
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
+  const [registrationFeeCache, setRegistrationFeeCache] = useState<{[key: string]: number}>({});
+  const [totalFeeCalculation, setTotalFeeCalculation] = useState<{performanceFee: number, registrationFee: number, total: number}>({performanceFee: 0, registrationFee: 0, total: 0});
   const [currentForm, setCurrentForm] = useState({
     itemName: '',
     choreographer: '',
@@ -657,15 +660,55 @@ export default function CompetitionEntryPage() {
     });
   };
 
-  const calculateTotalFee = () => {
+  const calculateTotalFee = async () => {
     const performanceFee = entries.reduce((total, entry) => total + entry.fee, 0);
-    const uniqueParticipants = new Set();
+    const uniqueParticipants = new Set<string>();
     entries.forEach(entry => {
       entry.participantIds.forEach(id => uniqueParticipants.add(id));
     });
-    const registrationFee = uniqueParticipants.size * 300;
-    return { performanceFee, registrationFee, total: performanceFee + registrationFee };
+    
+    // Check registration status for unique participants
+    const participantIds = Array.from(uniqueParticipants);
+    const cacheKey = participantIds.sort().join(',');
+    
+    let registrationFee = 0;
+    if (participantIds.length > 0) {
+      // Check if we have cached the result
+      if (registrationFeeCache[cacheKey] !== undefined) {
+        registrationFee = registrationFeeCache[cacheKey];
+      } else {
+        try {
+          // Use the first entry's mastery level (they should all be the same for Nationals)
+          const masteryLevel = entries.length > 0 ? entries[0].mastery : 'Fire (Advanced)';
+          const registrationStatus = await checkGroupRegistrationStatus(participantIds, masteryLevel);
+          registrationFee = registrationStatus.registrationFeeRequired;
+          
+          // Cache the result
+          setRegistrationFeeCache(prev => ({
+            ...prev,
+            [cacheKey]: registrationFee
+          }));
+        } catch (error) {
+          console.error('Error checking registration status:', error);
+          // Fallback to charging all participants (old behavior)
+          registrationFee = uniqueParticipants.size * 300;
+        }
+      }
+    }
+    
+    const result = { performanceFee, registrationFee, total: performanceFee + registrationFee };
+    setTotalFeeCalculation(result);
+    return result;
   };
+
+  // Recalculate fees whenever entries change
+  useEffect(() => {
+    if (entries.length > 0) {
+      calculateTotalFee();
+    } else {
+      setTotalFeeCalculation({performanceFee: 0, registrationFee: 0, total: 0});
+    }
+  }, [entries, registrationFeeCache]);
 
   const getPreviewFee = () => {
     if (!showAddForm || currentForm.participantIds.length === 0) return 0;
@@ -701,7 +744,7 @@ export default function CompetitionEntryPage() {
     setIsSubmitting(true);
 
     try {
-      const totalFee = calculateTotalFee().total;
+      const totalFee = totalFeeCalculation.total;
       
       // For multiple entries, we'll create a batch payment
       // First, store entry data temporarily and get payment URL
@@ -805,7 +848,7 @@ export default function CompetitionEntryPage() {
     setIsSubmitting(true);
 
     try {
-      const totalFee = calculateTotalFee().total;
+      const totalFee = totalFeeCalculation.total;
       
       // Create entry data for EFT payment - submit entries immediately as pending
       const batchEntryData = entries.map(entry => ({
@@ -929,7 +972,7 @@ export default function CompetitionEntryPage() {
 }
 
   // Calculate fees in real-time
-  const feeCalculation = calculateTotalFee();
+  const feeCalculation = totalFeeCalculation;
   const previewFee = getPreviewFee();
 
   return (
@@ -1854,7 +1897,7 @@ export default function CompetitionEntryPage() {
                   </button>
                 </>
               ) : (
-                <>
+                <div className="flex flex-col space-y-3">
                   <button
                     onClick={() => {
                       setShowSuccessModal(false);
@@ -1862,17 +1905,25 @@ export default function CompetitionEntryPage() {
                       setEntries([]);
                       setSubmissionResult(null);
                     }}
-                    className="flex-1 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500 transition-colors"
+                    className="w-full px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500 transition-colors"
                   >
                     Enter More Events
                   </button>
-                  <button
-                    onClick={() => router.push(`/`)}
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
-                  >
-                    Main Portal
-                  </button>
-                </>
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => router.push('/studio-portal')}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
+                    >
+                      Studio Portal
+                    </button>
+                    <button
+                      onClick={() => router.push(`/`)}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 font-semibold"
+                    >
+                      Main Portal
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -1891,7 +1942,7 @@ export default function CompetitionEntryPage() {
                 <div className="text-slate-300 text-sm space-y-2">
                   <div className="flex justify-between">
                     <span>Total Amount:</span>
-                    <span className="text-emerald-400 font-semibold text-lg">R{calculateTotalFee().total}</span>
+                    <span className="text-emerald-400 font-semibold text-lg">R{totalFeeCalculation.total}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Entries:</span>
@@ -1992,7 +2043,7 @@ export default function CompetitionEntryPage() {
                     
                     <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-lg p-3">
                       <div className="text-emerald-300 text-xs uppercase tracking-wide mb-1">Amount</div>
-                      <div className="text-emerald-200 font-bold text-xl">R{calculateTotalFee().total}</div>
+                      <div className="text-emerald-200 font-bold text-xl">R{totalFeeCalculation.total}</div>
                     </div>
                   </div>
                 </div>
