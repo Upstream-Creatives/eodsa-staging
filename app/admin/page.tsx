@@ -320,15 +320,28 @@ export default function AdminDashboard() {
     }
   };
 
+  // Helper function to format date for HTML input (YYYY-MM-DD)
+  const formatDateForInput = (dateString: string | undefined | null): string => {
+    if (!dateString) return '';
+    try {
+      // Handle different date formats from database
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return date.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+
   const handleEditEvent = (event: Event) => {
     setEditingEvent(event);
     setEditEventData({
       name: event.name,
       description: event.description,
       region: event.region,
-      eventDate: event.eventDate,
-      eventEndDate: event.eventEndDate || '',
-      registrationDeadline: event.registrationDeadline,
+      eventDate: formatDateForInput(event.eventDate), // Format for HTML date input
+      eventEndDate: formatDateForInput(event.eventEndDate), // Format for HTML date input
+      registrationDeadline: formatDateForInput(event.registrationDeadline), // Format for HTML date input
       venue: event.venue,
       status: event.status
     });

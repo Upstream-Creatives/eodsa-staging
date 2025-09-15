@@ -126,64 +126,26 @@ export async function PUT(
       updates[dbField] = value;
     });
 
-    // Execute dynamic update using individual field updates
-    let updatedEvent;
-    if (updates.name !== undefined) {
-      updatedEvent = await sql`
-        UPDATE events 
-        SET name = ${updates.name}, updated_at = NOW()
-        WHERE id = ${eventId}
-        RETURNING *
-      `;
-    }
-    if (updates.event_date !== undefined) {
-      updatedEvent = await sql`
-        UPDATE events 
-        SET event_date = ${updates.event_date}, updated_at = NOW()
-        WHERE id = ${eventId}
-        RETURNING *
-      `;
-    }
-    if (updates.registration_deadline !== undefined) {
-      updatedEvent = await sql`
-        UPDATE events 
-        SET registration_deadline = ${updates.registration_deadline}, updated_at = NOW()
-        WHERE id = ${eventId}
-        RETURNING *
-      `;
-    }
-    if (updates.location !== undefined) {
-      updatedEvent = await sql`
-        UPDATE events 
-        SET location = ${updates.location}, updated_at = NOW()
-        WHERE id = ${eventId}
-        RETURNING *
-      `;
-    }
-    if (updates.region !== undefined) {
-      updatedEvent = await sql`
-        UPDATE events 
-        SET region = ${updates.region}, updated_at = NOW()
-        WHERE id = ${eventId}
-        RETURNING *
-      `;
-    }
-
-    if (!updatedEvent || updatedEvent.length === 0) {
-      // Fallback: update all possible fields at once
-      updatedEvent = await sql`
-        UPDATE events 
-        SET 
-          name = COALESCE(${updates.name || null}, name),
-          event_date = COALESCE(${updates.event_date || null}, event_date),
-          registration_deadline = COALESCE(${updates.registration_deadline || null}, registration_deadline),
-          location = COALESCE(${updates.location || null}, location),
-          region = COALESCE(${updates.region || null}, region),
-          updated_at = NOW()
-        WHERE id = ${eventId}
-        RETURNING *
-      `;
-    }
+    // Execute single update query with all fields that match database schema
+    const updatedEvent = await sql`
+      UPDATE events 
+      SET 
+        name = COALESCE(${updates.name || null}, name),
+        description = COALESCE(${updates.description || null}, description),
+        region = COALESCE(${updates.region || null}, region),
+        age_category = COALESCE(${updates.age_category || null}, age_category),
+        performance_type = COALESCE(${updates.performance_type || null}, performance_type),
+        event_date = COALESCE(${updates.event_date || null}, event_date),
+        event_end_date = COALESCE(${updates.event_end_date || null}, event_end_date),
+        registration_deadline = COALESCE(${updates.registration_deadline || null}, registration_deadline),
+        venue = COALESCE(${updates.venue || null}, venue),
+        status = COALESCE(${updates.status || null}, status),
+        max_participants = COALESCE(${updates.max_participants || null}, max_participants),
+        entry_fee = COALESCE(${updates.entry_fee || null}, entry_fee),
+        payment_required = COALESCE(${updates.payment_required || null}, payment_required)
+      WHERE id = ${eventId}
+      RETURNING *
+    `;
 
     const eventRecord = updatedEvent[0];
     console.log(`✅ Event updated: ${eventRecord.name} (ID: ${eventId})`);
