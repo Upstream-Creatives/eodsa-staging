@@ -92,13 +92,75 @@ export const checkGroupRegistrationStatus = async (
   if (analysis.needRegistration.length > 0) {
     const registrationFeePerPerson = {
       'Water (Competitive)': 250,
-      'Fire (Advanced)': 250
-    }[masteryLevel] || 0;
+      'Fire (Advanced)': 250,
+      'Nationals': 300
+    }[masteryLevel] || 250; // Default to R250 if unknown mastery level
 
     analysis.registrationFeeRequired = registrationFeePerPerson * analysis.needRegistration.length;
   }
 
   return analysis;
+};
+
+// Automatically mark registration fee as paid when dancer gets their first paid entry
+export const autoMarkRegistrationFeePaid = async (eodsaId: string, masteryLevel: string) => {
+  try {
+    console.log(`🎫 Auto-marking registration fee for dancer: ${eodsaId} (${masteryLevel})`);
+    
+    // Find the dancer by EODSA ID
+    const basicDancer = await unifiedDb.getDancerByEodsaId(eodsaId);
+    if (!basicDancer) {
+      console.warn(`⚠️ No dancer found with EODSA ID: ${eodsaId}`);
+      return { success: false, reason: 'Dancer not found' };
+    }
+
+    // Get registration status for this dancer
+    const dancers = await unifiedDb.getDancersWithRegistrationStatus([basicDancer.id]);
+    const dancer = dancers[0];
+    
+    if (!dancer) {
+      console.warn(`⚠️ Could not get registration status for dancer: ${eodsaId}`);
+      return { success: false, reason: 'Registration status not found' };
+    }
+
+    // Check if registration fee is already marked as paid for this mastery level
+    if (dancer.registrationFeePaid && dancer.registrationFeeMasteryLevel === masteryLevel) {
+      console.log(`✅ Registration fee already marked as paid for dancer: ${eodsaId} (${masteryLevel})`);
+      return { success: true, reason: 'Already paid for this mastery level' };
+    }
+
+    // Mark registration fee as paid
+    await unifiedDb.markRegistrationFeePaid(dancer.id, masteryLevel);
+    console.log(`✅ Auto-marked registration fee as paid for dancer: ${eodsaId} (${masteryLevel})`);
+    
+    return { success: true, reason: 'Marked as paid' };
+  } catch (error) {
+    console.error('❌ Failed to auto-mark registration fee as paid:', error);
+    return { success: false, reason: 'Error occurred' };
+  }
+};
+
+// Auto-mark registration fees for multiple participants when entry is paid
+export const autoMarkRegistrationForParticipants = async (participantIds: string[], masteryLevel: string) => {
+  const results = [];
+  
+  for (const participantId of participantIds) {
+    try {
+      // Get dancer info
+      const dancer = await unifiedDb.getDancerById(participantId);
+      if (dancer && dancer.eodsaId) {
+        const result = await autoMarkRegistrationFeePaid(dancer.eodsaId, masteryLevel);
+        results.push({ participantId, eodsaId: dancer.eodsaId, ...result });
+      } else {
+        results.push({ participantId, success: false, reason: 'No EODSA ID found' });
+      }
+    } catch (error) {
+      console.error(`Error processing participant ${participantId}:`, error);
+      results.push({ participantId, success: false, reason: 'Error occurred' });
+    }
+  }
+  
+  return results;
 };
 
 // Initialize registration fee tracking in database

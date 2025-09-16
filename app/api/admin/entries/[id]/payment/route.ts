@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, unifiedDb } from '@/lib/database';
+import { autoMarkRegistrationForParticipants } from '@/lib/registration-fee-tracker';
 
 export async function PUT(
   request: Request,
@@ -65,6 +66,16 @@ export async function PUT(
 
     // Update the entry
     await db.updateEventEntry(entryId, updates);
+
+    // Auto-mark registration fees as paid if entry is now marked as paid
+    if (paymentStatus === 'paid' && entry.participantIds && entry.participantIds.length > 0 && entry.mastery) {
+      try {
+        const registrationResults = await autoMarkRegistrationForParticipants(entry.participantIds, entry.mastery);
+        console.log('Registration fee auto-marking results on admin payment update:', registrationResults);
+      } catch (error) {
+        console.error('Failed to auto-mark registration fees on admin payment update:', error);
+      }
+    }
 
     // Calculate outstanding balance
     const outstandingBalance = entry.paymentStatus === 'paid' ? 0 : entry.calculatedFee;

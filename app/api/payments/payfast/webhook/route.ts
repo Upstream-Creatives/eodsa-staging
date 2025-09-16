@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validatePayFastHost, PayFastWebhookData, PAYFAST_CONFIG } from '@/lib/payfast';
 import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
+import { autoMarkRegistrationForParticipants } from '@/lib/registration-fee-tracker';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -178,6 +179,24 @@ export async function POST(request: NextRequest) {
           approved = true
         WHERE payment_id = ${webhookData.m_payment_id}
       `;
+      
+      // Auto-mark registration fees as paid for all participants in completed entries
+      try {
+        const paidEntries = await sql`
+          SELECT participant_ids, mastery FROM event_entries 
+          WHERE payment_id = ${webhookData.m_payment_id} AND payment_status = 'paid'
+        `;
+        
+        for (const entry of paidEntries) {
+          if (entry.participant_ids && entry.mastery) {
+            const participantIds = JSON.parse(entry.participant_ids);
+            const registrationResults = await autoMarkRegistrationForParticipants(participantIds, entry.mastery);
+            console.log(`Registration fee auto-marking results for payment ${webhookData.m_payment_id}:`, registrationResults);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to auto-mark registration fees on PayFast webhook:', error);
+      }
     } else {
       await sql`
         UPDATE event_entries SET

@@ -7,7 +7,7 @@ import { PERFORMANCE_TYPES, MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
 import { useToast } from '@/components/ui/simple-toast';
 import MusicUpload from '@/components/MusicUpload';
-import { checkGroupRegistrationStatus } from '@/lib/registration-fee-tracker';
+import { checkGroupRegistrationStatus, calculateSmartEODSAFee } from '@/lib/registration-fee-tracker';
 import React from 'react';
 
 function TourOverlay({
@@ -564,7 +564,115 @@ export default function CompetitionEntryPage() {
     }
   };
 
-  const calculateEntryFee = (performanceType: string, participantCount: number) => {
+  const calculateEntryFee = async (performanceType: string, participantIds: string[]) => {
+    try {
+      if (!currentForm.mastery) {
+        console.warn('No mastery level selected, using default performance fee calculation');
+        return calculateFallbackEntryFee(performanceType, participantIds.length);
+      }
+
+      // Use smart fee calculation that accounts for registration fees
+      const capitalizedPerformanceType = performanceType.charAt(0).toUpperCase() + performanceType.slice(1).toLowerCase() as 'Solo' | 'Duet' | 'Trio' | 'Group';
+      
+      let soloCount = 1;
+      if (performanceType === 'Solo') {
+        // Count existing solo entries from database + current session entries
+        // For studios, we need to count solos for the specific dancer, not all studio solos
+        let existingSoloCount = 0;
+        
+        if (participantIds.length === 1) {
+          const dancerEodsaId = participantIds[0];
+          
+          // If we don't have existing entries loaded for this dancer, load them now
+          if (existingDbEntries.length === 0 && studioInfo) {
+            try {
+              console.log(`🔍 Loading existing entries for studio dancer ${dancerEodsaId}`);
+              const response = await fetch(`/api/contestants/entries?eodsaId=${dancerEodsaId}&debug=true`);
+              if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                  const dancerEventEntries = data.entries.filter((entry: any) => entry.eventId === eventId || entry.event_id === eventId);
+                  console.log(`📊 Found ${dancerEventEntries.length} existing entries for studio dancer`);
+                  
+                  // Count solos from the loaded entries
+                  existingSoloCount = dancerEventEntries.filter((entry: any) => {
+                    if (!entry.participantIds) return false;
+                    
+                    let entryParticipants = [];
+                    if (Array.isArray(entry.participantIds)) {
+                      entryParticipants = entry.participantIds;
+                    } else if (typeof entry.participantIds === 'string') {
+                      try {
+                        entryParticipants = JSON.parse(entry.participantIds);
+                      } catch (e) {
+                        entryParticipants = [entry.participantIds];
+                      }
+                    }
+                    
+                    return entryParticipants.length === 1 && entryParticipants.includes(dancerEodsaId);
+                  }).length;
+                }
+              }
+            } catch (error) {
+              console.error('Error loading dancer entries:', error);
+              existingSoloCount = 0;
+            }
+          } else {
+            // Count solos where this specific dancer is the participant
+            existingSoloCount = existingDbEntries.filter(entry => {
+              if (!entry.participantIds || entry.participantIds.length !== 1) return false;
+              
+              // Check if this dancer is the participant in the solo
+              let entryParticipants = [];
+              if (Array.isArray(entry.participantIds)) {
+                entryParticipants = entry.participantIds;
+              } else if (typeof entry.participantIds === 'string') {
+                try {
+                  entryParticipants = JSON.parse(entry.participantIds);
+                } catch (e) {
+                  entryParticipants = [entry.participantIds];
+                }
+              }
+              
+              return entryParticipants.includes(dancerEodsaId);
+            }).length;
+          }
+        } else {
+          // Fallback for non-solo or invalid participant setup
+          existingSoloCount = existingDbEntries.filter(entry => 
+            entry.participantIds && entry.participantIds.length === 1
+          ).length;
+        }
+        
+        const sessionSoloCount = entries.filter(entry => entry.performanceType === 'Solo').length;
+        soloCount = existingSoloCount + sessionSoloCount + 1; // +1 for current entry
+        
+        console.log(`🧮 Solo pricing calculation:`);
+        console.log(`- Target dancer: ${participantIds[0] || 'unknown'}`);
+        console.log(`- Existing DB solos for this dancer: ${existingSoloCount}`);
+        console.log(`- Session solos: ${sessionSoloCount}`);
+        console.log(`- This will be solo #${soloCount}`);
+      }
+
+      const feeBreakdown = await calculateSmartEODSAFee(
+        currentForm.mastery,
+        capitalizedPerformanceType,
+        participantIds,
+        {
+          soloCount: soloCount
+        }
+      );
+
+      console.log('🧮 Smart fee calculation result:', feeBreakdown);
+      return feeBreakdown.totalFee;
+    } catch (error) {
+      console.error('Error in smart fee calculation, falling back to basic calculation:', error);
+      return calculateFallbackEntryFee(performanceType, participantIds.length);
+    }
+  };
+
+  // Fallback fee calculation for when smart calculation fails
+  const calculateFallbackEntryFee = (performanceType: string, participantCount: number) => {
     if (performanceType === 'Solo') {
       // Count existing solo entries from database + current session entries
       const existingSoloCount = existingDbEntries.filter(entry => 
@@ -573,23 +681,31 @@ export default function CompetitionEntryPage() {
       const sessionSoloCount = entries.filter(entry => entry.performanceType === 'Solo').length;
       const totalSoloCount = existingSoloCount + sessionSoloCount + 1; // +1 for current entry
       
-      console.log(`🧮 Solo pricing calculation:`);
-      console.log(`- Existing DB solos: ${existingSoloCount}`);
-      console.log(`- Session solos: ${sessionSoloCount}`);
-      console.log(`- This will be solo #${totalSoloCount}`);
+      // Use nationals solo pricing: 1st R400, 2nd R350, 3rd R300, 4th R250, 5th FREE, additional R100
+      const registrationFee = 250; // R250 registration per dancer
+      let performanceFee = 0;
       
-      // Solo packages: 1 solo R400, 2 solos R750, 3 solos R1000, 4 solos R1200, 5th FREE, additional solos R100 each
-      if (totalSoloCount === 1) return 400;
-      if (totalSoloCount === 2) return 750 - 400; // R350 for 2nd solo (total R750)
-      if (totalSoloCount === 3) return 1000 - 750; // R250 for 3rd solo (total R1000)
-      if (totalSoloCount === 4) return 1200 - 1000; // R200 for 4th solo (total R1200)
-      if (totalSoloCount === 5) return 0; // 5th solo is FREE
-      if (totalSoloCount > 5) return 100; // Additional solos R100 each
-      return 400;
+      if (totalSoloCount === 1) {
+        performanceFee = 400; // R400 for 1st solo
+      } else if (totalSoloCount === 2) {
+        performanceFee = 350; // R350 for 2nd solo
+      } else if (totalSoloCount === 3) {
+        performanceFee = 300; // R300 for 3rd solo
+      } else if (totalSoloCount === 4) {
+        performanceFee = 250; // R250 for 4th solo
+      } else if (totalSoloCount === 5) {
+        performanceFee = 0; // 5th solo is FREE
+      } else if (totalSoloCount > 5) {
+        performanceFee = 100; // Additional solos R100 each
+      }
+      
+      return registrationFee + performanceFee;
     } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      return 280 * participantCount;
+      return (280 * participantCount) + (250 * participantCount); // R280 performance + R250 registration per dancer
     } else if (performanceType === 'Group') {
-      return participantCount <= 9 ? 220 * participantCount : 190 * participantCount;
+      const performanceFee = participantCount <= 9 ? 220 * participantCount : 190 * participantCount; // R220 (4-9 people), R190 (10+ people)
+      const registrationFee = 250 * participantCount; // R250 registration per dancer
+      return performanceFee + registrationFee;
     }
     return 0;
   };
@@ -627,7 +743,7 @@ export default function CompetitionEntryPage() {
     }
   };
 
-  const handleSaveEntry = () => {
+  const handleSaveEntry = async () => {
     if (!showAddForm || currentForm.participantIds.length === 0 || !currentForm.itemName) {
       return;
     }
@@ -650,7 +766,7 @@ export default function CompetitionEntryPage() {
       currentForm.participantIds.includes(dancer.id)
     );
 
-    const fee = calculateEntryFee(showAddForm, currentForm.participantIds.length);
+    const fee = await calculateEntryFee(showAddForm, currentForm.participantIds);
 
     const newEntry: PerformanceEntry = {
       id: `entry-${Date.now()}`,
@@ -756,7 +872,8 @@ export default function CompetitionEntryPage() {
       return 0;
     }
     
-    return calculateEntryFee(showAddForm, currentForm.participantIds.length);
+    // This needs to be handled async, return estimated fee for now
+    return calculateFallbackEntryFee(showAddForm, currentForm.participantIds.length);
   };
 
   const handleProceedToPayment = async () => {
@@ -1132,7 +1249,7 @@ export default function CompetitionEntryPage() {
                   const existingSolos = existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length;
                   const sessionSolos = entries.filter(e => e.performanceType === 'Solo').length;
                   const totalSoloCount = existingSolos + sessionSolos;
-                  const nextSoloFee = type === 'Solo' ? calculateEntryFee('Solo', 1) : 0;
+                  const nextSoloFee = type === 'Solo' ? calculateFallbackEntryFee('Solo', 1) : 0;
                   
                   // For independent dancers (non-studio mode), only allow Solo
                   const isDisabled = !isStudioMode && type !== 'Solo';

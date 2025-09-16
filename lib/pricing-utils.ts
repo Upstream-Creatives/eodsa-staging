@@ -1,6 +1,6 @@
 /**
  * Pricing utility functions for consistent fee calculation across the application
- * Fixes the critical bug where solo entry pricing was not progressive
+ * Uses nationals solo pricing structure with restored non-solo pricing
  */
 
 /**
@@ -11,16 +11,16 @@
  * @returns The fee that should be charged for this specific solo entry
  */
 export function calculateSoloEntryFee(currentSoloCount: number): number {
-  // Solo packages: 1 solo R400, 2 solos R750, 3 solos R1000, 4 solos R1200, 5th FREE, additional solos R100 each
+  // Use nationals solo pricing structure: 1st R400, 2nd R350, 3rd R300, 4th R250, 5th FREE, additional R100
   
   if (currentSoloCount === 1) {
     return 400; // First solo: R400
   } else if (currentSoloCount === 2) {
-    return 750 - 400; // Second solo: Total R750 - already paid R400 = R350
+    return 350; // Second solo: R350
   } else if (currentSoloCount === 3) {
-    return 1000 - 750; // Third solo: Total R1000 - already paid R750 = R250
+    return 300; // Third solo: R300
   } else if (currentSoloCount === 4) {
-    return 1200 - 1000; // Fourth solo: Total R1200 - already paid R1000 = R200
+    return 250; // Fourth solo: R250
   } else if (currentSoloCount === 5) {
     return 0; // Fifth solo is FREE
   } else {
@@ -37,19 +37,19 @@ export function calculateSoloEntryFee(currentSoloCount: number): number {
 export function calculateCumulativeSoloFee(totalSoloCount: number): number {
   if (totalSoloCount <= 0) return 0;
   
-  if (totalSoloCount === 1) return 400;
-  if (totalSoloCount === 2) return 750;
-  if (totalSoloCount === 3) return 1000;
-  if (totalSoloCount === 4) return 1200;
-  if (totalSoloCount === 5) return 1200; // 5th is free
+  if (totalSoloCount === 1) return 400; // R400
+  if (totalSoloCount === 2) return 750; // R400 + R350 = R750
+  if (totalSoloCount === 3) return 1050; // R400 + R350 + R300 = R1050
+  if (totalSoloCount === 4) return 1300; // R400 + R350 + R300 + R250 = R1300
+  if (totalSoloCount === 5) return 1300; // 5th is free, so total stays at R1300
   
-  // More than 5: 1200 + (additional * 100)
-  return 1200 + ((totalSoloCount - 5) * 100);
+  // More than 5: 1300 + (additional * 100)
+  return 1300 + ((totalSoloCount - 5) * 100);
 }
 
 /**
  * Get existing solo entries for a dancer/contestant for a specific event
- * Handles both legacy and unified system dancers
+ * Handles both legacy and unified system dancers, including studio dancers
  * 
  * @param allEntries - All event entries from the database
  * @param eventId - The event ID to check
@@ -65,25 +65,69 @@ export function getExistingSoloEntries(
   contestantId?: string,
   dancerId?: string
 ): any[] {
-  return allEntries.filter(entry => {
-    // Must be the same event and a solo entry
-    if (entry.eventId !== eventId || entry.participantIds.length !== 1) {
+  console.log(`🔍 Looking for existing solo entries for dancer ${eodsaId} in event ${eventId}`);
+  console.log(`🔍 Checking ${allEntries.length} total entries`);
+  
+  const soloEntries = allEntries.filter(entry => {
+    // Must be the same event and a solo entry (single participant)
+    if (entry.eventId !== eventId) {
       return false;
     }
     
-    // Check if dancer owns the entry (legacy system)
-    if (entry.eodsaId === eodsaId || (contestantId && entry.contestantId === contestantId)) {
+    // Check if it's a solo entry - must have exactly 1 participant
+    let participantIds: string[] = [];
+    if (Array.isArray(entry.participantIds)) {
+      participantIds = entry.participantIds;
+    } else if (typeof entry.participantIds === 'string') {
+      try {
+        participantIds = JSON.parse(entry.participantIds);
+      } catch (e) {
+        // If it's not valid JSON, treat as single string
+        participantIds = [entry.participantIds];
+      }
+    }
+    
+    if (participantIds.length !== 1) {
+      return false;
+    }
+    
+    // Check if this dancer is the participant in this solo entry
+    const participantId = participantIds[0];
+    
+    // Method 1: Check if the entry is owned by this dancer directly (eodsaId match)
+    if (entry.eodsaId === eodsaId) {
+      console.log(`✅ Found solo entry owned by dancer: ${entry.id} (${entry.itemName})`);
       return true;
     }
     
-    // Check if dancer is a participant (unified system)
-    if (entry.participantIds.includes(eodsaId) || 
-        (dancerId && entry.participantIds.includes(dancerId))) {
+    // Method 2: Check if the entry is owned by this dancer via contestant ID (legacy system)
+    if (contestantId && entry.contestantId === contestantId) {
+      console.log(`✅ Found solo entry via contestant ID: ${entry.id} (${entry.itemName})`);
+      return true;
+    }
+    
+    // Method 3: Check if this dancer is the participant (participantIds array)
+    if (participantId === eodsaId || (dancerId && participantId === dancerId)) {
+      console.log(`✅ Found solo entry with dancer as participant: ${entry.id} (${entry.itemName})`);
+      return true;
+    }
+    
+    // Method 4: For studio entries, the participant might be the EODSA ID stored as participant
+    // This handles cases where studio creates entries for their dancers
+    if (participantId === eodsaId) {
+      console.log(`✅ Found studio solo entry for dancer: ${entry.id} (${entry.itemName})`);
       return true;
     }
     
     return false;
   });
+  
+  console.log(`📊 Found ${soloEntries.length} existing solo entries for dancer ${eodsaId}`);
+  soloEntries.forEach((entry, index) => {
+    console.log(`  ${index + 1}. ${entry.itemName} (${entry.id})`);
+  });
+  
+  return soloEntries;
 }
 
 /**
@@ -95,9 +139,9 @@ export function getExistingSoloEntries(
  */
 export function calculateNonSoloFee(performanceType: string, participantCount: number): number {
   if (performanceType === 'Duet' || performanceType === 'Trio') {
-    return 280 * participantCount; // R280 per person
+    return 280 * participantCount; // R280 per person (restored original pricing)
   } else if (performanceType === 'Group') {
-    return participantCount <= 9 ? 220 * participantCount : 190 * participantCount;
+    return participantCount <= 9 ? 220 * participantCount : 190 * participantCount; // R220 (4-9 people), R190 (10+ people)
   }
   return 0;
 }
@@ -147,34 +191,34 @@ export function validateAndCorrectEntryFee(
 function getSoloFeeExplanation(soloCount: number): string {
   if (soloCount === 1) return 'R400 (first solo)';
   if (soloCount === 2) return 'R350 (package total R750)';
-  if (soloCount === 3) return 'R250 (package total R1000)';
-  if (soloCount === 4) return 'R200 (package total R1200)';
+  if (soloCount === 3) return 'R300 (package total R1050)';
+  if (soloCount === 4) return 'R250 (package total R1300)';
   if (soloCount === 5) return 'R0 (fifth solo is FREE)';
   return 'R100 (additional solo)';
 }
 
 /**
- * Constants for easy reference
+ * Constants for easy reference - using official EODSA fee structure
  */
 export const PRICING_CONSTANTS = {
   SOLO_PACKAGES: {
-    1: 400,
-    2: 750,
-    3: 1000,
-    4: 1200,
-    5: 1200 // 5th is free, so total stays at 1200
+    1: 400,   // R400
+    2: 750,   // R750 
+    3: 1050,  // R1050
+    4: 1300,  // R1300
+    5: 1300   // R1300 (5th is free)
   },
   SOLO_INCREMENTAL: {
-    1: 400,
-    2: 350, // 750 - 400
-    3: 250, // 1000 - 750
-    4: 200, // 1200 - 1000
-    5: 0,   // FREE
-    additional: 100
+    1: 400,   // R400
+    2: 350,   // R350
+    3: 300,   // R300
+    4: 250,   // R250
+    5: 0,     // FREE
+    additional: 100 // R100
   },
   NON_SOLO: {
-    DUET_TRIO_PER_PERSON: 280,
-    SMALL_GROUP_PER_PERSON: 220, // 4-9 people
-    LARGE_GROUP_PER_PERSON: 190  // 10+ people
+    DUET_TRIO_PER_PERSON: 280,    // R280 (restored original)
+    SMALL_GROUP_PER_PERSON: 220,  // R220 (4-9 people)
+    LARGE_GROUP_PER_PERSON: 190   // R190 (10+ people)
   }
 };

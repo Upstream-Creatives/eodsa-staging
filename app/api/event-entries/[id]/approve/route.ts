@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, unifiedDb, initializeDatabase } from '@/lib/database';
+import { autoMarkRegistrationForParticipants } from '@/lib/registration-fee-tracker';
 
 export async function PATCH(
   request: Request,
@@ -33,6 +34,16 @@ export async function PATCH(
     };
 
     await db.updateEventEntry(entryId, updatedEntry);
+
+    // Auto-mark registration fees as paid for all participants since entry is now paid
+    if (entry.participantIds && entry.participantIds.length > 0 && entry.mastery) {
+      try {
+        const registrationResults = await autoMarkRegistrationForParticipants(entry.participantIds, entry.mastery);
+        console.log('Registration fee auto-marking results:', registrationResults);
+      } catch (error) {
+        console.error('Failed to auto-mark registration fees on approval:', error);
+      }
+    }
 
     // Mark registration fees as paid for all participants after admin approval
     if (entry.participantIds && entry.participantIds.length > 0) {

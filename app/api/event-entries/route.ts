@@ -270,10 +270,18 @@ export async function POST(request: NextRequest) {
     if (performanceType === 'Solo') {
       // Get existing solo entries for this dancer/contestant and event
       const allEntries = await db.getAllEventEntries();
+      
+      // For studio entries, we need to count solos for the individual dancer, not the studio
+      let targetEodsaId = body.eodsaId;
+      if (body.participantIds && body.participantIds.length === 1) {
+        // This is a solo entry - use the participant's EODSA ID for counting
+        targetEodsaId = body.participantIds[0];
+      }
+      
       const existingSoloEntries = getExistingSoloEntries(
         allEntries,
         body.eventId,
-        body.eodsaId,
+        targetEodsaId, // Use the individual dancer's EODSA ID
         finalContestantId,
         firstParticipant?.id
       );
@@ -289,7 +297,7 @@ export async function POST(request: NextRequest) {
       validatedFee = feeValidation.validatedFee;
       
       // Log for debugging and monitoring
-      console.log(`Solo pricing calculation for ${body.eodsaId}:`);
+      console.log(`Solo pricing calculation for dancer ${targetEodsaId} (submitted by ${body.eodsaId}):`);
       console.log(`- Event: ${body.eventId}`);
       console.log(`- Existing solo entries: ${existingSoloEntries.length}`);
       console.log(`- This will be solo #${existingSoloEntries.length + 1}`);

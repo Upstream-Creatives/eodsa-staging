@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
+import { autoMarkRegistrationForParticipants } from '@/lib/registration-fee-tracker';
 import { db } from '@/lib/database';
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -112,6 +113,16 @@ export async function POST(request: NextRequest) {
           SET payment_id = ${payment_id}
           WHERE id = ${eventEntry.id}
         `;
+
+        // Auto-mark registration fees as paid for all participants since entry is paid
+        if (entry.participantIds && entry.participantIds.length > 0 && entry.mastery) {
+          try {
+            const registrationResults = await autoMarkRegistrationForParticipants(entry.participantIds, entry.mastery);
+            console.log(`Registration fee auto-marking results for entry ${eventEntry.id}:`, registrationResults);
+          } catch (error) {
+            console.error('Failed to auto-mark registration fees on payment processing:', error);
+          }
+        }
 
         createdEntries.push({
           entryId: eventEntry.id,

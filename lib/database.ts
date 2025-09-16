@@ -2094,11 +2094,21 @@ export const db = {
 
   async getDancersWithRegistrationStatus(dancerIds: string[]) {
     const sqlClient = getSql();
+    // Enhanced query to check both registration_fee_paid column AND existing paid entries
     const result = await sqlClient`
-      SELECT id, name, age, date_of_birth, national_id, eodsa_id,
-             registration_fee_paid, registration_fee_paid_at, registration_fee_mastery_level
-      FROM dancers 
-      WHERE id = ANY(${dancerIds})
+      SELECT d.id, d.name, d.age, d.date_of_birth, d.national_id, d.eodsa_id,
+             d.registration_fee_paid, d.registration_fee_paid_at, d.registration_fee_mastery_level,
+             CASE 
+               WHEN d.registration_fee_paid = TRUE THEN TRUE
+               WHEN EXISTS (
+                 SELECT 1 FROM event_entries ee 
+                 WHERE ee.eodsa_id = d.eodsa_id 
+                 AND ee.payment_status = 'paid'
+               ) THEN TRUE
+               ELSE FALSE
+             END as effective_registration_paid
+      FROM dancers d
+      WHERE d.id = ANY(${dancerIds})
     ` as any[];
     
     return result.map((row: any) => ({
@@ -2108,7 +2118,7 @@ export const db = {
       dateOfBirth: row.date_of_birth,
       nationalId: row.national_id,
       eodsaId: row.eodsa_id,
-      registrationFeePaid: row.registration_fee_paid || false,
+      registrationFeePaid: row.effective_registration_paid || false,
       registrationFeePaidAt: row.registration_fee_paid_at,
       registrationFeeMasteryLevel: row.registration_fee_mastery_level,
       style: '', // For compatibility
@@ -4501,11 +4511,21 @@ export const unifiedDb = {
 
   async getDancersWithRegistrationStatus(dancerIds: string[]) {
     const sqlClient = getSql();
+    // Enhanced query to check both registration_fee_paid column AND existing paid entries
     const result = await sqlClient`
-      SELECT id, name, age, date_of_birth, national_id, eodsa_id,
-             registration_fee_paid, registration_fee_paid_at, registration_fee_mastery_level
-      FROM dancers 
-      WHERE id = ANY(${dancerIds})
+      SELECT d.id, d.name, d.age, d.date_of_birth, d.national_id, d.eodsa_id,
+             d.registration_fee_paid, d.registration_fee_paid_at, d.registration_fee_mastery_level,
+             CASE 
+               WHEN d.registration_fee_paid = TRUE THEN TRUE
+               WHEN EXISTS (
+                 SELECT 1 FROM event_entries ee 
+                 WHERE ee.eodsa_id = d.eodsa_id 
+                 AND ee.payment_status = 'paid'
+               ) THEN TRUE
+               ELSE FALSE
+             END as effective_registration_paid
+      FROM dancers d
+      WHERE d.id = ANY(${dancerIds})
     ` as any[];
     
     return result.map((row: any) => ({
@@ -4515,7 +4535,7 @@ export const unifiedDb = {
       dateOfBirth: row.date_of_birth,
       nationalId: row.national_id,
       eodsaId: row.eodsa_id,
-      registrationFeePaid: row.registration_fee_paid || false,
+      registrationFeePaid: row.effective_registration_paid || false,
       registrationFeePaidAt: row.registration_fee_paid_at,
       registrationFeeMasteryLevel: row.registration_fee_mastery_level,
       style: '', // For compatibility
