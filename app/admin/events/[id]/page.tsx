@@ -234,6 +234,13 @@ export default function EventParticipantsPage() {
         setEntries(prev => prev.map(entry => 
           entry.id === entryId ? { ...entry, approved: true } : entry
         ));
+        
+        // Close the entry modal if it's open
+        setShowEntryModal(false);
+        setEntryModal(null);
+        
+        // Show success message
+        showAlert('Entry approved successfully!', 'success');
       } else {
         const errorData = await response.json();
         showAlert(`Failed to approve entry: ${errorData.error || 'Unknown error'}`, 'error');
