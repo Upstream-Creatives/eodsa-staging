@@ -112,9 +112,7 @@ export default function AdminDashboard() {
   const [dancers, setDancers] = useState<Dancer[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [studioApplications, setStudioApplications] = useState<StudioApplication[]>([]);
-  const [verificationDancers, setVerificationDancers] = useState<Dancer[]>([]);
-  const [verificationStudios, setVerificationStudios] = useState<Studio[]>([]);
-  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'verification' | 'sound-tech'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'judges' | 'assignments' | 'dancers' | 'studios' | 'sound-tech' | 'music-tracking'>('events');
   const [isLoading, setIsLoading] = useState(true);
   const { success, error, warning, info } = useToast();
   const { showAlert, showConfirm, showPrompt } = useAlert();
@@ -156,14 +154,15 @@ export default function AdminDashboard() {
   const [isCleaningDatabase, setIsCleaningDatabase] = useState(false);
   const [cleanDatabaseMessage, setCleanDatabaseMessage] = useState('');
 
-  // Verification processing state
-  const [isProcessingVerification, setIsProcessingVerification] = useState(false);
-  const [verificationMessage, setVerificationMessage] = useState('');
 
   // Email testing state
   const [emailTestResults, setEmailTestResults] = useState('');
   const [testEmail, setTestEmail] = useState('');
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+
+  // Music tracking state
+  const [musicTrackingData, setMusicTrackingData] = useState<any[]>([]);
+  const [loadingMusicTracking, setLoadingMusicTracking] = useState(false);
 
   // Dancer search and filter state
   const [dancerSearchTerm, setDancerSearchTerm] = useState('');
@@ -220,14 +219,13 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes, verificationRes] = await Promise.all([
+      const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes] = await Promise.all([
         fetch('/api/events'),
         fetch('/api/judges'),
         fetch('/api/judge-assignments/nationals-view'),
         fetch('/api/admin/dancers'),
         fetch('/api/admin/studios'),
-        fetch('/api/admin/studio-applications'),
-        fetch('/api/admin/pending-verification')
+        fetch('/api/admin/studio-applications')
       ]);
 
       const eventsData = await eventsRes.json();
@@ -236,7 +234,6 @@ export default function AdminDashboard() {
       const dancersData = await dancersRes.json();
       const studiosData = await studiosRes.json();
       const applicationsData = await applicationsRes.json();
-      const verificationData = await verificationRes.json();
 
       if (eventsData.success) setEvents(eventsData.events);
       if (judgesData.success) setJudges(judgesData.judges);
@@ -244,14 +241,28 @@ export default function AdminDashboard() {
       if (dancersData.success) setDancers(dancersData.dancers);
       if (studiosData.success) setStudios(studiosData.studios);
       if (applicationsData.success) setStudioApplications(applicationsData.applications);
-      if (verificationData.success) {
-        setVerificationDancers(verificationData.data.dancers);
-        setVerificationStudios(verificationData.data.studios);
-      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchMusicTrackingData = async () => {
+    setLoadingMusicTracking(true);
+    try {
+      const response = await fetch('/api/admin/music-tracking');
+      const data = await response.json();
+      if (data.success) {
+        setMusicTrackingData(data.entries);
+      } else {
+        error('Failed to load music tracking data');
+      }
+    } catch (err) {
+      console.error('Error fetching music tracking data:', err);
+      error('Failed to load music tracking data');
+    } finally {
+      setLoadingMusicTracking(false);
     }
   };
 
@@ -708,62 +719,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleProcessVerification = async () => {
-    if (isProcessingVerification) {
-      return;
-    }
-
-    showConfirm(
-      '🔍 Process 48-Hour Verification Window\n\n' +
-      'This will automatically approve all accounts that have passed the 48-hour verification period without being flagged as spam.\n\n' +
-      'Accounts older than 48 hours that are still pending will be approved and moved to the "All" section.\n\n' +
-      'Continue?',
-      () => {
-        performVerificationProcessing();
-      }
-    );
-  };
-
-  const performVerificationProcessing = async () => {
-    setIsProcessingVerification(true);
-    setVerificationMessage('');
-
-    try {
-      const session = localStorage.getItem('adminSession');
-      if (!session) {
-        setVerificationMessage('Error: Session expired. Please log in again.');
-        return;
-      }
-
-      const adminData = JSON.parse(session);
-
-      const response = await fetch('/api/admin/process-verification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          adminId: adminData.id
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setVerificationMessage(`✅ ${data.message}`);
-        // Refresh the dashboard data
-        fetchData();
-        setTimeout(() => setVerificationMessage(''), 7000);
-      } else {
-        setVerificationMessage(`❌ Error: ${data.error || 'Unknown error occurred'}`);
-      }
-    } catch (error) {
-      console.error('Error processing verification:', error);
-      setVerificationMessage('❌ Error processing verification. Please check your connection and try again.');
-    } finally {
-      setIsProcessingVerification(false);
-    }
-  };
 
   const handleApproveDancer = async (dancerId: string) => {
     try {
@@ -1140,42 +1095,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleRejectAccount = async (accountId: string, accountType: 'dancer' | 'studio', accountName: string) => {
-    try {
-      const session = localStorage.getItem('adminSession');
-      if (!session) {
-        error('Session expired. Please log in again.', 7000);
-        return;
-      }
-
-      const adminData = JSON.parse(session);
-
-      const response = await fetch('/api/admin/reject-account', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          accountId,
-          accountType,
-          reason: 'Flagged as potential spam account during 48-hour verification period',
-          adminId: adminData.id
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        success(`${accountType === 'dancer' ? 'Dancer' : 'Studio'} "${accountName}" has been rejected and disabled.`, 6000);
-        fetchData(); // Refresh the data
-      } else {
-        error(data.error || 'An unknown error occurred while rejecting the account.', 8000);
-      }
-    } catch (err) {
-      console.error('Error rejecting account:', err);
-      error('Unable to reject account. Please check your connection and try again.', 8000);
-    }
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('adminSession');
@@ -1187,7 +1106,6 @@ export default function AdminDashboard() {
     setCreateJudgeMessage('');
     setAssignmentMessage('');
     setCleanDatabaseMessage('');
-    setVerificationMessage('');
     setEmailTestResults('');
     setShowCreateEventModal(false);
     setShowCreateJudgeModal(false);
@@ -1390,8 +1308,8 @@ export default function AdminDashboard() {
               { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' },
               { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' },
               { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' },
-              { id: 'verification', label: 'Pending Verification', icon: '🔍', color: 'emerald' },
-              { id: 'sound-tech', label: 'Sound Tech', icon: '🎵', color: 'blue' }
+              { id: 'sound-tech', label: 'Sound Tech', icon: '🎵', color: 'blue' },
+              { id: 'music-tracking', label: 'Music Upload Tracking', icon: '🎼', color: 'cyan' }
             ].map((tab) => (
                 <button
                   key={tab.id}
@@ -2189,172 +2107,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Pending Verification Tab */}
-        {activeTab === 'verification' && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Verification Overview */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-emerald-100">
-              <div className="px-6 py-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-b border-emerald-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
-                      <span className="text-white text-sm">🔍</span>
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900">48-Hour Verification Window</h2>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
-                      {verificationDancers.length + verificationStudios.length} accounts pending
-                    </div>
-                    <button
-                      onClick={handleProcessVerification}
-                      disabled={isProcessingVerification}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium text-sm"
-                    >
-                      {isProcessingVerification ? 'Processing...' : 'Process Expired'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Verification Processing Message */}
-              {verificationMessage && (
-                <div className="mx-6 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                  <p className="text-blue-800 text-sm font-medium">{verificationMessage}</p>
-                </div>
-              )}
-
-              <div className="p-6">
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-                  <div className="flex items-start space-x-3">
-                    <span className="text-blue-500 text-lg">ℹ️</span>
-                    <div>
-                      <h3 className="font-semibold text-blue-900 mb-2">Anti-Spam Protection</h3>
-                      <p className="text-blue-800 text-sm leading-relaxed">
-                        New accounts are automatically activated but monitored for 48 hours. Use the "Reject" button to disable spam accounts. 
-                        Accounts automatically clear from this list after 48 hours and remain active indefinitely.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Recent Dancers */}
-                {verificationDancers.length > 0 && (
-                  <div className="mb-8">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <span className="mr-2">💃</span>
-                      Recent Dancer Registrations ({verificationDancers.length})
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dancer</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">EODSA ID</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registered</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {verificationDancers.map((dancer) => (
-                            <tr key={dancer.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">{dancer.name}</div>
-                                <div className="text-sm text-gray-500">ID: {dancer.nationalId}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                                {dancer.eodsaId}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {dancer.age}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {dancer.email || 'Not provided'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {new Date(dancer.createdAt).toLocaleString()}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <button
-                                  onClick={() => handleRejectAccount(dancer.id, 'dancer', dancer.name)}
-                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                                >
-                                  🚫 Reject
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Recent Studios */}
-                {verificationStudios.length > 0 && (
-                  <div className="mb-8">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <span className="mr-2">🏢</span>
-                      Recent Studio Registrations ({verificationStudios.length})
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Studio</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration #</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registered</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {verificationStudios.map((studio) => (
-                            <tr key={studio.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">{studio.name}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                                {studio.registrationNumber}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {studio.email}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {new Date(studio.createdAt).toLocaleString()}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <button
-                                  onClick={() => handleRejectAccount(studio.id, 'studio', studio.name)}
-                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                                >
-                                  🚫 Reject
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* No pending accounts */}
-                {verificationDancers.length === 0 && verificationStudios.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <span className="text-green-600 text-2xl">✅</span>
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">All Clear!</h3>
-                    <p className="text-gray-500">No accounts pending verification in the last 48 hours.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Sound Tech Tab */}
         {activeTab === 'sound-tech' && (
@@ -2459,6 +2211,185 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Music Upload Tracking Tab */}
+        {activeTab === 'music-tracking' && (
+          <div className="space-y-8 animate-fadeIn">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-cyan-100">
+              <div className="px-6 py-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-b border-cyan-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-sm">🎼</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900">Music Upload Tracking</h2>
+                  </div>
+                  <button
+                    onClick={fetchMusicTrackingData}
+                    disabled={loadingMusicTracking}
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg hover:from-cyan-600 hover:to-blue-700 disabled:bg-gray-400 transition-all duration-200 font-medium"
+                  >
+                    {loadingMusicTracking ? 'Loading...' : 'Refresh Data'}
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                {loadingMusicTracking ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading music tracking data...</p>
+                  </div>
+                ) : musicTrackingData.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <span className="text-4xl mb-4 block">📭</span>
+                    <p className="text-lg">No entries found</p>
+                    <p className="text-sm text-gray-400 mt-2">Click "Refresh Data" to load music upload tracking information</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-2xl">✅</span>
+                          <div>
+                            <p className="text-sm text-green-600 font-medium">Music Uploaded</p>
+                            <p className="text-2xl font-bold text-green-700">
+                              {musicTrackingData.filter(entry => entry.musicFileUrl).length}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-2xl">❌</span>
+                          <div>
+                            <p className="text-sm text-red-600 font-medium">Missing Music</p>
+                            <p className="text-2xl font-bold text-red-700">
+                              {musicTrackingData.filter(entry => !entry.musicFileUrl && entry.entryType === 'live').length}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-2xl">🎥</span>
+                          <div>
+                            <p className="text-sm text-blue-600 font-medium">Virtual Entries</p>
+                            <p className="text-2xl font-bold text-blue-700">
+                              {musicTrackingData.filter(entry => entry.entryType === 'virtual').length}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Entries Table */}
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Entry Details
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Contestant
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Event
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Type
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Music Status
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {musicTrackingData.map((entry) => (
+                            <tr key={entry.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{entry.itemName}</div>
+                                  <div className="text-sm text-gray-500">Item #{entry.itemNumber || 'Not assigned'}</div>
+                                  <div className="text-sm text-gray-500">{entry.mastery} • {entry.itemStyle}</div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{entry.contestantName || 'Unknown'}</div>
+                                  <div className="text-sm text-gray-500">{entry.eodsaId}</div>
+                                  <div className="text-sm text-gray-500">{entry.studioName || 'Independent'}</div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{entry.eventName}</div>
+                                  <div className="text-sm text-gray-500">{entry.eventDate ? new Date(entry.eventDate).toLocaleDateString() : 'TBD'}</div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                  entry.entryType === 'live' 
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {entry.entryType === 'live' ? '🎵 Live' : '🎥 Virtual'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {entry.entryType === 'live' ? (
+                                  entry.musicFileUrl ? (
+                                    <div className="flex items-center space-x-2">
+                                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                        ✅ Uploaded
+                                      </span>
+                                      <span className="text-xs text-gray-500 truncate max-w-[100px]">{entry.musicFileName}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                      ❌ Missing
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                    N/A
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                {entry.musicFileUrl && (
+                                  <a
+                                    href={entry.musicFileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-cyan-600 hover:text-cyan-900"
+                                  >
+                                    🎧 Play
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => window.open(`/admin/events/${entry.eventId}`, '_blank')}
+                                  className="text-indigo-600 hover:text-indigo-900"
+                                >
+                                  📋 View Entry
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
