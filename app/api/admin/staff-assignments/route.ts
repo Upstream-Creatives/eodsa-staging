@@ -42,8 +42,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid role' }, { status: 400 });
     }
 
-    const assignment = await db.createStaffAssignment({ userId, eventId, role, assignedBy: assignedBy || 'admin' });
-    return NextResponse.json({ success: true, assignment });
+    if (eventId === 'all') {
+      // Assign this user to all events
+      const events = await db.getAllEvents();
+      const created: any[] = [];
+      for (const ev of events) {
+        try {
+          created.push(await db.createStaffAssignment({ userId, eventId: ev.id, role, assignedBy: assignedBy || 'admin' }));
+        } catch {}
+      }
+      return NextResponse.json({ success: true, assignments: created });
+    } else {
+      const assignment = await db.createStaffAssignment({ userId, eventId, role, assignedBy: assignedBy || 'admin' });
+      return NextResponse.json({ success: true, assignment });
+    }
   } catch (error) {
     console.error('Error creating staff assignment:', error);
     return NextResponse.json({ success: false, error: 'Failed to create assignment' }, { status: 500 });

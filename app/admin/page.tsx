@@ -554,7 +554,13 @@ function AdminDashboard() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(newJudge),
+        body: JSON.stringify({
+          ...newJudge,
+          immediateAssignment: staffAssignment.eventId ? {
+            eventId: staffAssignment.eventId,
+            role: staffAssignment.role
+          } : undefined
+        }),
       });
 
       const data = await response.json();
@@ -567,6 +573,7 @@ function AdminDashboard() {
           password: '',
           isAdmin: false
         });
+        setStaffAssignment({ userId: '', role: 'announcer', eventId: '' });
         fetchData();
         setShowCreateJudgeModal(false);
         setTimeout(() => setCreateJudgeMessage(''), 5000);
@@ -2981,7 +2988,7 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* Create Judge Modal */}
+      {/* Create Account Modal */}
       {showCreateJudgeModal && (
         <div className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
@@ -2989,9 +2996,9 @@ function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-lg">👨‍⚖️</span>
+                    <span className="text-white text-lg">👤</span>
                   </div>
-                  <h2 className="text-xl font-bold ${themeClasses.textPrimary}">Create New Judge</h2>
+                  <h2 className="text-xl font-bold ${themeClasses.textPrimary}">Create Account</h2>
                 </div>
                 <button
                   onClick={() => setShowCreateJudgeModal(false)}
@@ -3005,7 +3012,7 @@ function AdminDashboard() {
             <form onSubmit={handleCreateJudge} className="p-6">
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Judge Name</label>
+                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Full Name</label>
                   <input
                     type="text"
                       value={newJudge.name}
@@ -3070,6 +3077,73 @@ function AdminDashboard() {
                     </div>
                   </div>
                   
+              {/* Optional immediate staff assignment */}
+              <div className="mt-6 p-4 rounded-xl border border-gray-200">
+                <h3 className="text-sm font-semibold mb-3">Optional: Assign this user to an event</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium mb-2">Role</label>
+                    <select
+                      value={staffAssignment.role}
+                      onChange={(e) => setStaffAssignment(prev => ({ ...prev, role: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="announcer">Announcer</option>
+                      <option value="backstage_manager">Backstage Manager</option>
+                      <option value="registration">Registration</option>
+                      <option value="media">Media</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-2">Event</label>
+                    <select
+                      value={staffAssignment.eventId}
+                      onChange={(e) => setStaffAssignment(prev => ({ ...prev, eventId: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">No immediate assignment</option>
+                      <option value="all">All current events</option>
+                      {events.map(event => (
+                        <option key={event.id} value={event.id}>{event.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      disabled={!staffAssignment.eventId}
+                      onClick={async () => {
+                        try {
+                          setIsAssigningStaff(true);
+                          // Ensure the just-created user's id is used after creation (handleCreateJudge will set it)
+                          const res = await fetch('/api/admin/staff-assignments', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              userId: staffAssignment.userId || '',
+                              eventId: staffAssignment.eventId,
+                              role: staffAssignment.role,
+                            })
+                          });
+                          const data = await res.json();
+                          if (!res.ok || !data.success) throw new Error(data.error || 'Failed');
+                          setStaffAssignments(prev => [data.assignment, ...prev]);
+                          alert('Assigned successfully');
+                        } catch (e) {
+                          alert('Failed to assign; create the user first then assign from Staff list.');
+                        } finally {
+                          setIsAssigningStaff(false);
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                    >
+                      Assign Now
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Tip: You can also assign later from the Staff list.</p>
+              </div>
+
               {createJudgeMessage && (
                 <div className={`mt-6 p-4 rounded-xl font-medium animate-slideIn ${
                   createJudgeMessage.includes('Error') 
@@ -3106,7 +3180,7 @@ function AdminDashboard() {
                   ) : (
                     <>
                       <span>✨</span>
-                      <span>Create Judge</span>
+                      <span>Create Account</span>
                     </>
                   )}
                     </button>
