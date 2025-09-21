@@ -3023,6 +3023,14 @@ export const db = {
     const sqlClient = getSql();
     const timestamp = new Date().toISOString();
     
+    // Ensure columns exist for announcer tracking (idempotent)
+    try {
+      await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced BOOLEAN DEFAULT FALSE`;
+      await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_by TEXT`;
+      await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_at TEXT`;
+      await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announcer_notes TEXT`;
+    } catch {}
+
     await sqlClient`
       UPDATE performances 
       SET announced = true, announced_by = ${announcedBy}, announced_at = ${timestamp}, announcer_notes = COALESCE(${note || null}, announcer_notes)

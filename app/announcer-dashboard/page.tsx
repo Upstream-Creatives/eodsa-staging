@@ -142,9 +142,7 @@ export default function AnnouncerDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ performanceId, announcedBy: user?.id || 'announcer', note })
       });
-      if (res.ok) {
-        success('Announcement note saved');
-      }
+      if (res.ok) success('Announcement note saved'); else error('Failed to save note');
     } catch {}
   };
 
@@ -198,8 +196,20 @@ export default function AnnouncerDashboard() {
     }
   };
 
-  const handlePerformanceReorder = (reorderedPerformances: any) => {
-    setPerformances(reorderedPerformances);
+  const handlePerformanceReorder = (reorderedPerformances: any[]) => {
+    // Merge new itemNumbers into existing objects; don't replace objects (prevents undefined fields)
+    setPerformances(prev => {
+      const idToItemNumber = new Map(reorderedPerformances.map((r: any) => [r.id, r.itemNumber]));
+      const merged = prev.map(p => idToItemNumber.has(p.id) ? { ...p, itemNumber: idToItemNumber.get(p.id)! } : p);
+      // Keep list sorted by itemNumber, then title
+      merged.sort((a, b) => {
+        if (a.itemNumber && b.itemNumber) return a.itemNumber - b.itemNumber;
+        if (a.itemNumber && !b.itemNumber) return -1;
+        if (!a.itemNumber && b.itemNumber) return 1;
+        return a.title.localeCompare(b.title);
+      });
+      return merged;
+    });
     success('Performance order updated by backstage');
   };
 
@@ -266,7 +276,8 @@ export default function AnnouncerDashboard() {
         setActivePrompt(null);
         success('Announcing now');
       } else {
-        error('Failed to set item in progress');
+        const msg = await res.json().catch(() => ({} as any));
+        error(msg?.error || 'Failed to set item in progress');
       }
     } catch (e) {
       error('Network error starting announcement');
@@ -481,9 +492,11 @@ export default function AnnouncerDashboard() {
                           </h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1">
                             <div>
-                              <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
-                                <strong>Choreographer:</strong> {performance.choreographer}
-                              </p>
+                              {performance.choreographer && (
+                                <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
+                                  <strong>Choreographer:</strong> {performance.choreographer}
+                                </p>
+                              )}
                               <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
                                 <strong>Style:</strong> {performance.itemStyle} • <strong>Level:</strong> {performance.mastery}
                               </p>
@@ -494,13 +507,17 @@ export default function AnnouncerDashboard() {
                               )}
                             </div>
                             <div>
-                              <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
-                                <strong>Performer(s):</strong> {performance.participantNames.length === 1 ? performance.participantNames[0] : `${performance.participantNames.length} performers`}
-                              </p>
-                              {performance.participantNames.length > 1 && (
-                                <p className={`text-xs ${performance.status === 'completed' ? 'text-green-600' : performance.announced ? 'text-gray-400' : 'text-gray-600'}`}>
-                                  {performance.participantNames.join(', ')}
-                                </p>
+                              {Array.isArray(performance.participantNames) && (
+                                <>
+                                  <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
+                                    <strong>Performer(s):</strong> {performance.participantNames.length === 1 ? performance.participantNames[0] : `${performance.participantNames.length} performers`}
+                                  </p>
+                                  {performance.participantNames.length > 1 && (
+                                    <p className={`text-xs ${performance.status === 'completed' ? 'text-green-600' : performance.announced ? 'text-gray-400' : 'text-gray-600'}`}>
+                                      {performance.participantNames.join(', ')}
+                                    </p>
+                                  )}
+                                </>
                               )}
                           <p className={`text-xs ${performance.status === 'completed' ? 'text-green-600' : performance.announced ? 'text-gray-400' : 'text-gray-600'}`}>
                             {performance.entryType?.toUpperCase()}

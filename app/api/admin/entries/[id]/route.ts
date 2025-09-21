@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { unifiedDb, initializeDatabase } from '@/lib/database';
+import { db, unifiedDb, initializeDatabase } from '@/lib/database';
 
 // Admin-only: Delete a competition entry
 export async function DELETE(
@@ -51,5 +51,35 @@ export async function DELETE(
       { error: 'Failed to delete entry' },
       { status: 500 }
     );
+  }
+}
+
+// Admin: Update entry fields (used by Sound Tech to save uploaded music)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const entryId = id;
+    const body = await request.json();
+    const { musicFileUrl, musicFileName } = body || {};
+
+    if (!musicFileUrl || !musicFileName) {
+      return NextResponse.json(
+        { success: false, error: 'musicFileUrl and musicFileName are required' },
+        { status: 400 }
+      );
+    }
+
+    await db.updateEventEntry(entryId, {
+      musicFileUrl,
+      musicFileName
+    });
+
+    return NextResponse.json({ success: true, message: 'Entry updated' });
+  } catch (error) {
+    console.error('Error updating entry:', error);
+    return NextResponse.json({ success: false, error: 'Failed to update entry' }, { status: 500 });
   }
 } 

@@ -29,34 +29,34 @@ export default function RealtimeUpdates({
     if (!socket.connected) return;
 
     const handleReorder = (data: any) => {
-      if (data.eventId === eventId && onPerformanceReorder) {
+      if ((!eventId || data.eventId === eventId) && onPerformanceReorder) {
         onPerformanceReorder(data.performances);
         addNotification('🔄 Performance order updated');
       }
     };
 
     const handleStatus = (data: any) => {
-      if (data.eventId === eventId && onPerformanceStatus) {
+      if ((!eventId || data.eventId === eventId) && onPerformanceStatus) {
         onPerformanceStatus(data);
         addNotification(`📊 Performance status: ${data.status}`);
       }
     };
 
     const handleEventControl = (data: any) => {
-      if (data.eventId === eventId && onEventControl) {
+      if ((!eventId || data.eventId === eventId) && onEventControl) {
         onEventControl(data);
         addNotification(`🎯 Event ${data.action}ed`);
       }
     };
 
     const handleNotification = (data: any) => {
-      if (!data.eventId || data.eventId === eventId) {
+      if (!data.eventId || !eventId || data.eventId === eventId) {
         addNotification(data.message);
       }
     };
 
     const handlePresence = (data: any) => {
-      if (data.eventId === eventId && onPresenceUpdate) {
+      if ((!eventId || data.eventId === eventId) && onPresenceUpdate) {
         onPresenceUpdate(data);
         addNotification(`👥 Presence: ${data.present ? 'Present' : 'Absent'}`);
       }

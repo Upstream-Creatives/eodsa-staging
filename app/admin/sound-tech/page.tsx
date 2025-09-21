@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MusicPlayer from '@/components/MusicPlayer';
+import MusicUpload from '@/components/MusicUpload';
 import { useToast } from '@/components/ui/simple-toast';
 import { ThemeProvider, useTheme, getThemeClasses } from '@/components/providers/ThemeProvider';
 import RealtimeUpdates from '@/components/RealtimeUpdates';
@@ -84,10 +85,36 @@ function SoundTechPage() {
       if (entriesData.success) {
         console.log('📊 Sound Tech: Fetched entries:', entriesData.entries);
         console.log('📊 Live entries with music:', entriesData.entries?.filter((e: any) => e.entryType === 'live' && e.musicFileUrl));
-        setEntries(entriesData.entries || []);
+        let baseEntries = entriesData.entries || [];
+        // If a specific event is selected, map in the latest item numbers from performances
+        if (selectedEvent && selectedEvent !== 'all') {
+          try {
+            const perfRes = await fetch(`/api/events/${selectedEvent}/performances`);
+            const perfData = await perfRes.json();
+            if (perfData.success) {
+              const map = new Map<string, number>();
+              for (const p of perfData.performances) {
+                if (p.eventEntryId && p.itemNumber) {
+                  map.set(p.eventEntryId, p.itemNumber);
+                }
+              }
+              baseEntries = baseEntries.map((e: any) => (
+                e.eventId === selectedEvent && map.has(e.id)
+                  ? { ...e, itemNumber: map.get(e.id) }
+                  : e
+              ));
+            }
+          } catch {}
+        }
+        setEntries(baseEntries);
       }
       if (eventsData.success) {
-        setEvents(eventsData.events || []);
+        const ev = eventsData.events || [];
+        setEvents(ev);
+        // Default to first event for realtime join if currently "all"
+        if ((selectedEvent === 'all' || !selectedEvent) && ev.length > 0) {
+          setSelectedEvent(ev[0].id);
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -121,9 +148,16 @@ function SoundTechPage() {
     
     return matchesEvent && matchesEntryType && matchesSearch;
   });
+  // Sort consistently by program order then name
+  const sortedFilteredEntries = [...filteredEntries].sort((a, b) => {
+    if (a.itemNumber && b.itemNumber) return a.itemNumber - b.itemNumber;
+    if (a.itemNumber && !b.itemNumber) return -1;
+    if (!a.itemNumber && b.itemNumber) return 1;
+    return a.itemName.localeCompare(b.itemName);
+  });
   // Sound desk must see ALL live entries, even without music
-  const liveEntries = filteredEntries.filter(entry => entry.entryType === 'live');
-  const virtualEntries = filteredEntries.filter(entry => entry.entryType === 'virtual' && entry.videoExternalUrl);
+  const liveEntries = sortedFilteredEntries.filter(entry => entry.entryType === 'live');
+  const virtualEntries = sortedFilteredEntries.filter(entry => entry.entryType === 'virtual' && entry.videoExternalUrl);
 
   const downloadAllMusic = () => {
     liveEntries.forEach(entry => {
@@ -199,8 +233,26 @@ function SoundTechPage() {
   }
 
   const handleRealtimeReorder = async () => {
-    // Simply refetch to reflect latest item numbers synced to entries
-    await fetchData();
+    // Update item numbers from the latest performances without disrupting filters
+    if (!selectedEvent || selectedEvent === 'all') {
+      await fetchData();
+      return;
+    }
+    try {
+      const perfRes = await fetch(`/api/events/${selectedEvent}/performances`);
+      const perfData = await perfRes.json();
+      if (perfData.success) {
+        const map = new Map<string, number>();
+        for (const p of perfData.performances) {
+          if (p.eventEntryId && p.itemNumber) map.set(p.eventEntryId, p.itemNumber);
+        }
+        setEntries(prev => prev.map((e: any) => (
+          e.eventId === selectedEvent && map.has(e.id) ? { ...e, itemNumber: map.get(e.id) } : e
+        )));
+      }
+    } catch {
+      await fetchData();
+    }
   };
 
   return (
@@ -385,8 +437,33 @@ function SoundTechPage() {
                           </div>
                         )}
                         {!entry.musicFileUrl && (
-                          <div className="mt-4 p-3 border border-yellow-200 bg-yellow-50 text-yellow-800 rounded-md text-sm">
-                            Upload outstanding — no track uploaded yet.
+                          <div className="mt-4">
+                            <div className="mb-2 p-3 border border-yellow-200 bg-yellow-50 text-yellow-800 rounded-md text-sm">
+                              Upload outstanding — no track uploaded yet.
+                            </div>
+                            <MusicUpload
+                              currentFile={null}
+                              variant="light"
+                              compact
+                              onUploadSuccess={async (file) => {
+                                // Persist music info to entry and refetch
+                                try {
+                                  await fetch(`/api/admin/entries/${entry.id}`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      musicFileUrl: file.url,
+                                      musicFileName: file.originalFilename
+                                    })
+                                  });
+                                  success('Music uploaded and saved');
+                                  await fetchData();
+                                } catch (e) {
+                                  error('Failed to save uploaded music');
+                                }
+                              }}
+                              onUploadError={(err) => error(err)}
+                            />
                           </div>
                         )}
                       </div>
