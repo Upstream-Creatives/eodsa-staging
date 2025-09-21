@@ -525,15 +525,6 @@ export default function JudgeDashboard() {
     };
   };
 
-  // Compute Solo/Duet/Trio/Group from participant count
-  const getPerformanceTypeLabel = (p: { participantNames: string[] }): 'Solo' | 'Duet' | 'Trio' | 'Group' => {
-    const count = Array.isArray(p.participantNames) ? p.participantNames.length : 0;
-    if (count <= 1) return 'Solo';
-    if (count === 2) return 'Duet';
-    if (count === 3) return 'Trio';
-    return 'Group';
-  };
-
   const handleSubmitScore = async () => {
     if (!selectedPerformance) return;
     
@@ -758,10 +749,6 @@ export default function JudgeDashboard() {
                     <div>
                       <p className="text-gray-600">Participants</p>
                       <p className="font-semibold text-gray-900">{selectedPerformance.participantNames.join(', ')}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Type</p>
-                      <p className="font-semibold text-gray-900">{getPerformanceTypeLabel(selectedPerformance)}</p>
                     </div>
                     {selectedPerformance.mastery && (
                       <div>
@@ -1120,9 +1107,6 @@ export default function JudgeDashboard() {
                                       {performance.mastery}
                                     </span>
                                   )}
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    {getPerformanceTypeLabel(performance)}
-                                  </span>
                                   <button 
                                     className="sm:hidden text-xs text-blue-600 underline"
                                     onClick={(e) => {

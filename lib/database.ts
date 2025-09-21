@@ -3120,46 +3120,6 @@ export const db = {
       WHERE id = ${performanceId}
     `;
     return { success: true };
-  },
-
-  // Staff assignments (non-judge roles) helpers
-  async getStaffAssignmentsByEvent(eventId: string, role?: string) {
-    const sqlClient = getSql();
-    const rows = role
-      ? await sqlClient`
-          SELECT * FROM staff_event_assignments
-          WHERE event_id = ${eventId} AND role = ${role}
-          ORDER BY assigned_at DESC
-        ` as any[]
-      : await sqlClient`
-          SELECT * FROM staff_event_assignments
-          WHERE event_id = ${eventId}
-          ORDER BY assigned_at DESC
-        ` as any[];
-    return rows;
-  },
-
-  async getAllStaffAssignments() {
-    const sqlClient = getSql();
-    const rows = await sqlClient`SELECT * FROM staff_event_assignments ORDER BY assigned_at DESC` as any[];
-    return rows;
-  },
-
-  async createStaffAssignment(input: { userId: string; eventId: string; role: 'backstage_manager' | 'announcer' | 'registration' | 'media'; assignedBy?: string; }) {
-    const sqlClient = getSql();
-    const id = `staff-assign-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const assignedAt = new Date().toISOString();
-    await sqlClient`
-      INSERT INTO staff_event_assignments (id, user_id, event_id, role, status, assigned_by, assigned_at)
-      VALUES (${id}, ${input.userId}, ${input.eventId}, ${input.role}, 'active', ${input.assignedBy || 'system'}, ${assignedAt})
-    `;
-    return { id, ...input, status: 'active', assignedAt };
-  },
-
-  async deleteStaffAssignment(id: string) {
-    const sqlClient = getSql();
-    await sqlClient`DELETE FROM staff_event_assignments WHERE id = ${id}`;
-    return { success: true };
   }
 };
 

@@ -309,38 +309,16 @@ export default function BackstageDashboard() {
   );
 
   useEffect(() => {
-    // Check admin or assigned backstage_manager access
-    const adminSession = localStorage.getItem('adminSession');
-    const backstageSession = localStorage.getItem('backstageSession');
-    const admin = adminSession ? JSON.parse(adminSession) : null;
-    const staff = backstageSession ? JSON.parse(backstageSession) : null;
+    // Check admin authentication
+    const session = localStorage.getItem('adminSession');
+    if (!session) {
+      router.push('/portal/admin');
+      return;
+    }
 
-    const proceed = async () => {
-      if (!eventId) return;
-      if (admin) {
-        await loadEventData();
-        return;
-      }
-      if (staff) {
-        try {
-          const res = await fetch(`/api/admin/staff-assignments?eventId=${eventId}&role=backstage_manager`);
-          const data = await res.json();
-          const ok = data.success && (data.assignments || []).some((a: any) => a.user_id === staff.id && a.status === 'active');
-          if (!ok) {
-            router.push('/backstage-dashboard');
-            return;
-          }
-          await loadEventData();
-          return;
-        } catch {
-          router.push('/backstage-dashboard');
-          return;
-        }
-      }
-      router.push('/portal/backstage');
-    };
-
-    proceed();
+    if (eventId) {
+      loadEventData();
+    }
   }, [eventId, router]);
 
   // Set up socket listeners

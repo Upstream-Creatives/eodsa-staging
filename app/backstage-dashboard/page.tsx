@@ -31,23 +31,13 @@ export default function BackstageDashboard() {
 
   const fetchEvents = async () => {
     try {
-      // Load only events this user is assigned to for backstage
-      const response = await fetch(`/api/admin/staff-assignments?eventId=all&role=backstage_manager`);
-      const assignmentsRes = await response.json();
-      let allowedEventIds: string[] = [];
-      if (assignmentsRes.success) {
-        allowedEventIds = (assignmentsRes.assignments || [])
-          .filter((a: any) => a.user_id === user?.id)
-          .map((a: any) => a.event_id);
-      }
-
-      const eventsRes = await fetch('/api/events');
-      const eventsData = await eventsRes.json();
-      if (eventsData.success) {
-        const all = eventsData.events || [];
-        const filtered = allowedEventIds.length > 0 ? all.filter((e: any) => allowedEventIds.includes(e.id)) : [];
-        setEvents(filtered);
-        if (filtered.length > 0) setSelectedEvent(filtered[0].id);
+      const response = await fetch('/api/events');
+      const data = await response.json();
+      if (data.success) {
+        setEvents(data.events || []);
+        if (data.events && data.events.length > 0) {
+          setSelectedEvent(data.events[0].id);
+        }
       }
     } catch (error) {
       console.error('Error fetching events:', error);

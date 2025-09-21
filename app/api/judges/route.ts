@@ -22,7 +22,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, password, isAdmin, immediateAssignment } = body as any;
+    const { name, email, password, isAdmin } = body;
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -63,20 +63,6 @@ export async function POST(request: Request) {
       role: Boolean(isAdmin) ? 'admin' : 'judge',
       specialization: []
     });
-
-    // Optional immediate staff assignment for non-admin roles
-    if (immediateAssignment && immediateAssignment.eventId && immediateAssignment.role) {
-      try {
-        await db.createStaffAssignment({
-          userId: newJudge.id,
-          eventId: immediateAssignment.eventId,
-          role: immediateAssignment.role,
-          assignedBy: 'admin'
-        });
-      } catch (e) {
-        console.warn('Immediate staff assignment failed:', e);
-      }
-    }
 
     // Return success without password
     const { password: _, ...judgeResponse } = newJudge;

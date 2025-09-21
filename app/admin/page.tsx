@@ -189,10 +189,6 @@ function AdminDashboard() {
   const [selectedDancerFinances, setSelectedDancerFinances] = useState<any>(null);
   const [loadingFinances, setLoadingFinances] = useState(false);
   const [showAssignJudgeModal, setShowAssignJudgeModal] = useState(false);
-  const [showAssignStaffModal, setShowAssignStaffModal] = useState(false);
-  const [staffAssignment, setStaffAssignment] = useState({ userId: '', role: 'announcer', eventId: '' });
-  const [isAssigningStaff, setIsAssigningStaff] = useState(false);
-  const [staffAssignments, setStaffAssignments] = useState<any[]>([]);
   const [showEmailTestModal, setShowEmailTestModal] = useState(false);
 
   // Edit event state
@@ -554,13 +550,7 @@ function AdminDashboard() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...newJudge,
-          immediateAssignment: staffAssignment.eventId ? {
-            eventId: staffAssignment.eventId,
-            role: staffAssignment.role
-          } : undefined
-        }),
+        body: JSON.stringify(newJudge),
       });
 
       const data = await response.json();
@@ -573,7 +563,6 @@ function AdminDashboard() {
           password: '',
           isAdmin: false
         });
-        setStaffAssignment({ userId: '', role: 'announcer', eventId: '' });
         fetchData();
         setShowCreateJudgeModal(false);
         setTimeout(() => setCreateJudgeMessage(''), 5000);
@@ -1586,11 +1575,10 @@ function AdminDashboard() {
                               </span>
                             ) : (
                               <div className="flex flex-wrap gap-1">
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">👨‍⚖️ Judge</span>
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">🎭 Backstage</span>
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800 border border-orange-200">📢 Announcer</span>
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-teal-100 text-teal-800 border border-teal-200">✅ Registration</span>
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-violet-100 text-violet-800 border border-violet-200">📸 Media</span>
+                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                                  👨‍⚖️ Judge
+                                </span>
+                                {/* Additional role badges can be added here based on staff roles */}
                               </div>
                             )}
                         </td>
@@ -1602,10 +1590,10 @@ function AdminDashboard() {
                               {!judge.isAdmin && (
                                 <>
                                   <button
-                                    onClick={() => { setShowAssignStaffModal(true); setStaffAssignment({ userId: judge.id, role: 'announcer', eventId: '' }); }}
+                                    onClick={() => {/* TODO: Implement edit roles functionality */}}
                                     className="inline-flex items-center px-3 py-1 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors"
                                   >
-                                    🔗 Assign to Event
+                                    ⚙️ Roles
                                   </button>
                                   <button
                                     onClick={() => handleDeleteJudge(judge.id, judge.name)}
@@ -2988,7 +2976,7 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* Create Account Modal */}
+      {/* Create Judge Modal */}
       {showCreateJudgeModal && (
         <div className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
@@ -2996,9 +2984,9 @@ function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-lg">👤</span>
+                    <span className="text-white text-lg">👨‍⚖️</span>
                   </div>
-                  <h2 className="text-xl font-bold ${themeClasses.textPrimary}">Create Account</h2>
+                  <h2 className="text-xl font-bold ${themeClasses.textPrimary}">Create New Judge</h2>
                 </div>
                 <button
                   onClick={() => setShowCreateJudgeModal(false)}
@@ -3012,7 +3000,7 @@ function AdminDashboard() {
             <form onSubmit={handleCreateJudge} className="p-6">
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Full Name</label>
+                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Judge Name</label>
                   <input
                     type="text"
                       value={newJudge.name}
@@ -3077,73 +3065,6 @@ function AdminDashboard() {
                     </div>
                   </div>
                   
-              {/* Optional immediate staff assignment */}
-              <div className="mt-6 p-4 rounded-xl border border-gray-200">
-                <h3 className="text-sm font-semibold mb-3">Optional: Assign this user to an event</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium mb-2">Role</label>
-                    <select
-                      value={staffAssignment.role}
-                      onChange={(e) => setStaffAssignment(prev => ({ ...prev, role: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                    >
-                      <option value="announcer">Announcer</option>
-                      <option value="backstage_manager">Backstage Manager</option>
-                      <option value="registration">Registration</option>
-                      <option value="media">Media</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-2">Event</label>
-                    <select
-                      value={staffAssignment.eventId}
-                      onChange={(e) => setStaffAssignment(prev => ({ ...prev, eventId: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">No immediate assignment</option>
-                      <option value="all">All current events</option>
-                      {events.map(event => (
-                        <option key={event.id} value={event.id}>{event.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      disabled={!staffAssignment.eventId}
-                      onClick={async () => {
-                        try {
-                          setIsAssigningStaff(true);
-                          // Ensure the just-created user's id is used after creation (handleCreateJudge will set it)
-                          const res = await fetch('/api/admin/staff-assignments', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              userId: staffAssignment.userId || '',
-                              eventId: staffAssignment.eventId,
-                              role: staffAssignment.role,
-                            })
-                          });
-                          const data = await res.json();
-                          if (!res.ok || !data.success) throw new Error(data.error || 'Failed');
-                          setStaffAssignments(prev => [data.assignment, ...prev]);
-                          alert('Assigned successfully');
-                        } catch (e) {
-                          alert('Failed to assign; create the user first then assign from Staff list.');
-                        } finally {
-                          setIsAssigningStaff(false);
-                        }
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
-                    >
-                      Assign Now
-                    </button>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">Tip: You can also assign later from the Staff list.</p>
-              </div>
-
               {createJudgeMessage && (
                 <div className={`mt-6 p-4 rounded-xl font-medium animate-slideIn ${
                   createJudgeMessage.includes('Error') 
@@ -3180,7 +3101,7 @@ function AdminDashboard() {
                   ) : (
                     <>
                       <span>✨</span>
-                      <span>Create Account</span>
+                      <span>Create Judge</span>
                     </>
                   )}
                     </button>
@@ -3292,119 +3213,6 @@ function AdminDashboard() {
         </div>
             </form>
       </div>
-        </div>
-      )}
-
-      {/* Assign Staff Modal */}
-      {showAssignStaffModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-lg">🔗</span>
-                  </div>
-                  <h2 className="text-xl font-bold text-gray-900">Assign Staff to Event</h2>
-                </div>
-                <button onClick={() => setShowAssignStaffModal(false)} className="text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                  <span className="text-2xl">×</span>
-                </button>
-              </div>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                try {
-                  setIsAssigningStaff(true);
-                  const res = await fetch('/api/admin/staff-assignments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      userId: staffAssignment.userId,
-                      eventId: staffAssignment.eventId,
-                      role: staffAssignment.role,
-                    })
-                  });
-                  const data = await res.json();
-                  if (!res.ok || !data.success) throw new Error(data.error || 'Failed');
-                  setStaffAssignments(prev => [data.assignment, ...prev]);
-                  setShowAssignStaffModal(false);
-                } catch (err) {
-                  console.error(err);
-                  alert('Failed to create assignment');
-                } finally {
-                  setIsAssigningStaff(false);
-                }
-              }}
-              className="p-6"
-            >
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Select Staff Role</label>
-                  <select
-                    value={staffAssignment.role}
-                    onChange={(e) => setStaffAssignment(prev => ({ ...prev, role: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-base font-medium"
-                    required
-                  >
-                    <option value="announcer">Announcer</option>
-                    <option value="backstage_manager">Backstage Manager</option>
-                    <option value="registration">Registration</option>
-                    <option value="media">Media</option>
-                  </select>
-                </div>
-
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Staff Member</label>
-                  <select
-                    value={staffAssignment.userId}
-                    onChange={(e) => setStaffAssignment(prev => ({ ...prev, userId: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-base font-medium"
-                    required
-                  >
-                    <option value="">Choose a user</option>
-                    {judges.filter(j => !j.isAdmin).map(j => (
-                      <option key={j.id} value={j.id}>{j.name} ({j.email})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Event</label>
-                  <select
-                    value={staffAssignment.eventId}
-                    onChange={(e) => setStaffAssignment(prev => ({ ...prev, eventId: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-base font-medium"
-                    required
-                  >
-                    <option value="">Choose an event</option>
-                    {events.map(event => (
-                      <option key={event.id} value={event.id}>{event.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setShowAssignStaffModal(false)}
-                  className={`px-6 py-3 border border-gray-300 ${themeClasses.textSecondary} rounded-xl hover:bg-gray-50 transition-colors font-medium`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isAssigningStaff}
-                  className="inline-flex items-center space-x-3 px-8 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg font-semibold"
-                >
-                  {isAssigningStaff ? 'Assigning...' : 'Assign Staff'}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 
