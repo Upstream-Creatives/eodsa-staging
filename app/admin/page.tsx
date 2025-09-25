@@ -292,6 +292,83 @@ function AdminDashboard() {
     }
   };
 
+  const bulkClearMusic = async () => {
+    const targets = musicTrackingData.filter(e => e.entryType === 'live' && !e.videoExternalUrl && !e.musicFileUrl);
+    if (targets.length === 0) {
+      warning('No live entries without music in current filter');
+      return;
+    }
+    if (!confirm(`Remove music from ${targets.length} entries? This allows contestants to re-upload.`)) return;
+
+    try {
+      const session = localStorage.getItem('adminSession');
+      const adminId = session ? JSON.parse(session).id : undefined;
+      if (!adminId) { error('Admin session required'); return; }
+
+      let done = 0, failed = 0;
+      for (const entry of targets) {
+        try {
+          await fetch(`/api/admin/entries/${entry.id}/remove-music`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminId })
+          });
+          done++;
+        } catch {
+          failed++;
+        }
+      }
+      info(`Cleared ${done} entries${failed ? `, ${failed} failed` : ''}`);
+      await fetchMusicTrackingData({ entryType: activeBackendFilter === 'all' ? undefined : activeBackendFilter });
+    } catch (e) {
+      error('Bulk clear failed');
+    }
+  };
+
+  const bulkClearVideos = async () => {
+    const targets = musicTrackingData.filter(e => e.entryType === 'virtual' && e.videoExternalUrl);
+    if (targets.length === 0) { warning('No virtual entries with links in current filter'); return; }
+    if (!confirm(`Remove video links from ${targets.length} entries?`)) return;
+    try {
+      let done = 0, failed = 0;
+      for (const entry of targets) {
+        try {
+          const res = await fetch(`/api/admin/entries/${entry.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoExternalUrl: '' })
+          });
+          if (res.ok) done++; else failed++;
+        } catch { failed++; }
+      }
+      info(`Cleared ${done} video links${failed ? `, ${failed} failed` : ''}`);
+      await fetchMusicTrackingData({ entryType: activeBackendFilter === 'all' ? undefined : activeBackendFilter });
+    } catch { error('Bulk clear videos failed'); }
+  };
+
+  const exportProgramCsv = () => {
+    const rows = [['Item #','Title','Contestant','Participants','Type','Style','Level','Event','Music','Video']];
+    for (const e of musicTrackingData) {
+      rows.push([
+        e.itemNumber || '',
+        e.itemName || '',
+        e.contestantName || '',
+        Array.isArray(e.participantNames) ? e.participantNames.join('; ') : '',
+        e.entryType || '',
+        e.itemStyle || '',
+        e.mastery || '',
+        e.eventName || '',
+        e.musicFileUrl ? 'Yes' : 'No',
+        e.videoExternalUrl ? 'Yes' : 'No'
+      ]);
+    }
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'program-order.csv'; a.click(); URL.revokeObjectURL(url);
+  };
+
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -2447,6 +2524,61 @@ function AdminDashboard() {
                     <div className={`overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin ${theme === 'dark' ? 'scrollbar-thumb-gray-600 scrollbar-track-gray-800' : 'scrollbar-thumb-gray-300 scrollbar-track-gray-100'}`}>
                       <div className="inline-block min-w-full align-middle">
                         <div className={`overflow-hidden shadow-sm ring-1 sm:rounded-lg ${theme === 'dark' ? 'ring-gray-600 ring-opacity-50' : 'ring-black ring-opacity-5'}`}>
+                          <div className="px-4 py-2 flex justify-end gap-2">
+                            <button
+                              onClick={bulkClearMusic}
+                              className="px-3 py-1.5 bg-red-600 text-white rounded-md text-xs font-semibold hover:bg-red-700"
+                              title="Clear music for all currently filtered live entries needing uploads"
+                            >
+                              Clear Music (Filtered)
+                            </button>
+                            <button
+                              onClick={bulkClearVideos}
+                              className="ml-2 px-3 py-1.5 bg-purple-600 text-white rounded-md text-xs font-semibold hover:bg-purple-700"
+                              title="Clear video links for all currently filtered virtual entries"
+                            >
+                              Clear Videos (Filtered)
+                            </button>
+                            <button
+                              onClick={exportProgramCsv}
+                              className="ml-2 px-3 py-1.5 bg-gray-800 text-white rounded-md text-xs font-semibold hover:bg-black"
+                              title="Export current program view to CSV"
+                            >
+                              Export Program CSV
+                            </button>
+                            <select
+                              onChange={(e) => {
+                                const val = e.target.value; (async () => { try { await (async () => {
+                                  const eventId = val; if (!eventId) return;
+                                  if (!confirm('Archive media for this event? This clears music and video links.')) return;
+                                  try {
+                                    const session = localStorage.getItem('adminSession');
+                                    const adminId = session ? JSON.parse(session).id : undefined;
+                                    // Clear music
+                                    const musicTargets = musicTrackingData.filter(e => e.eventId === eventId && e.entryType === 'live' && e.musicFileUrl);
+                                    for (const entry of musicTargets) {
+                                      await fetch(`/api/admin/entries/${entry.id}/remove-music`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId }) });
+                                    }
+                                    // Clear videos
+                                    const videoTargets = musicTrackingData.filter(e => e.eventId === eventId && e.entryType === 'virtual' && e.videoExternalUrl);
+                                    for (const entry of videoTargets) {
+                                      await fetch(`/api/admin/entries/${entry.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoExternalUrl: '' }) });
+                                    }
+                                    success('Event media archived');
+                                    await fetchMusicTrackingData({ eventId });
+                                  } catch { error('Archiving failed'); }
+                                })(); } catch {} })();
+                              }}
+                              className="ml-2 px-2 py-1.5 border rounded-md text-xs"
+                              defaultValue=""
+                              title="Archive clears music and videos for selected event"
+                            >
+                              <option value="" disabled>Archive Event Media…</option>
+                              {events.map(ev => (
+                                <option key={ev.id} value={ev.id}>{ev.name}</option>
+                              ))}
+                            </select>
+                          </div>
                           {/* Mobile swipe indicator */}
                           <div className={`sm:hidden px-4 py-2 text-center ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}`}>
                             <p className={`text-xs ${themeClasses.textMuted}`}>← Swipe to see more columns →</p>
@@ -2604,6 +2736,15 @@ function AdminDashboard() {
                                             if (res.ok && data.success) {
                                               success('Video link saved');
                                               setVideoLinkDrafts(prev => ({ ...prev, [entry.id]: '' }));
+                                              try {
+                                                const { socketClient } = await import('@/lib/socket-client');
+                                                socketClient.emit('entry:video_updated' as any, {
+                                                  eventId: entry.eventId,
+                                                  entryId: entry.id,
+                                                  videoExternalUrl: url,
+                                                  timestamp: new Date().toISOString()
+                                                } as any);
+                                              } catch {}
                                               await fetchMusicTrackingData({ entryType: activeBackendFilter === 'all' ? undefined : activeBackendFilter });
                                             } else {
                                               error(data?.error || 'Failed to save video link');
@@ -2626,6 +2767,15 @@ function AdminDashboard() {
                                               const data = await res.json();
                                               if (res.ok && data.success) {
                                                 success('Video link removed');
+                                                try {
+                                                  const { socketClient } = await import('@/lib/socket-client');
+                                                  socketClient.emit('entry:video_updated' as any, {
+                                                    eventId: entry.eventId,
+                                                    entryId: entry.id,
+                                                    videoExternalUrl: '',
+                                                    timestamp: new Date().toISOString()
+                                                  } as any);
+                                                } catch {}
                                                 await fetchMusicTrackingData({ entryType: activeBackendFilter === 'all' ? undefined : activeBackendFilter });
                                               } else {
                                                 error(data?.error || 'Failed to remove video link');
@@ -2677,6 +2827,7 @@ function AdminDashboard() {
                                     <span className="hidden sm:inline">📋 View Entry</span>
                                     <span className="sm:hidden">📋</span>
                                   </button>
+                                  {/* Bulk action seed: individual clear button available above. A dedicated Bulk Clear panel can iterate IDs from current filter. */}
                                 </div>
                               </td>
                             </tr>

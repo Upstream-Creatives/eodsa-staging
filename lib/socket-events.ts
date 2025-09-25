@@ -49,6 +49,14 @@ export interface SocketEvents {
     timestamp: string;
   };
 
+  // Video link added/changed for a virtual entry
+  'entry:video_updated': {
+    eventId: string;
+    entryId: string;
+    videoExternalUrl?: string;
+    timestamp: string;
+  };
+
   // Event control commands from backstage
   'event:control': {
     eventId: string;

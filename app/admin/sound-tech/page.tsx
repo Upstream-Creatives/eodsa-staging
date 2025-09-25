@@ -264,6 +264,7 @@ function SoundTechPage() {
   return (
     <RealtimeUpdates
       eventId={selectedEvent !== 'all' ? selectedEvent : ''}
+      strictEvent
       onPerformanceReorder={handleRealtimeReorder}
       onPerformanceMusicCue={async (data) => {
         // Update in place for specific event; if in All, fetch the single performance to map
@@ -450,11 +451,21 @@ function SoundTechPage() {
                                 </span>
                               )}
                             </p>
-                            {/* Age category not stored on entry; omit to avoid type errors */}
-                            <p className="text-xs text-gray-600">
-                              Studio: {entry.contestantName || 'Unknown'} • {getEventName(entry.eventId)} • {entry.participantNames?.join(', ')}
-                              {Array.isArray(entry.participantIds) && entry.participantIds.length > 1 ? ` (${entry.participantIds.length} contestants)` : ''}
-                            </p>
+                            {/* Prominent contestant name display */}
+                            <div className="mb-2">
+                              <p className="text-lg font-bold text-black">
+                                {entry.contestantName || 'Unknown Contestant'}
+                              </p>
+                              <p className="text-base text-gray-700">
+                                {entry.participantNames?.join(', ')}
+                                {Array.isArray(entry.participantIds) && entry.participantIds.length > 1 ? ` (${entry.participantIds.length} contestants)` : ''}
+                              </p>
+                            </div>
+                            {selectedEvent === 'all' && (
+                              <p className="text-xs text-gray-600">
+                                Event: {getEventName(entry.eventId)}
+                              </p>
+                            )}
                           </div>
                         </div>
                         
@@ -462,7 +473,7 @@ function SoundTechPage() {
                           <div className="mt-4">
                             <MusicPlayer
                               musicUrl={entry.musicFileUrl}
-                              filename={entry.musicFileName || `${entry.itemName}.mp3`}
+                              filename="" 
                               className="max-w-2xl"
                               showDownload={true}
                             />
@@ -526,9 +537,7 @@ function SoundTechPage() {
                           )}
                         </button>
                         
-                        <div className="text-right text-xs text-gray-600">
-                          <div>Track: <span className={`${entry.musicFileUrl ? 'text-green-700' : 'text-red-700'}`}>{entry.musicFileUrl ? 'Uploaded' : 'Upload outstanding'}</span></div>
-                        </div>
+                        {/* Hide filename to avoid confusion */}
                       </div>
                     </div>
                   </div>

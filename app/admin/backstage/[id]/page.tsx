@@ -7,6 +7,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -30,7 +31,8 @@ interface Performance {
   contestantName: string;
   participantNames: string[];
   duration: number;
-  itemNumber?: number;
+  itemNumber?: number; // Permanent item number (locked after assignment)
+  performanceOrder?: number; // Current position in backstage sequence
   status: 'scheduled' | 'ready' | 'hold' | 'in_progress' | 'completed' | 'cancelled';
   entryType?: 'live' | 'virtual';
   musicFileUrl?: string;
@@ -78,7 +80,8 @@ function SortablePerformanceItem({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+      {...listeners}
+      className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-grab active:cursor-grabbing touch-manipulation ${
         isDragging
           ? 'bg-purple-600 border-purple-400 shadow-2xl scale-105 rotate-2'
           : performance.status === 'completed'
@@ -87,12 +90,13 @@ function SortablePerformanceItem({
           ? 'bg-blue-700 border-blue-500'
           : 'bg-gray-700 border-gray-600'
       }`}
+      title="Drag anywhere on this card to reorder"
     >
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          {/* Enhanced Item Number Display */}
+          {/* Item Number + Performance Order Display */}
           <div className={`relative ${isDragging ? 'animate-pulse' : ''}`}>
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl border-4 transition-all duration-200 ${
+            <div className={`w-20 h-20 rounded-lg flex flex-col items-center justify-center font-bold border-4 transition-all duration-200 ${
               isDragging 
                 ? 'bg-yellow-400 border-yellow-300 text-black scale-110' 
                 : performance.status === 'completed'
@@ -101,7 +105,10 @@ function SortablePerformanceItem({
                 ? 'bg-blue-500 border-blue-400 text-white'
                 : 'bg-purple-500 border-purple-400 text-white'
             }`}>
-              {performance.itemNumber || '?'}
+              <div className="text-lg leading-none">#{performance.itemNumber || '?'}</div>
+              <div className="text-xs opacity-75 leading-none mt-1">
+                Pos: {performance.performanceOrder || '?'}
+              </div>
             </div>
             {isDragging && (
               <div className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-300 rounded-full flex items-center justify-center">
@@ -113,7 +120,7 @@ function SortablePerformanceItem({
           <div className={isDragging ? 'opacity-75' : ''}>
             <h3 className="font-semibold text-lg text-white">{performance.title}</h3>
             <p className={`text-sm ${isDragging ? 'text-gray-200' : 'text-gray-300'}`}>
-              by {performance.contestantName} | {performance.duration}min | {performance.entryType?.toUpperCase()}
+              by {performance.contestantName} | {performance.entryType?.toUpperCase()}
             </p>
             <p className={`text-xs ${isDragging ? 'text-gray-300' : 'text-gray-400'}`}>
               {performance.participantNames.join(', ')}
@@ -125,7 +132,12 @@ function SortablePerformanceItem({
           {/* Music/Video Play Button */}
           {!isDragging && (
             <button
-              onClick={() => onPlayMusic(performance)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlayMusic(performance);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               className={`p-3 rounded-lg transition-all duration-200 border-2 ${
                 performance.entryType === 'live' && performance.musicFileUrl
                   ? 'bg-green-600 hover:bg-green-700 border-green-400 text-white'
@@ -153,12 +165,22 @@ function SortablePerformanceItem({
             <div className="flex items-center space-x-2 mr-2">
               <span className="text-xs text-gray-200">Music:</span>
               <label className={`px-2 py-1 text-xs rounded cursor-pointer ${performance.musicCue === 'onstage' ? 'bg-green-600' : 'bg-gray-600'}`}
-                onClick={() => onUpdateMusicCue(performance.id, 'onstage')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateMusicCue(performance.id, 'onstage');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 title="Music starts when contestant is on stage">
                 Onstage
               </label>
               <label className={`px-2 py-1 text-xs rounded cursor-pointer ${performance.musicCue === 'offstage' ? 'bg-green-600' : 'bg-gray-600'}`}
-                onClick={() => onUpdateMusicCue(performance.id, 'offstage')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateMusicCue(performance.id, 'offstage');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 title="Music starts while contestant walks on">
                 Offstage
               </label>
@@ -169,13 +191,23 @@ function SortablePerformanceItem({
           {performance.status === 'scheduled' && !isDragging && (
             <>
               <button
-                onClick={() => updatePerformanceStatus(performance.id, 'ready')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updatePerformanceStatus(performance.id, 'ready');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded font-semibold transition-colors text-sm"
               >
                 ✅ Ready
               </button>
               <button
-                onClick={() => updatePerformanceStatus(performance.id, 'hold')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updatePerformanceStatus(performance.id, 'hold');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded font-semibold transition-colors text-sm"
               >
                 ⏸️ Hold
@@ -186,19 +218,34 @@ function SortablePerformanceItem({
           {performance.status === 'ready' && !isDragging && (
             <>
               <button
-                onClick={() => updatePerformanceStatus(performance.id, 'in_progress')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updatePerformanceStatus(performance.id, 'in_progress');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded font-semibold transition-colors"
               >
                 ▶️ Start
               </button>
               <button
-                onClick={() => updatePerformanceStatus(performance.id, 'hold')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updatePerformanceStatus(performance.id, 'hold');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded font-semibold transition-colors text-sm"
               >
                 ⏸️ Hold
               </button>
               <button
-                onClick={() => updatePerformanceStatus(performance.id, 'scheduled')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updatePerformanceStatus(performance.id, 'scheduled');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs font-semibold transition-colors"
                 title="Reset to scheduled"
               >
@@ -274,17 +321,16 @@ function SortablePerformanceItem({
             {performance.status.toUpperCase()}
           </div>
 
-          {/* Enhanced Drag handle */}
+          {/* Visual drag indicator - entire card is now draggable */}
           <div 
-            {...listeners} 
-            className={`text-gray-300 cursor-grab active:cursor-grabbing p-3 rounded-lg transition-all duration-200 ${
+            className={`text-gray-300 p-6 rounded-lg transition-all duration-200 pointer-events-none ${
               isDragging 
                 ? 'bg-yellow-400 text-black scale-110' 
-                : 'hover:bg-gray-600 hover:text-white'
+                : 'bg-gray-600 text-white'
             }`}
-            title="Drag to reorder"
+            style={{ minWidth: '80px', minHeight: '60px' }}
           >
-            <div className="text-lg">⋮⋮</div>
+            <div className="text-2xl font-bold">⋮⋮</div>
           </div>
         </div>
       </div>
@@ -320,9 +366,19 @@ export default function BackstageDashboard() {
   // Socket connection for real-time updates
   const socket = useBackstageSocket(eventId);
 
-  // @dnd-kit sensors for drag interactions
+  // @dnd-kit sensors for drag interactions - optimized for mobile/tablet
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Reduced for easier activation
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100, // Shorter delay for responsive touch
+        tolerance: 8, // Slightly more tolerance for touch
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -395,8 +451,13 @@ export default function BackstageDashboard() {
       if (performancesData.success) {
         // Filter live only for backstage
         const liveOnly = performancesData.performances.filter((p: Performance) => (p.entryType || 'live') === 'live');
-        // Sort by item number, then by creation time
+        // Sort by performanceOrder first, then by item number for initial display
         const sortedPerformances = liveOnly.sort((a: Performance, b: Performance) => {
+          // If both have performanceOrder, use that
+          if (a.performanceOrder && b.performanceOrder) {
+            return a.performanceOrder - b.performanceOrder;
+          }
+          // Fall back to item number ordering
           if (a.itemNumber && b.itemNumber) {
             return a.itemNumber - b.itemNumber;
           } else if (a.itemNumber && !b.itemNumber) {
@@ -407,7 +468,13 @@ export default function BackstageDashboard() {
           return a.title.localeCompare(b.title);
         });
         
-        setPerformances(sortedPerformances);
+        // Set initial performanceOrder if not already set
+        const performancesWithOrder = sortedPerformances.map((performance: Performance, index: number) => ({
+          ...performance,
+          performanceOrder: performance.performanceOrder || (index + 1)
+        }));
+        
+        setPerformances(performancesWithOrder);
       }
     } catch (error) {
       console.error('Error loading event data:', error);
@@ -460,20 +527,21 @@ export default function BackstageDashboard() {
     // Reorder performances array
     const reorderedPerformances = arrayMove(performances, oldIndex, newIndex);
     
-    // Update item numbers based on new order (THIS HAPPENS IMMEDIATELY)
+    // GABRIEL'S REQUIREMENT: Lock item numbers, only update performance order
     const updatedPerformances = reorderedPerformances.map((performance, index) => ({
       ...performance,
-      itemNumber: index + 1  // Item numbers are 1-based
+      // itemNumber stays UNCHANGED - locked for judges
+      performanceOrder: index + 1  // Only update the performance sequence
     }));
 
     // Update local state immediately for instant visual feedback
     setPerformances(updatedPerformances);
 
-    // Show immediate feedback
-    const oldItemNumber = draggedPerformance.itemNumber || oldIndex + 1;
-    const newItemNumber = newIndex + 1;
+    // Show immediate feedback - Gabriel's requirement
+    const oldOrder = oldIndex + 1;
+    const newOrder = newIndex + 1;
     
-    success(`🎯 Moved "${draggedPerformance.title}" from #${oldItemNumber} → #${newItemNumber}`);
+    success(`🎯 Moved Item #${draggedPerformance.itemNumber} from position ${oldOrder} → position ${newOrder}`);
 
     try {
       // Send reorder to server
@@ -484,8 +552,8 @@ export default function BackstageDashboard() {
           eventId,
           performances: updatedPerformances.map(p => ({
             id: p.id,
-            itemNumber: p.itemNumber,
-            displayOrder: p.itemNumber
+            itemNumber: p.itemNumber, // Keep original item number (locked)
+            performanceOrder: p.performanceOrder // Send new performance order
           }))
         })
       });
@@ -496,8 +564,9 @@ export default function BackstageDashboard() {
           eventId,
           performances: updatedPerformances.map(p => ({
             id: p.id,
-            itemNumber: p.itemNumber!,
-            displayOrder: p.itemNumber!
+            itemNumber: p.itemNumber!, // Keep permanent item number (locked)
+            performanceOrder: p.performanceOrder!, // Send new performance order
+            displayOrder: p.performanceOrder! // For backward compatibility with existing handlers
           }))
         });
 
@@ -735,7 +804,7 @@ export default function BackstageDashboard() {
           <div>
             <h2 className="text-2xl font-bold">Performance Order</h2>
             <p className="text-sm text-gray-400 mt-1">
-              Drag the <span className="text-yellow-400">⋮⋮ handle</span> to reorder performances. Item numbers update instantly!
+              Drag <span className="text-yellow-400">anywhere on a card</span> to reorder performances. Item numbers stay locked, only performance order changes!
             </p>
           </div>
           <div className="text-right">
@@ -766,8 +835,8 @@ export default function BackstageDashboard() {
             <ol className="text-gray-300 text-sm mt-2 space-y-1">
               <li>1. Go to the admin dashboard and create some event entries</li>
               <li>2. Return here to see them listed with item numbers</li>
-              <li>3. Drag the ⋮⋮ handle to reorder them</li>
-              <li>4. Watch item numbers update in real-time!</li>
+              <li>3. Drag anywhere on a card to reorder them</li>
+              <li>4. Watch performance order update in real-time (item numbers stay locked)!</li>
             </ol>
           </div>
         )}
@@ -775,8 +844,8 @@ export default function BackstageDashboard() {
         {performances.length > 0 && (
           <div className="bg-purple-600/10 border border-purple-600/50 rounded-lg p-4 mb-6">
             <p className="text-purple-300 text-sm">
-              <span className="font-semibold">💡 How to test:</span> Grab any ⋮⋮ handle and drag up/down to reorder. 
-              Item numbers will update instantly and sync across all connected dashboards!
+              <span className="font-semibold">💡 How to test:</span> Click and drag anywhere on a performance card to reorder. 
+              Item numbers stay locked (for judges), only the performance order changes and syncs across dashboards!
             </p>
             <p className="text-purple-300 text-sm mt-2">
               <span className="font-semibold">🎵 Music Player:</span> Click the 🎵 button on live entries to play music, 

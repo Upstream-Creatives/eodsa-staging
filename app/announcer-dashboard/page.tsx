@@ -19,7 +19,6 @@ interface Performance {
   announcedAt?: string;
   mastery?: string;
   itemStyle?: string;
-  choreographer?: string;
   ageCategory?: string;
   musicFileUrl?: string;
   musicFileName?: string;
@@ -51,6 +50,17 @@ export default function AnnouncerDashboard() {
   const [presenceByPerformance, setPresenceByPerformance] = useState<Record<string, any>>({});
   const [notesByPerformance, setNotesByPerformance] = useState<Record<string, string>>({});
   const [activePrompt, setActivePrompt] = useState<Performance | null>(null);
+  const [generalNotes, setGeneralNotes] = useState<string>('');
+  const [lastSyncAt, setLastSyncAt] = useState<string>('');
+  const saveGeneralNotes = () => {
+    if (!selectedEvent) return;
+    try {
+      localStorage.setItem(`announcer:generalNotes:${selectedEvent}`, generalNotes || '');
+      success('Notes saved');
+    } catch (e) {
+      error('Failed to save notes');
+    }
+  };
 
   useEffect(() => {
     // Check authentication
@@ -74,6 +84,33 @@ export default function AnnouncerDashboard() {
       fetchEventData();
     }
   }, [selectedEvent]);
+
+  // Load/save announcer general notes locally per event (announcer-only)
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const key = `announcer:generalNotes:${selectedEvent}`;
+    try {
+      const saved = localStorage.getItem(key);
+      setGeneralNotes(saved || '');
+    } catch {}
+  }, [selectedEvent]);
+
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const key = `announcer:generalNotes:${selectedEvent}`;
+    const handle = setTimeout(() => {
+      try { localStorage.setItem(key, generalNotes || ''); } catch {}
+    }, 2000);
+    return () => clearTimeout(handle);
+  }, [generalNotes, selectedEvent]);
+
+  // Update last sync time on focus/heartbeat
+  useEffect(() => {
+    const onFocus = () => setLastSyncAt(new Date().toLocaleTimeString());
+    const hb = setInterval(() => setLastSyncAt(new Date().toLocaleTimeString()), 15000);
+    if (typeof window !== 'undefined') window.addEventListener('focus', onFocus);
+    return () => { clearInterval(hb); if (typeof window !== 'undefined') window.removeEventListener('focus', onFocus); };
+  }, []);
 
   const fetchEvents = async () => {
     try {
@@ -222,12 +259,46 @@ export default function AnnouncerDashboard() {
     }
   };
 
+  // Per-item performed toggle
+  const togglePerformed = async (perf: Performance) => {
+    const newStatus = perf.status === 'completed' ? 'scheduled' : 'completed';
+    try {
+      const res = await fetch(`/api/performances/${perf.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        setPerformances(prev => prev.map(p => p.id === perf.id ? { ...p, status: newStatus } : p));
+        try {
+          const { socketClient } = await import('@/lib/socket-client');
+          socketClient.emit('performance:status' as any, {
+            performanceId: perf.id,
+            eventId: selectedEvent,
+            status: newStatus,
+            timestamp: new Date().toISOString()
+          } as any);
+        } catch {}
+      }
+    } catch {}
+  };
+
   const handlePerformanceReorder = (reorderedPerformances: any[]) => {
-    // Merge new itemNumbers into existing objects; don't replace objects (prevents undefined fields)
+    // Merge both itemNumber (permanent) and performanceOrder (dynamic) from backstage
     setPerformances(prev => {
-      const idToItemNumber = new Map(reorderedPerformances.map((r: any) => [r.id, r.itemNumber]));
-      const merged = prev.map(p => idToItemNumber.has(p.id) ? { ...p, itemNumber: idToItemNumber.get(p.id)! } : p);
-      // Keep list sorted by itemNumber, then title
+      const updateMap = new Map(reorderedPerformances.map((r: any) => [r.id, r]));
+      const merged = prev.map(p => {
+        if (updateMap.has(p.id)) {
+          const update = updateMap.get(p.id)!;
+          return { 
+            ...p, 
+            itemNumber: update.itemNumber || p.itemNumber, // Keep permanent item number
+            performanceOrder: update.performanceOrder // Update performance order from backstage
+          };
+        }
+        return p;
+      });
+      // Keep announcer list sorted by itemNumber (for judging reference), not performance order
       merged.sort((a, b) => {
         if (a.itemNumber && b.itemNumber) return a.itemNumber - b.itemNumber;
         if (a.itemNumber && !b.itemNumber) return -1;
@@ -236,7 +307,7 @@ export default function AnnouncerDashboard() {
       });
       return merged;
     });
-    success('Performance order updated by backstage');
+    success('Performance order updated by backstage (showing by item number for judging)');
   };
 
   const handlePerformanceStatus = (data: any) => {
@@ -324,6 +395,7 @@ export default function AnnouncerDashboard() {
   return (
     <RealtimeUpdates
       eventId={selectedEvent}
+      strictEvent
       onPerformanceReorder={handlePerformanceReorder}
       onPerformanceStatus={handlePerformanceStatus}
       onPerformanceMusicCue={(data) => {
@@ -377,11 +449,36 @@ export default function AnnouncerDashboard() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Announcer General Notes */}
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl sm:text-2xl font-bold text-black">Announcer Notes</h2>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">Autosaves</span>
+                <button
+                  onClick={saveGeneralNotes}
+                  className="px-3 py-1.5 bg-orange-600 text-white rounded-md text-xs font-semibold hover:bg-orange-700"
+                >
+                  Save Notes
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={generalNotes}
+              onChange={(e) => setGeneralNotes(e.target.value)}
+              onBlur={() => {
+                try { localStorage.setItem(`announcer:generalNotes:${selectedEvent}`, generalNotes || ''); } catch {}
+              }}
+              className="w-full min-h-[120px] sm:min-h-[160px] px-3 py-2 border border-gray-300 rounded-lg text-black"
+              placeholder="Script, announcements, reminders…"
+            />
+          </div>
           {/* Event Info */}
           {event && (
             <div className="bg-white rounded-lg shadow p-6 mb-8">
               <h2 className="text-xl font-semibold text-black mb-2">{event.name}</h2>
-              <p className="text-black">Date: {event.eventDate} | Venue: {event.venue}</p>
+            <p className="text-black">Date: {event.eventDate} | Venue: {event.venue}</p>
+            <p className="text-xs text-gray-500 mt-1">Live updating… Last sync {lastSyncAt || '—'}</p>
             </div>
           )}
 
@@ -398,7 +495,7 @@ export default function AnnouncerDashboard() {
                     #{currentPerformance.itemNumber} - {currentPerformance.title}
                   </p>
                   <p className="text-orange-600">
-                    by {currentPerformance.choreographer} | {currentPerformance.participantNames.join(', ')}
+                    {currentPerformance.participantNames.join(', ')}
                   </p>
                 </div>
                 <button
@@ -521,26 +618,21 @@ export default function AnnouncerDashboard() {
                         </div>
                         
                         <div className="flex-1 min-w-0">
-                          <h3 className={`text-lg font-semibold ${performance.status === 'completed' ? 'text-green-800' : performance.announced ? 'text-gray-600' : 'text-black'}`}>
+                          <h3 className={`text-3xl font-extrabold ${performance.status === 'completed' ? 'text-green-800' : performance.announced ? 'text-gray-600' : 'text-purple-900'}`}>
                             {performance.title}
                           </h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1">
                             <div>
-                              {performance.choreographer && (
-                                <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
-                                  <strong>Choreographer:</strong> {performance.choreographer}
-                                </p>
-                              )}
-                              <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
+                              <p className={`text-xl font-semibold ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
                                 <strong>Style:</strong> {performance.itemStyle} • <strong>Level:</strong> {performance.mastery}
                               </p>
                               {performance.musicCue && (
-                                <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
+                                <p className={`text-base ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
                                   <strong>Music cue:</strong> {performance.musicCue === 'onstage' ? 'Onstage (start when in position)' : 'Offstage (start while walking on)'}
                                 </p>
                               )}
                               {performance.ageCategory && (
-                                <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
+                                <p className={`text-base ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
                                   <strong>Age Category:</strong> {performance.ageCategory}
                                 </p>
                               )}
@@ -548,11 +640,11 @@ export default function AnnouncerDashboard() {
                             <div>
                               {Array.isArray(performance.participantNames) && (
                                 <>
-                                  <p className={`text-sm ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
+                                  <p className={`text-xl font-semibold ${performance.status === 'completed' ? 'text-green-700' : performance.announced ? 'text-gray-500' : 'text-black'}`}>
                                     <strong>Performer(s):</strong> {performance.participantNames.length === 1 ? performance.participantNames[0] : `${performance.participantNames.length} performers`}
                                   </p>
                                   {performance.participantNames.length > 1 && (
-                                    <p className={`text-xs ${performance.status === 'completed' ? 'text-green-600' : performance.announced ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    <p className={`text-sm ${performance.status === 'completed' ? 'text-green-600' : performance.announced ? 'text-gray-400' : 'text-gray-600'}`}>
                                       {performance.participantNames.join(', ')}
                                     </p>
                                   )}
@@ -598,6 +690,15 @@ export default function AnnouncerDashboard() {
                             </span>
                           )}
 
+                          {/* Toggle Performed */}
+                          <button
+                            onClick={() => togglePerformed(performance)}
+                            className={`${performance.status === 'completed' ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-200 hover:bg-gray-300'} text-white px-3 py-1 rounded-md text-xs font-semibold`}
+                            title={performance.status === 'completed' ? 'Mark as not performed' : 'Mark as performed'}
+                          >
+                            {performance.status === 'completed' ? 'Performed ✓' : 'Mark Performed'}
+                          </button>
+
                           {presenceByPerformance[performance.id]?.present !== undefined && (
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                               presenceByPerformance[performance.id]?.present
@@ -619,28 +720,7 @@ export default function AnnouncerDashboard() {
                         </button>
                       )}
                     </div>
-                    {/* Announcement Notes */}
-                    <div className="mt-3">
-                      <textarea
-                        value={
-                          (notesByPerformance[performance.id] !== undefined
-                            ? notesByPerformance[performance.id]
-                            : (performance.announcerNotes || ''))
-                        }
-                        onChange={(e) => setNotesByPerformance(prev => ({ ...prev, [performance.id]: e.target.value }))}
-                        placeholder="Announcement notes…"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
-                        rows={2}
-                      />
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          onClick={() => saveAnnouncementNote(performance.id, notesByPerformance[performance.id] || '')}
-                          className="px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-                        >
-                          Save Note
-                        </button>
-                      </div>
-                    </div>
+                    {/* Per-item announcer notes removed per client request */}
                   </div>
                 ))}
               </div>
@@ -662,7 +742,7 @@ export default function AnnouncerDashboard() {
                     </div>
                     <div>
                       <div className="text-2xl text-gray-600">Now Announcing</div>
-                      <h2 className="text-6xl font-extrabold text-black leading-tight">{activePrompt.title}</h2>
+                      <h2 className="text-6xl font-extrabold text-indigo-900 leading-tight">{activePrompt.title}</h2>
                     </div>
                   </div>
                   <button
@@ -676,10 +756,10 @@ export default function AnnouncerDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-12">
                   <div className="md:col-span-2">
                     <p className="text-3xl text-gray-900">
-                      Performed by <span className="font-semibold">{activePrompt.participantNames.join(', ')}</span>
+                      Performers: <span className="font-semibold">{activePrompt.participantNames.join(', ')}</span>
                     </p>
                     <p className="text-2xl text-gray-800 mt-2">
-                      Choreographer: <span className="font-semibold">{activePrompt.choreographer}</span> • Style: <span className="font-semibold">{activePrompt.itemStyle}</span> • Level: <span className="font-semibold">{activePrompt.mastery}</span>
+                      Style: <span className="font-semibold">{activePrompt.itemStyle}</span> • Level: <span className="font-semibold">{activePrompt.mastery}</span>
                     </p>
                     {/* Duration hidden by request */}
                     {presenceByPerformance[activePrompt.id]?.present !== undefined && (
@@ -690,34 +770,7 @@ export default function AnnouncerDashboard() {
                       </div>
                     )}
                   </div>
-                  <div>
-                    <label className="block text-2xl font-semibold text-black mb-3">Announcement notes</label>
-                    <textarea
-                      value={
-                        (notesByPerformance[activePrompt.id] !== undefined
-                          ? notesByPerformance[activePrompt.id]
-                          : (activePrompt.announcerNotes || ''))
-                      }
-                      onChange={(e) => setNotesByPerformance(prev => ({ ...prev, [activePrompt!.id]: e.target.value }))}
-                      placeholder="Script or notes the announcer reads…"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-2xl text-black"
-                      rows={8}
-                    />
-                    <div className="flex justify-end mt-4 space-x-3">
-                      <button
-                        onClick={() => saveAnnouncementNote(activePrompt.id, notesByPerformance[activePrompt.id] || '')}
-                        className="px-5 py-3 bg-gray-100 text-2xl text-gray-700 rounded-xl hover:bg-gray-200"
-                      >
-                        Save Note
-                      </button>
-                      <button
-                        onClick={() => announceNow(activePrompt)}
-                        className="px-6 py-3 bg-orange-600 text-white text-2xl rounded-xl hover:bg-orange-700 font-extrabold"
-                      >
-                        Announce Now
-                      </button>
-                    </div>
-                  </div>
+                  <div className="hidden md:block" />
                 </div>
 
                 <div className="mt-10">

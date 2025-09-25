@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import RealtimeUpdates from '@/components/RealtimeUpdates';
 import { useRouter } from 'next/navigation';
 import MusicPlayer from '@/components/MusicPlayer';
 import VideoPlayer from '@/components/VideoPlayer';
@@ -292,6 +293,7 @@ export default function JudgeDashboard() {
   const [performancesPerPage] = useState(8);
   const [searchTerm, setSearchTerm] = useState('');
   const [itemNumberSearch, setItemNumberSearch] = useState('');
+  const [lastSyncAt, setLastSyncAt] = useState('');
   const router = useRouter();
   const { showAlert } = useAlert();
 
@@ -334,6 +336,13 @@ export default function JudgeDashboard() {
     filterAndLoadPerformances();
   }, [performances, filterStatus, searchTerm, itemNumberSearch]);
 
+  useEffect(() => {
+    const onFocus = () => setLastSyncAt(new Date().toLocaleTimeString());
+    const hb = setInterval(() => setLastSyncAt(new Date().toLocaleTimeString()), 15000);
+    if (typeof window !== 'undefined') window.addEventListener('focus', onFocus);
+    return () => { clearInterval(hb); if (typeof window !== 'undefined') window.removeEventListener('focus', onFocus); };
+  }, []);
+
   const loadJudgeData = async (judgeId: string) => {
     setIsLoading(true);
     try {
@@ -343,33 +352,30 @@ export default function JudgeDashboard() {
         const assignmentsData = await assignmentsResponse.json();
         setAssignments(assignmentsData.assignments || []);
         
-        // Load ALL performances for all assigned nationals events
+        // Load ALL performances for all assigned events (batched and parallelized)
         const allPerformances: PerformanceWithScore[] = [];
-        for (const assignment of assignmentsData.assignments || []) {
+        await Promise.all((assignmentsData.assignments || []).map(async (assignment: any) => {
           const performancesResponse = await fetch(`/api/events/${assignment.eventId}/performances`);
-          if (performancesResponse.ok) {
-            const performancesData = await performancesResponse.json();
-            
-            // Check score status for each performance
-            for (const performance of performancesData.performances || []) {
-              // Check if this judge has scored this performance
-              const scoreResponse = await fetch(`/api/scores/${performance.id}/${judgeId}`);
-              const scoreData = await scoreResponse.json();
-              
-              // Check the complete scoring status (all judges)
-              const scoringStatusResponse = await fetch(`/api/scores/performance/${performance.id}`);
-              const scoringStatusData = await scoringStatusResponse.json();
-              
-              allPerformances.push({
-                ...performance,
-                hasScore: scoreData.success && scoreData.score,
-                judgeScore: scoreData.score,
-                isFullyScored: scoringStatusData.success ? scoringStatusData.scoringStatus.isFullyScored : false,
-                scoringStatus: scoringStatusData.success ? scoringStatusData.scoringStatus : null
-              });
-            }
-          }
-        }
+          if (!performancesResponse.ok) return;
+          const performancesData = await performancesResponse.json();
+          const perfs: any[] = performancesData.performances || [];
+          await Promise.all(perfs.map(async (performance: any) => {
+            // Fetch judge's score and overall scoring status concurrently
+            const [scoreRes, statusRes] = await Promise.all([
+              fetch(`/api/scores/${performance.id}/${judgeId}`),
+              fetch(`/api/scores/performance/${performance.id}`)
+            ]);
+            const scoreData = await scoreRes.json().catch(() => ({}));
+            const scoringStatusData = await statusRes.json().catch(() => ({}));
+            allPerformances.push({
+              ...performance,
+              hasScore: scoreData.success && scoreData.score,
+              judgeScore: scoreData.score,
+              isFullyScored: scoringStatusData.success ? scoringStatusData.scoringStatus.isFullyScored : false,
+              scoringStatus: scoringStatusData.success ? scoringStatusData.scoringStatus : null
+            });
+          }));
+        }));
         
         // Sort by item number for program order
         allPerformances.sort((a, b) => {
@@ -636,8 +642,18 @@ export default function JudgeDashboard() {
 
   const handlePerformanceReorder = (reordered: any[]) => {
     setPerformances(prev => {
-      const map = new Map(reordered.map(r => [r.id, r.itemNumber]));
-      return prev.map(p => map.has(p.id) ? { ...p, itemNumber: map.get(p.id) } : p);
+      const updateMap = new Map(reordered.map(r => [r.id, r]));
+      return prev.map(p => {
+        if (updateMap.has(p.id)) {
+          const update = updateMap.get(p.id)!;
+          return { 
+            ...p, 
+            itemNumber: update.itemNumber || p.itemNumber, // Keep permanent item number (for scoring)
+            performanceOrder: update.performanceOrder // Update performance order from backstage
+          };
+        }
+        return p;
+      });
     });
   };
 
@@ -645,7 +661,9 @@ export default function JudgeDashboard() {
     setPerformances(prev => prev.map(p => p.id === data.performanceId ? { ...p, status: data.status } : p));
   };
 
-    return (
+  return (
+    <>
+      <RealtimeUpdates eventId={selectedEventId} strictEvent onPerformanceReorder={handlePerformanceReorder} onPerformanceStatus={handlePerformanceStatus}>
       <div className="min-h-screen bg-gray-50">
       {/* Professional Header */}
       <div className="bg-white shadow-sm border-b">
@@ -675,8 +693,9 @@ export default function JudgeDashboard() {
                 </button>
                 </div>
               </div>
-              </div>
             </div>
+          </div>
+        </div>
 
       {/* Alert Messages */}
       {successMessage && (
@@ -969,8 +988,8 @@ export default function JudgeDashboard() {
                     {isSubmittingScore ? 'Submitting...' : (selectedPerformance.hasScore ? 'Update Score' : 'Submit Score')}
                   </button>
                 </div>
-      </div>
-    );
+              </div>
+            );
           })()
         )}
 
@@ -981,6 +1000,7 @@ export default function JudgeDashboard() {
             <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 md:p-6 mb-3 sm:mb-4 md:mb-6">
               <div className="flex flex-col gap-3 mb-4 md:mb-6">
                 <h2 className="text-lg md:text-xl font-bold text-black">Event Assignments</h2>
+                <span className="text-xs text-gray-500">Live updating… Last sync {lastSyncAt || '—'}</span>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                   <span className="text-xs md:text-sm text-black font-medium">
                     {getCompletionStats().scored} of {getCompletionStats().total} scored ({getCompletionStats().percentage}%)
@@ -1200,6 +1220,7 @@ export default function JudgeDashboard() {
           </>
         )}
       </div>
-    </div>
+    </RealtimeUpdates>
+    </>
   );
 } 

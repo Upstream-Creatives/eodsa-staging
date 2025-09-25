@@ -3150,6 +3150,16 @@ export const db = {
       WHERE id = ${performanceId}
     `;
     return { success: true };
+  },
+
+  async updatePerformanceOrder(performanceId: string, performanceOrder: number) {
+    const sqlClient = getSql();
+    await sqlClient`
+      UPDATE performances 
+      SET performance_order = ${performanceOrder}
+      WHERE id = ${performanceId}
+    `;
+    return { success: true };
   }
 };
 

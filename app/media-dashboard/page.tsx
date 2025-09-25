@@ -182,10 +182,20 @@ export default function MediaDashboard() {
   };
 
   const handlePerformanceReorder = (reorderedPerformances: any[]) => {
-    // Merge item numbers safely like Announcer does
+    // Merge both itemNumber and performanceOrder safely
     setPerformances(prev => {
-      const idToItemNumber = new Map(reorderedPerformances.map((r: any) => [r.id, r.itemNumber]));
-      const merged = prev.map(p => idToItemNumber.has(p.id) ? { ...p, itemNumber: idToItemNumber.get(p.id)! } : p);
+      const updateMap = new Map(reorderedPerformances.map((r: any) => [r.id, r]));
+      const merged = prev.map(p => {
+        if (updateMap.has(p.id)) {
+          const update = updateMap.get(p.id)!;
+          return { 
+            ...p, 
+            itemNumber: update.itemNumber || p.itemNumber, // Keep permanent item number
+            performanceOrder: update.performanceOrder // Update performance order
+          };
+        }
+        return p;
+      });
       merged.sort((a, b) => {
         if (a.itemNumber && b.itemNumber) return a.itemNumber - b.itemNumber;
         if (a.itemNumber && !b.itemNumber) return -1;
@@ -278,11 +288,17 @@ export default function MediaDashboard() {
   return (
     <RealtimeUpdates
       eventId={selectedEvent}
+      strictEvent
       onPerformanceReorder={handlePerformanceReorder}
       onPerformanceStatus={handlePerformanceStatus}
       onMusicUpdated={(data) => {
         setPerformances(prev => prev.map(p => (
           (p as any).eventEntryId === data.entryId ? { ...p, musicFileUrl: data.musicFileUrl, musicFileName: data.musicFileName } : p
+        )));
+      }}
+      onVideoUpdated={(data) => {
+        setPerformances(prev => prev.map(p => (
+          (p as any).eventEntryId === data.entryId ? { ...p, videoExternalUrl: data.videoExternalUrl } : p
         )));
       }}
     >
