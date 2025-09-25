@@ -54,7 +54,7 @@ export async function DELETE(
   }
 }
 
-// Admin: Update entry fields (used by Sound Tech to save uploaded music)
+// Admin: Update entry fields (music or virtual video link)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -63,21 +63,28 @@ export async function PUT(
     const { id } = await params;
     const entryId = id;
     const body = await request.json();
-    const { musicFileUrl, musicFileName } = body || {};
+    const { musicFileUrl, musicFileName, videoExternalUrl } = body || {};
 
-    if (!musicFileUrl || !musicFileName) {
-      return NextResponse.json(
-        { success: false, error: 'musicFileUrl and musicFileName are required' },
-        { status: 400 }
-      );
+    // Allow updating either music fields or video link for virtual entries
+    if (musicFileUrl && musicFileName) {
+      await db.updateEventEntry(entryId, {
+        musicFileUrl,
+        musicFileName
+      });
+      return NextResponse.json({ success: true, message: 'Music updated' });
     }
 
-    await db.updateEventEntry(entryId, {
-      musicFileUrl,
-      musicFileName
-    });
+    if (typeof videoExternalUrl === 'string') {
+      await db.updateEventEntry(entryId, {
+        videoExternalUrl
+      } as any);
+      return NextResponse.json({ success: true, message: 'Video link updated' });
+    }
 
-    return NextResponse.json({ success: true, message: 'Entry updated' });
+    return NextResponse.json(
+      { success: false, error: 'Provide musicFileUrl+musicFileName or videoExternalUrl' },
+      { status: 400 }
+    );
   } catch (error) {
     console.error('Error updating entry:', error);
     return NextResponse.json({ success: false, error: 'Failed to update entry' }, { status: 500 });

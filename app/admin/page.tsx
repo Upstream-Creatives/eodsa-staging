@@ -171,6 +171,7 @@ function AdminDashboard() {
   const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'live' | 'virtual'>('all');
   const [uploadStatusFilter, setUploadStatusFilter] = useState<'all' | 'uploaded' | 'missing' | 'no_video'>('all');
   const [activeBackendFilter, setActiveBackendFilter] = useState<'all' | 'live' | 'virtual'>('all');
+  const [videoLinkDrafts, setVideoLinkDrafts] = useState<Record<string, string>>({});
 
   // Dancer search and filter state
   const [dancerSearchTerm, setDancerSearchTerm] = useState('');
@@ -2566,20 +2567,78 @@ function AdminDashboard() {
                               </td>
                               <td className="px-2 sm:px-6 py-3 sm:py-4">
                                 {entry.entryType === 'virtual' ? (
-                                  entry.videoExternalUrl ? (
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                                      <span className={`inline-flex px-1.5 sm:px-2 py-1 text-xs font-semibold rounded-full ${theme === 'dark' ? 'bg-green-900/80 text-green-200' : 'bg-green-100 text-green-800'}`}>
-                                        <span className="hidden sm:inline">✅ Video Link</span>
-                                        <span className="sm:hidden">✅</span>
+                                  <div className="space-y-1">
+                                    {entry.videoExternalUrl ? (
+                                      <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
+                                        <span className={`inline-flex px-1.5 sm:px-2 py-1 text-xs font-semibold rounded-full ${theme === 'dark' ? 'bg-green-900/80 text-green-200' : 'bg-green-100 text-green-800'}`}>
+                                          <span className="hidden sm:inline">✅ Video Link</span>
+                                          <span className="sm:hidden">✅</span>
+                                        </span>
+                                        <span className={`text-xs ${themeClasses.textMuted} truncate max-w-[80px] mt-1 sm:mt-0`}>{entry.videoExternalType?.toUpperCase() || 'LINK'}</span>
+                                      </div>
+                                    ) : (
+                                      <span className={`inline-flex px-1.5 sm:px-2 py-1 text-xs font-semibold rounded-full ${theme === 'dark' ? 'bg-red-900/80 text-red-200' : 'bg-red-100 text-red-800'}`}>
+                                        <span className="hidden sm:inline">❌ No Video Link</span>
+                                        <span className="sm:hidden">❌</span>
                                       </span>
-                                      <span className={`text-xs ${themeClasses.textMuted} truncate max-w-[50px] sm:max-w-[80px] mt-1 sm:mt-0`}>{entry.videoExternalType?.toUpperCase() || 'LINK'}</span>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="url"
+                                        placeholder={entry.videoExternalUrl ? 'Replace link…' : 'Paste YouTube/Vimeo link…'}
+                                        value={videoLinkDrafts[entry.id] ?? ''}
+                                        onChange={(e) => setVideoLinkDrafts(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                                        className={`w-40 sm:w-56 px-2 py-1 text-xs rounded border ${themeClasses.cardBorder} ${themeClasses.cardBg} ${themeClasses.textPrimary}`}
+                                      />
+                                      <button
+                                        onClick={async () => {
+                                          const url = (videoLinkDrafts[entry.id] || '').trim();
+                                          if (!url) { error('Enter a video link first'); return; }
+                                          try {
+                                            const res = await fetch(`/api/admin/entries/${entry.id}`, {
+                                              method: 'PUT',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ videoExternalUrl: url })
+                                            });
+                                            const data = await res.json();
+                                            if (res.ok && data.success) {
+                                              success('Video link saved');
+                                              setVideoLinkDrafts(prev => ({ ...prev, [entry.id]: '' }));
+                                              await fetchMusicTrackingData({ entryType: activeBackendFilter === 'all' ? undefined : activeBackendFilter });
+                                            } else {
+                                              error(data?.error || 'Failed to save video link');
+                                            }
+                                          } catch (e) {
+                                            error('Network error saving link');
+                                          }
+                                        }}
+                                        className="px-2 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-700"
+                                      >Save</button>
+                                      {entry.videoExternalUrl && (
+                                        <button
+                                          onClick={async () => {
+                                            try {
+                                              const res = await fetch(`/api/admin/entries/${entry.id}`, {
+                                                method: 'PUT',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ videoExternalUrl: '' })
+                                              });
+                                              const data = await res.json();
+                                              if (res.ok && data.success) {
+                                                success('Video link removed');
+                                                await fetchMusicTrackingData({ entryType: activeBackendFilter === 'all' ? undefined : activeBackendFilter });
+                                              } else {
+                                                error(data?.error || 'Failed to remove video link');
+                                              }
+                                            } catch (e) {
+                                              error('Network error removing link');
+                                            }
+                                          }}
+                                          className={`px-2 py-1 text-xs rounded ${theme === 'dark' ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
+                                        >Clear</button>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <span className={`inline-flex px-1.5 sm:px-2 py-1 text-xs font-semibold rounded-full ${theme === 'dark' ? 'bg-red-900/80 text-red-200' : 'bg-red-100 text-red-800'}`}>
-                                      <span className="hidden sm:inline">❌ No Video Link</span>
-                                      <span className="sm:hidden">❌</span>
-                                    </span>
-                                  )
+                                  </div>
                                 ) : (
                                   <span className={`inline-flex px-1.5 sm:px-2 py-1 text-xs font-semibold rounded-full ${theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800'}`}>
                                     <span className="hidden sm:inline">N/A (Live)</span>
