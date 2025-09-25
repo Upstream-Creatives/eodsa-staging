@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/simple-toast';
 import RealtimeUpdates from '@/components/RealtimeUpdates';
+import MusicUpload from '@/components/MusicUpload';
 import MusicPlayer from '@/components/MusicPlayer';
 import VideoPlayer from '@/components/VideoPlayer';
 
@@ -279,6 +280,11 @@ export default function MediaDashboard() {
       eventId={selectedEvent}
       onPerformanceReorder={handlePerformanceReorder}
       onPerformanceStatus={handlePerformanceStatus}
+      onMusicUpdated={(data) => {
+        setPerformances(prev => prev.map(p => (
+          (p as any).eventEntryId === data.entryId ? { ...p, musicFileUrl: data.musicFileUrl, musicFileName: data.musicFileName } : p
+        )));
+      }}
     >
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
@@ -546,13 +552,55 @@ export default function MediaDashboard() {
                       </div>
                       
                       {/* Inline media preview */}
-                      {performance.entryType === 'live' && performance.musicFileUrl && (
+                      {performance.entryType === 'live' && (
                         <div className="mt-4">
-                          <MusicPlayer
-                            musicUrl={performance.musicFileUrl}
-                            filename={performance.musicFileName || `${performance.title}.mp3`}
-                            className="max-w-2xl"
-                            showDownload={false}
+                          {performance.musicFileUrl ? (
+                            <MusicPlayer
+                              musicUrl={performance.musicFileUrl}
+                              filename={performance.musicFileName || `${performance.title}.mp3`}
+                              className="max-w-2xl"
+                              showDownload={false}
+                            />
+                          ) : (
+                            <div className="mb-2 p-3 border border-yellow-200 bg-yellow-50 text-yellow-800 rounded-md text-sm">
+                              Track missing — upload below.
+                            </div>
+                          )}
+                          <MusicUpload
+                            currentFile={performance.musicFileUrl ? { url: performance.musicFileUrl, originalFilename: performance.musicFileName } as any : null}
+                            variant="light"
+                            compact
+                            onUploadSuccess={async (file) => {
+                              try {
+                                await fetch(`/api/admin/entries/${(performance as any).eventEntryId}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    musicFileUrl: file.url,
+                                    musicFileName: file.originalFilename
+                                  })
+                                });
+                                // Emit realtime update
+                                try {
+                                  const { socketClient } = await import('@/lib/socket-client');
+                                  socketClient.emit('entry:music_updated' as any, {
+                                    eventId: selectedEvent,
+                                    entryId: (performance as any).eventEntryId,
+                                    musicFileUrl: file.url,
+                                    musicFileName: file.originalFilename,
+                                    timestamp: new Date().toISOString()
+                                  } as any);
+                                } catch {}
+                                // Reflect immediately
+                                setPerformances(prev => prev.map(p => (
+                                  p.id === performance.id ? { ...p, musicFileUrl: file.url, musicFileName: file.originalFilename } : p
+                                )));
+                                success('Music uploaded and saved');
+                              } catch (e) {
+                                error('Failed to save uploaded music');
+                              }
+                            }}
+                            onUploadError={(err) => error(err)}
                           />
                         </div>
                       )}

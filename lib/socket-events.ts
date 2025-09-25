@@ -40,6 +40,15 @@ export interface SocketEvents {
     updates: any;
   };
 
+  // Music file added/changed for an entry
+  'entry:music_updated': {
+    eventId: string;
+    entryId: string;
+    musicFileUrl?: string;
+    musicFileName?: string;
+    timestamp: string;
+  };
+
   // Event control commands from backstage
   'event:control': {
     eventId: string;

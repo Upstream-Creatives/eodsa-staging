@@ -332,6 +332,11 @@ export default function AnnouncerDashboard() {
       onPresenceUpdate={(data) => {
         setPresenceByPerformance(prev => ({ ...prev, [data.performanceId]: { present: data.present, checkedInAt: data.checkedInAt, checkedInBy: data.checkedInBy } }));
       }}
+      onMusicUpdated={(data) => {
+        setPerformances(prev => prev.map(p => (
+          (p as any).eventEntryId === data.entryId ? { ...p, musicFileUrl: data.musicFileUrl, musicFileName: data.musicFileName } : p
+        )));
+      }}
     >
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
