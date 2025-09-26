@@ -290,6 +290,7 @@ export default function JudgeDashboard() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'scored' | 'completed'>('all');
+  const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'live' | 'virtual'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [performancesPerPage] = useState(8);
   const [searchTerm, setSearchTerm] = useState('');
@@ -335,7 +336,7 @@ export default function JudgeDashboard() {
 
   useEffect(() => {
     filterAndLoadPerformances();
-  }, [performances, filterStatus, searchTerm, itemNumberSearch]);
+  }, [performances, filterStatus, entryTypeFilter, searchTerm, itemNumberSearch]);
 
   useEffect(() => {
     const onFocus = () => setLastSyncAt(new Date().toLocaleTimeString());
@@ -426,6 +427,13 @@ export default function JudgeDashboard() {
     
     // IMPORTANT: Always exclude withdrawn performances from judge view
     filtered = filtered.filter(p => !p.withdrawnFromJudging);
+    
+    // NEW: Filter by entry type (Live/Virtual)
+    if (entryTypeFilter === 'live') {
+      filtered = filtered.filter(p => p.entryType === 'live');
+    } else if (entryTypeFilter === 'virtual') {
+      filtered = filtered.filter(p => p.entryType === 'virtual');
+    }
     
     // MAIN CHANGE: By default, hide performances this judge has already scored
     // This makes scored items disappear from the judge's view automatically
@@ -663,7 +671,7 @@ export default function JudgeDashboard() {
   const handlePerformanceReorder = (reordered: any[]) => {
     setPerformances(prev => {
       const updateMap = new Map(reordered.map(r => [r.id, r]));
-      return prev.map(p => {
+      const updated = prev.map(p => {
         if (updateMap.has(p.id)) {
           const update = updateMap.get(p.id)!;
           return { 
@@ -674,6 +682,26 @@ export default function JudgeDashboard() {
         }
         return p;
       });
+      
+      // Re-sort after updating performance orders
+      updated.sort((a, b) => {
+        // Primary sort: performanceOrder (backstage sequence)
+        if (a.performanceOrder && b.performanceOrder) {
+          return a.performanceOrder - b.performanceOrder;
+        }
+        // Fallback to item number if performanceOrder missing
+        if (a.itemNumber && b.itemNumber) {
+          return a.itemNumber - b.itemNumber;
+        } else if (a.itemNumber && !b.itemNumber) {
+          return -1;
+        } else if (!a.itemNumber && b.itemNumber) {
+          return 1;
+        } else {
+          return a.title.localeCompare(b.title);
+        }
+      });
+      
+      return updated;
     });
   };
 
@@ -683,7 +711,7 @@ export default function JudgeDashboard() {
 
   return (
     <>
-      <RealtimeUpdates eventId={selectedEventId} strictEvent onPerformanceReorder={handlePerformanceReorder} onPerformanceStatus={handlePerformanceStatus}>
+      <RealtimeUpdates eventId="" strictEvent={false} onPerformanceReorder={handlePerformanceReorder} onPerformanceStatus={handlePerformanceStatus}>
       <div className="bg-gray-50">
       {/* Professional Header */}
       <div className="bg-white shadow-sm border-b">
@@ -1062,7 +1090,7 @@ export default function JudgeDashboard() {
             {/* Quick Actions */}
             <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6 mobile-hide-quick-actions">
               <h3 className="text-base md:text-lg font-semibold text-black mb-3 md:mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-3">
                   <label className="text-xs md:text-sm font-medium text-black">Jump to Item:</label>
                   <div className="flex space-x-2">
@@ -1089,7 +1117,7 @@ export default function JudgeDashboard() {
                 </div>
                 
                 <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-3">
-                  <label className="text-xs md:text-sm font-medium text-black">Filter:</label>
+                  <label className="text-xs md:text-sm font-medium text-black">Status:</label>
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value as 'all' | 'scored' | 'completed')}
@@ -1098,6 +1126,19 @@ export default function JudgeDashboard() {
                     <option value="all">To Score</option>
                     <option value="scored">My Scores</option>
                     <option value="completed">Fully Completed</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-3">
+                  <label className="text-xs md:text-sm font-medium text-black">Type:</label>
+                  <select
+                    value={entryTypeFilter}
+                    onChange={(e) => setEntryTypeFilter(e.target.value as 'all' | 'live' | 'virtual')}
+                    className="px-2 py-1 md:px-3 md:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs md:text-sm"
+                  >
+                    <option value="all">All Entries</option>
+                    <option value="live">Live Only</option>
+                    <option value="virtual">Virtual Only</option>
                   </select>
                 </div>
                 
@@ -1147,6 +1188,13 @@ export default function JudgeDashboard() {
                                       {performance.mastery}
                                     </span>
                                   )}
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    performance.entryType === 'virtual' 
+                                      ? 'bg-purple-100 text-purple-800' 
+                                      : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {performance.entryType === 'virtual' ? '📹 Virtual' : '🎭 Live'}
+                                  </span>
                                   <button 
                                     className="sm:hidden text-xs text-blue-600 underline"
                                     onClick={(e) => {
