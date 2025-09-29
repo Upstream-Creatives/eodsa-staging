@@ -486,15 +486,33 @@ function SoundTechPage() {
                                 </span>
                               )}
                             </p>
-                            {/* Prominent contestant name display */}
+                            {/* Nicely formatted contestant/dancer names */}
                             <div className="mb-2">
-                              <p className="text-lg font-bold text-black">
-                                {entry.contestantName || 'Unknown Contestant'}
-                              </p>
-                              <p className="text-base text-gray-700">
-                                {entry.participantNames?.join(', ')}
-                                {Array.isArray(entry.participantIds) && entry.participantIds.length > 1 ? ` (${entry.participantIds.length} contestants)` : ''}
-                              </p>
+                              {entry.contestantName && entry.contestantName !== 'Unknown Contestant' ? (
+                                <div>
+                                  <p className="text-lg font-bold text-black mb-1">
+                                    {entry.contestantName.includes(', ') ? (
+                                      <span className="text-indigo-600">Group Performance</span>
+                                    ) : (
+                                      <span className="text-green-600">Solo Performance</span>
+                                    )}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {entry.contestantName.split(', ').map((name, index) => (
+                                      <span 
+                                        key={index}
+                                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+                                      >
+                                        {name.trim()}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-lg font-bold text-red-500">
+                                  Unknown Contestant
+                                </p>
+                              )}
                             </div>
                             {selectedEvent === 'all' && (
                               <p className="text-xs text-gray-600">

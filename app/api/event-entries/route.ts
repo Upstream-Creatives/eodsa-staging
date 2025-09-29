@@ -50,14 +50,68 @@ export async function GET() {
   try {
     await ensureDbInitialized();
     
-    // Get all event entries for debugging
+    // Get all event entries
     const entries = await db.getAllEventEntries();
+    
+    // Enhance entries with contestant names from participantIds
+    const { getSql } = await import('@/lib/database');
+    const sqlClient = getSql();
+    
+    const enhancedEntries = await Promise.all(
+      entries.map(async (entry) => {
+        let contestantName = 'Unknown Contestant';
+        
+        try {
+          if (entry.participantIds && Array.isArray(entry.participantIds) && entry.participantIds.length > 0) {
+            console.log(`🔍 DEBUG: Entry ${entry.id} participantIds:`, entry.participantIds);
+            
+            // Try as dancer IDs first
+            const dancerResults = await sqlClient`
+              SELECT id, name FROM dancers WHERE id = ANY(${entry.participantIds})
+            ` as any[];
+            
+            console.log(`🔍 DEBUG: Found ${dancerResults.length} dancers by ID`);
+            
+            if (dancerResults.length > 0) {
+              const names = dancerResults.map(d => d.name);
+              contestantName = names.join(', ');
+              console.log(`✅ Found dancer names: ${contestantName}`);
+            } else {
+              // Try as EODSA IDs
+              console.log(`🔍 DEBUG: Trying as EODSA IDs...`);
+              const eodsaResults = await sqlClient`
+                SELECT id, name, eodsa_id FROM dancers WHERE eodsa_id = ANY(${entry.participantIds})
+              ` as any[];
+              
+              console.log(`🔍 DEBUG: Found ${eodsaResults.length} dancers by EODSA ID`);
+              
+              if (eodsaResults.length > 0) {
+                const names = eodsaResults.map(d => d.name);
+                contestantName = names.join(', ');
+                console.log(`✅ Found dancer names by EODSA ID: ${contestantName}`);
+              } else {
+                console.warn(`❌ No dancers found with IDs or EODSA IDs: ${entry.participantIds.join(', ')}`);
+              }
+            }
+          } else {
+            console.warn(`❌ No valid participantIds for entry ${entry.id}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error fetching dancers for entry ${entry.id}:`, error);
+        }
+        
+        return {
+          ...entry,
+          contestantName
+        };
+      })
+    );
     
     return NextResponse.json({ 
       success: true,
-      entries: entries,
-      count: entries.length,
-      message: `Found ${entries.length} event entries`
+      entries: enhancedEntries,
+      count: enhancedEntries.length,
+      message: `Found ${enhancedEntries.length} event entries`
     });
   } catch (error) {
     console.error('Error fetching event entries:', error);
