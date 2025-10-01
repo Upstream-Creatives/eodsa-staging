@@ -21,6 +21,8 @@ interface Performance {
   contestantId?: string;
   eodsaId?: string;
   ageCategory?: string;
+  musicFileUrl?: string;
+  musicFileName?: string;
   presence?: {
     present: boolean;
     checkedInBy?: string;
@@ -294,6 +296,11 @@ export default function RegistrationDashboard() {
       strictEvent
       onPerformanceReorder={handlePerformanceReorder}
       onPerformanceStatus={handlePerformanceStatus}
+      onMusicUpdated={(data) => {
+        setPerformances(prev => prev.map(p => (
+          (p as any).eventEntryId === data.entryId ? { ...p, musicFileUrl: data.musicFileUrl, musicFileName: data.musicFileName } : p
+        )));
+      }}
     >
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
@@ -321,7 +328,7 @@ export default function RegistrationDashboard() {
                 </select>
                 <button
                   onClick={() => {
-                    const rows = [['Item #','Title','Contestant','Participants','Present','CheckedInBy','CheckedInAt']];
+                    const rows = [['Item #','Item Name','Contestant','Participants','Present','CheckedInBy','CheckedInAt']];
                     for (const p of performances) {
                       rows.push([
                         String(p.itemNumber || ''),
@@ -501,6 +508,16 @@ export default function RegistrationDashboard() {
                               {performance.eodsaId && (
                                 <p className="text-xs text-gray-600">
                                   <strong>EODSA ID:</strong> {performance.eodsaId}
+                                </p>
+                              )}
+                              {/* Music Status for Live Performances */}
+                              {performance.entryType === 'live' && (
+                                <p className="text-xs">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    performance.musicFileUrl ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {performance.musicFileUrl ? 'Music uploaded' : 'Music missing'}
+                                  </span>
                                 </p>
                               )}
                             </div>

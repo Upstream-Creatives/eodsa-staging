@@ -27,6 +27,7 @@ interface Performance {
   contestantPhone?: string;
   musicFileUrl?: string;
   musicFileName?: string;
+  musicCue?: 'onstage' | 'offstage';
   videoExternalUrl?: string;
   videoExternalType?: string;
   studioInfo?: {
@@ -327,6 +328,9 @@ export default function MediaDashboard() {
           (p as any).eventEntryId === data.entryId ? { ...p, musicFileUrl: data.musicFileUrl, musicFileName: data.musicFileName } : p
         )));
       }}
+      onPerformanceMusicCue={(data) => {
+        setPerformances(prev => prev.map(p => p.id === data.performanceId ? { ...p, musicCue: data.musicCue } : p));
+      }}
       onVideoUpdated={(data) => {
         setPerformances(prev => prev.map(p => (
           (p as any).eventEntryId === data.entryId ? { ...p, videoExternalUrl: data.videoExternalUrl } : p
@@ -502,6 +506,9 @@ export default function MediaDashboard() {
                               <strong>Choreographer:</strong> {performance.choreographer} • 
                               <strong> Style:</strong> {performance.itemStyle} • 
                               <strong> Level:</strong> {performance.mastery}
+                              {performance.ageCategory && (
+                                <> • <strong> Age Category:</strong> {performance.ageCategory}</>
+                              )}
                             </p>
                             <p className="text-sm text-black">
                               <strong>Performers:</strong> 
@@ -544,6 +551,11 @@ export default function MediaDashboard() {
                                 <strong>EODSA ID:</strong> {performance.eodsaId}
                               </p>
                             )}
+                            {performance.musicCue && performance.entryType === 'live' && (
+                              <p className="text-xs text-gray-600">
+                                <strong>Music Cue:</strong> {performance.musicCue === 'onstage' ? 'On Stage' : 'Off Stage'}
+                              </p>
+                            )}
                             {performance.contestantEmail && (
                               <p className="text-xs text-gray-600">
                                 <strong>Email:</strong> {performance.contestantEmail} • 
@@ -583,10 +595,8 @@ export default function MediaDashboard() {
                             onClick={() => openPerformanceDetails(performance)}
                             className="px-3 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium transition-colors"
                           >
-                            📋 View Details
+                            View Details
                           </button>
-                          
-                          {/* Media Dashboard is view-only - no download/play buttons */}
                         </div>
                       </div>
                       

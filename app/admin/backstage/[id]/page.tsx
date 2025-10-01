@@ -652,6 +652,18 @@ export default function BackstageDashboard() {
   });
 
   const updatePerformanceStatus = async (performanceId: string, status: Performance['status']) => {
+    // Backstage "Complete" is local only - doesn't update server or broadcast
+    if (status === 'completed') {
+      // Update local state only for backstage view
+      setPerformances(prev => 
+        prev.map(p => 
+          p.id === performanceId ? { ...p, status } : p
+        )
+      );
+      success('Performance marked as complete (backstage view only)');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/performances/${performanceId}/status`, {
         method: 'PUT',
