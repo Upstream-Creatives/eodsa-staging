@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     // Generate unique public ID
     const fileTimestamp = Date.now();
-    const originalName = filename.replace(/\.[^/.]+$/, ""); // Remove extension
+    const originalName = filename.replace(/\.[^/.]+$/, "").replace(/\s+/g, "_"); // Remove extension and replace spaces with underscores
     const publicId = `eodsa/music/${fileTimestamp}_${originalName}`;
 
     // Generate upload signature (no upload preset needed for signed uploads)

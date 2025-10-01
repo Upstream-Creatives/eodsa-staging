@@ -37,26 +37,53 @@ export async function GET(request: NextRequest) {
           const events = await db.getAllEvents();
           const event = events.find(e => e.id === entry.eventId);
 
-          // Get dancer name using contestant_id (which is the internal dancer ID)
+          // Get dancer names using participantIds
           let contestantName = 'Unknown Contestant';
           let studioName = 'Independent';
           
           try {
             const sqlClient = getSql();
             
-            // contestant_id is the internal dancer ID, so query dancers table directly
-            const dancerResult = await sqlClient`
-              SELECT name FROM dancers WHERE id = ${entry.contestantId}
-            ` as any[];
+            console.log(`🔍 DEBUG: Entry ${entry.id} participantIds:`, entry.participantIds);
+            console.log(`🔍 DEBUG: participantIds type:`, typeof entry.participantIds);
+            console.log(`🔍 DEBUG: participantIds isArray:`, Array.isArray(entry.participantIds));
             
-            if (dancerResult.length > 0) {
-              contestantName = dancerResult[0].name;
-              console.log(`✅ Found dancer name: ${contestantName} for entry ${entry.id} using contestant_id ${entry.contestantId}`);
+            if (entry.participantIds && Array.isArray(entry.participantIds) && entry.participantIds.length > 0) {
+              console.log(`🔍 DEBUG: Looking for dancers with IDs: ${entry.participantIds.join(', ')}`);
+              
+              // Try as dancer IDs first
+              const dancerResults = await sqlClient`
+                SELECT id, name FROM dancers WHERE id = ANY(${entry.participantIds})
+              ` as any[];
+              
+              console.log(`🔍 DEBUG: Found ${dancerResults.length} dancers by ID`);
+              
+              if (dancerResults.length > 0) {
+                const names = dancerResults.map(d => d.name);
+                contestantName = names.join(', ');
+                console.log(`✅ Found dancer names: ${contestantName}`);
+              } else {
+                // Try as EODSA IDs
+                console.log(`🔍 DEBUG: Trying as EODSA IDs...`);
+                const eodsaResults = await sqlClient`
+                  SELECT id, name, eodsa_id FROM dancers WHERE eodsa_id = ANY(${entry.participantIds})
+                ` as any[];
+                
+                console.log(`🔍 DEBUG: Found ${eodsaResults.length} dancers by EODSA ID`);
+                
+                if (eodsaResults.length > 0) {
+                  const names = eodsaResults.map(d => d.name);
+                  contestantName = names.join(', ');
+                  console.log(`✅ Found dancer names by EODSA ID: ${contestantName}`);
+                } else {
+                  console.warn(`❌ No dancers found with IDs or EODSA IDs: ${entry.participantIds.join(', ')}`);
+                }
+              }
             } else {
-              console.warn(`❌ Could not find dancer for entry ${entry.id} with contestant_id: ${entry.contestantId}`);
+              console.warn(`❌ No valid participantIds for entry ${entry.id}`);
             }
           } catch (error) {
-            console.error(`❌ Error fetching dancer for entry ${entry.id}:`, error);
+            console.error(`❌ Error fetching dancers for entry ${entry.id}:`, error);
           }
 
           return {
