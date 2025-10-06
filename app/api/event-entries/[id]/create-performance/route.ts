@@ -67,7 +67,12 @@ export async function POST(
       choreographer: entry.choreographer,
       mastery: entry.mastery,
       itemStyle: entry.itemStyle,
-      status: 'scheduled'
+      status: 'scheduled',
+      entryType: entry.entryType || 'live',
+      videoExternalUrl: entry.videoExternalUrl,
+      videoExternalType: entry.videoExternalType,
+      musicFileUrl: entry.musicFileUrl,
+      musicFileName: entry.musicFileName
     });
 
     return NextResponse.json({

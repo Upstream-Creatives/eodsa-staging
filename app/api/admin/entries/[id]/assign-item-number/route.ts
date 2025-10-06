@@ -38,17 +38,58 @@ export async function PUT(
     }
     await db.updateEventEntry(entryId, entryUpdates);
 
-    // AUTO-SYNC: Update the corresponding performance as well
+    // AUTO-SYNC: Update the corresponding performance as well (or create if missing)
     try {
       const allPerformances = await db.getAllPerformances();
-      const performance = allPerformances.find(p => p.eventEntryId === entryId);
-      
+      let performance = allPerformances.find(p => p.eventEntryId === entryId);
+
       if (performance) {
         await db.updatePerformanceItemNumber(performance.id, itemNumber);
         console.log(`Auto-synced item number ${itemNumber} to performance ${performance.id}`);
+      } else {
+        // Performance doesn't exist yet - create it (happens for virtual entries)
+        const entry = allEntries.find(e => e.id === entryId);
+        if (entry && entry.approved) {
+          console.log(`Creating missing performance for entry ${entryId} (${entry.entryType})`);
+
+          // Build participant names
+          const { unifiedDb } = await import('@/lib/database');
+          const participantNames: string[] = [];
+          for (let i = 0; i < entry.participantIds.length; i++) {
+            const pid = entry.participantIds[i];
+            try {
+              const dancer = await unifiedDb.getDancerById(pid);
+              if (dancer?.name) {
+                participantNames.push(dancer.name);
+                continue;
+              }
+            } catch {}
+            participantNames.push(`Participant ${i + 1}`);
+          }
+
+          await db.createPerformance({
+            eventId: entry.eventId,
+            eventEntryId: entry.id,
+            contestantId: entry.contestantId,
+            title: entry.itemName,
+            participantNames,
+            duration: entry.estimatedDuration || 0,
+            itemNumber: itemNumber,
+            choreographer: entry.choreographer,
+            mastery: entry.mastery,
+            itemStyle: entry.itemStyle,
+            status: 'scheduled',
+            entryType: entry.entryType || 'live',
+            videoExternalUrl: entry.videoExternalUrl,
+            videoExternalType: entry.videoExternalType,
+            musicFileUrl: entry.musicFileUrl,
+            musicFileName: entry.musicFileName
+          } as any);
+          console.log(`✅ Created performance for virtual entry ${entryId}`);
+        }
       }
     } catch (syncError) {
-      console.warn('Failed to auto-sync performance item number:', syncError);
+      console.warn('Failed to auto-sync/create performance:', syncError);
       // Don't fail the whole request if sync fails
     }
 

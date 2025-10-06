@@ -13,11 +13,12 @@ export async function POST(request: NextRequest) {
     const entries = await db.getAllEventEntries();
     const performances = await db.getAllPerformances();
 
-    const approvedLive = entries.filter(e => e.eventId === eventId && e.approved && (e.entryType || 'live') === 'live');
+    // Include BOTH live and virtual approved entries
+    const approvedEntries = entries.filter(e => e.eventId === eventId && e.approved);
     const existingByEntry = new Set(performances.filter(p => p.eventId === eventId).map(p => p.eventEntryId));
 
     let created = 0;
-    for (const entry of approvedLive) {
+    for (const entry of approvedEntries) {
       if (existingByEntry.has(entry.id)) continue;
 
       // Build participant names using unified dancer records when available
@@ -49,7 +50,12 @@ export async function POST(request: NextRequest) {
         mastery: entry.mastery,
         itemStyle: entry.itemStyle,
         status: 'scheduled',
-        itemNumber: entry.itemNumber || null as any
+        itemNumber: entry.itemNumber || null as any,
+        entryType: entry.entryType || 'live',
+        videoExternalUrl: entry.videoExternalUrl,
+        videoExternalType: entry.videoExternalType,
+        musicFileUrl: entry.musicFileUrl,
+        musicFileName: entry.musicFileName
       });
       created++;
     }

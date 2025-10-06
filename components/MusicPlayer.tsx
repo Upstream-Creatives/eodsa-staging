@@ -9,15 +9,17 @@ interface MusicPlayerProps {
   className?: string;
   showDownload?: boolean;
   compact?: boolean;
+  onPlayingChange?: (isPlaying: boolean) => void;
 }
 
-export default function MusicPlayer({ 
-  musicUrl, 
-  filename, 
+export default function MusicPlayer({
+  musicUrl,
+  filename,
   publicId,
   className = '',
   showDownload = true,
-  compact = false
+  compact = false,
+  onPlayingChange
 }: MusicPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -32,7 +34,10 @@ export default function MusicPlayer({
 
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration);
-    const handleEnded = () => setIsPlaying(false);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      onPlayingChange?.(false);
+    };
     const handleLoadStart = () => setIsLoading(true);
     const handleCanPlay = () => setIsLoading(false);
 
@@ -57,10 +62,13 @@ export default function MusicPlayer({
 
     if (isPlaying) {
       audio.pause();
+      setIsPlaying(false);
+      onPlayingChange?.(false);
     } else {
       audio.play();
+      setIsPlaying(true);
+      onPlayingChange?.(true);
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
