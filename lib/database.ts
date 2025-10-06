@@ -59,6 +59,13 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_by TEXT`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_at TEXT`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announcer_notes TEXT`;
+
+    // Phase 2: Virtual entry support columns
+    await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS entry_type TEXT DEFAULT 'live'`;
+    await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS video_external_url TEXT`;
+    await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS video_external_type TEXT`;
+    await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS music_file_url TEXT`;
+    await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS music_file_name TEXT`;
     
     // Create EFT payment logs table for tracking manual payments
     await sqlClient`
