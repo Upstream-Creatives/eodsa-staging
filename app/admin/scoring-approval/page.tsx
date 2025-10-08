@@ -27,7 +27,7 @@ interface PerformanceApproval {
   judgeScores: JudgeScore[];
   averageScore: number;
   percentage: number;
-  medal: string;
+  medal: string | { type: string; label: string; color: string; bgColor: string; borderColor: string; emoji: string };
   status: 'pending' | 'published';
   scoresPublished: boolean;
 }
