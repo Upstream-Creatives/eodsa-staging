@@ -341,7 +341,7 @@ export default function ScoringApprovalPage() {
 
                       {/* Average Score & Medal */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                        <div className={`bg-gradient-to-r ${getMedalColor(approval.medal)} rounded-lg p-4 text-center`}>
+                        <div className={`bg-gradient-to-r ${getMedalColor(typeof approval.medal === 'string' ? approval.medal : approval.medal.label)} rounded-lg p-4 text-center`}>
                           <p className="text-xs font-semibold text-white mb-1">FINAL SCORE</p>
                           <p className="text-3xl sm:text-4xl font-bold text-white">
                             {approval.averageScore.toFixed(2)}
@@ -350,9 +350,11 @@ export default function ScoringApprovalPage() {
                           <p className="text-xs text-white mt-1">{approval.percentage.toFixed(1)}%</p>
                         </div>
 
-                        <div className={`bg-gradient-to-r ${getMedalColor(approval.medal)} rounded-lg p-4 text-center`}>
+                        <div className={`bg-gradient-to-r ${getMedalColor(typeof approval.medal === 'string' ? approval.medal : approval.medal.label)} rounded-lg p-4 text-center`}>
                           <p className="text-xs font-semibold text-white mb-1">MEDAL</p>
-                          <p className="text-3xl sm:text-4xl font-bold text-white">{approval.medal}</p>
+                          <p className="text-3xl sm:text-4xl font-bold text-white">
+                            {typeof approval.medal === 'string' ? approval.medal : approval.medal.label}
+                          </p>
                           <p className="text-xs text-white mt-1">{approval.totalJudges} judges scored</p>
                         </div>
                       </div>
@@ -421,13 +423,13 @@ export default function ScoringApprovalPage() {
 
             <div className="p-4 sm:p-6">
               {/* Final Score Display */}
-              <div className={`bg-gradient-to-r ${getMedalColor(selectedApproval.medal)} rounded-xl p-6 mb-6 text-center text-white`}>
+              <div className={`bg-gradient-to-r ${getMedalColor(typeof selectedApproval.medal === 'string' ? selectedApproval.medal : selectedApproval.medal.label)} rounded-xl p-6 mb-6 text-center text-white`}>
                 <p className="text-sm font-semibold mb-2">FINAL AVERAGE SCORE</p>
                 <p className="text-5xl font-bold">
                   {selectedApproval.averageScore.toFixed(2)}
                   <span className="text-2xl">/100</span>
                 </p>
-                <p className="text-lg mt-2">{selectedApproval.percentage.toFixed(1)}% • {selectedApproval.medal}</p>
+                <p className="text-lg mt-2">{selectedApproval.percentage.toFixed(1)}% • {typeof selectedApproval.medal === 'string' ? selectedApproval.medal : selectedApproval.medal.label}</p>
                 <p className="text-sm mt-1 opacity-90">Averaged from {selectedApproval.totalJudges} judges</p>
               </div>
 

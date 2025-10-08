@@ -3311,7 +3311,9 @@ export const db = {
   async getScoreApprovals(performanceId?: string) {
     const sqlClient = getSql();
 
-    // Get performances with ALL judges scored - aggregated view
+    // IMPORTANT: Get performances with ALL judges scored - aggregated view
+    // This query is DYNAMIC - it counts actual judges assigned, NOT hard-coded to 4
+    // Performance appears when: scored_judges = total_judges (regardless of number)
     const performancesQuery = performanceId
       ? sqlClient`
           WITH performance_judge_counts AS (
@@ -3351,6 +3353,9 @@ export const db = {
         `;
 
     const performances = await performancesQuery as any[];
+    
+    // Debug logging to help diagnose issues
+    console.log(`📊 Score Approvals Query Result: Found ${performances.length} performances ready for approval`);
 
     // For each performance, get all judge scores
     const result = await Promise.all(performances.map(async (perf: any) => {
