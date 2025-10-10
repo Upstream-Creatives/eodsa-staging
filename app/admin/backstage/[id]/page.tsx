@@ -437,10 +437,12 @@ export default function BackstageDashboard() {
   );
 
   useEffect(() => {
-    // Check admin authentication
-    const session = localStorage.getItem('adminSession');
-    if (!session) {
-      router.push('/portal/admin');
+    // Check admin or backstage staff authentication
+    const adminSession = localStorage.getItem('adminSession');
+    const backstageSession = localStorage.getItem('backstageSession');
+    
+    if (!adminSession && !backstageSession) {
+      router.push('/portal/backstage');
       return;
     }
 

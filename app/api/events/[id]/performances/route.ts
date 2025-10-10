@@ -35,7 +35,10 @@ export async function GET(
 
     // Include virtualItemNumber and calculate age categories
     try {
-      const entries = await db.getAllEventEntries();
+      // CRITICAL FIX: Query BOTH event_entries AND nationals_event_entries
+      const regularEntries = await db.getAllEventEntries();
+      const nationalsEntries = await db.getAllNationalsEventEntries();
+      const entries = [...regularEntries, ...nationalsEntries];
 
       const withVirtualAndAges = await Promise.all(
         performances.map(async (p: any) => {
@@ -48,7 +51,7 @@ export async function GET(
 
           return {
             ...p,
-            virtualItemNumber: entry && entry.virtualItemNumber ? entry.virtualItemNumber : undefined,
+            virtualItemNumber: entry && (entry as any).virtualItemNumber ? (entry as any).virtualItemNumber : undefined,
             ageCategory // Add calculated age category
           };
         })

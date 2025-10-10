@@ -35,6 +35,60 @@ export async function PATCH(
 
     await db.updateEventEntry(entryId, updatedEntry);
 
+    // CRITICAL: Auto-create performance for this approved entry (idempotent)
+    try {
+      const existingPerformances = await db.getAllPerformances();
+      const alreadyExists = existingPerformances.some(p => p.eventEntryId === entryId);
+      
+      if (!alreadyExists) {
+        console.log(`🎭 Creating performance for approved entry: ${entryId}`);
+        
+        // Build participant names using unified dancer records when available
+        const participantNames: string[] = [];
+        try {
+          for (let i = 0; i < entry.participantIds.length; i++) {
+            const pid = entry.participantIds[i];
+            try {
+              const dancer = await unifiedDb.getDancerById(pid);
+              if (dancer?.name) {
+                participantNames.push(dancer.name);
+                continue;
+              }
+            } catch {}
+            participantNames.push(`Participant ${i + 1}`);
+          }
+        } catch {
+          entry.participantIds.forEach((_, i) => participantNames.push(`Participant ${i + 1}`));
+        }
+
+        await db.createPerformance({
+          eventId: entry.eventId,
+          eventEntryId: entryId,
+          contestantId: entry.contestantId,
+          title: entry.itemName,
+          participantNames,
+          duration: entry.estimatedDuration || 0,
+          choreographer: entry.choreographer,
+          mastery: entry.mastery,
+          itemStyle: entry.itemStyle,
+          status: 'scheduled',
+          itemNumber: entry.itemNumber || undefined,
+          entryType: entry.entryType || 'live',
+          videoExternalUrl: entry.videoExternalUrl,
+          videoExternalType: entry.videoExternalType,
+          musicFileUrl: entry.musicFileUrl,
+          musicFileName: entry.musicFileName
+        });
+        
+        console.log(`✅ Performance created successfully for entry: ${entryId}`);
+      } else {
+        console.log(`ℹ️  Performance already exists for entry: ${entryId}`);
+      }
+    } catch (perfErr) {
+      console.error('⚠️  Failed to auto-create performance for entry', entryId, perfErr);
+      // Don't fail the approval if performance creation fails
+    }
+
     // Auto-mark registration fees as paid for all participants since entry is now paid
     if (entry.participantIds && entry.participantIds.length > 0 && entry.mastery) {
       try {

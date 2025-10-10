@@ -403,13 +403,13 @@ function AdminRankingsPage() {
                 <div
                   key={studio}
                   className={`p-4 rounded-xl border-2 transition-all duration-200 hover:shadow-lg ${
-                    index === 0 
-                      ? 'border-emerald-500 bg-emerald-50' 
-                      : index === 1 
-                      ? 'border-blue-500 bg-blue-50'
+                    index === 0
+                      ? 'border-emerald-500 bg-gray-700'
+                      : index === 1
+                      ? 'border-blue-500 bg-gray-700'
                       : index === 2
-                      ? 'border-amber-500 bg-amber-50'
-                      : 'border-gray-300 bg-gray-50'
+                      ? 'border-amber-500 bg-gray-700'
+                      : 'border-gray-600 bg-gray-700'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -420,18 +420,18 @@ function AdminRankingsPage() {
                       </div>
                     </div>
                     <div className={`text-xl font-bold ${
-                      index === 0 
-                        ? 'text-emerald-600' 
-                        : index === 1 
-                        ? 'text-blue-600'
+                      index === 0
+                        ? 'text-emerald-400'
+                        : index === 1
+                        ? 'text-blue-400'
                         : index === 2
-                        ? 'text-amber-600'
-                        : 'text-gray-400'
+                        ? 'text-amber-400'
+                        : 'text-gray-300'
                     }`}>
                       {count}
                     </div>
                   </div>
-                  
+
                   {index < 3 && (
                     <div className="mt-2 flex items-center space-x-1">
                       <span className="text-xs">
@@ -458,7 +458,7 @@ function AdminRankingsPage() {
               className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                 viewMode === 'all'
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
             >
               All Rankings
@@ -468,7 +468,7 @@ function AdminRankingsPage() {
               className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                 viewMode === 'top3_age'
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
             >
               Top 3 by Age
@@ -478,7 +478,7 @@ function AdminRankingsPage() {
               className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                 viewMode === 'top3_style'
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
             >
               Top 3 by Style
@@ -488,7 +488,7 @@ function AdminRankingsPage() {
               className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                 viewMode === 'top3_duets'
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
             >
               Top 3 Duets
@@ -498,7 +498,7 @@ function AdminRankingsPage() {
               className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                 viewMode === 'top3_groups'
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
             >
               Top 3 Groups
@@ -508,7 +508,7 @@ function AdminRankingsPage() {
               className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                 viewMode === 'top3_trios'
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
             >
               Top 3 Trios
@@ -518,7 +518,7 @@ function AdminRankingsPage() {
               className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                 viewMode === 'top10_soloists'
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
             >
               Top 10 Soloists
@@ -536,17 +536,17 @@ function AdminRankingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Competition</label>
-              <div className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-50 text-white font-medium">
+              <div className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl bg-gray-700 text-white font-medium">
                 Avalon
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Age Category</label>
               <select
                 value={selectedAgeCategory}
                 onChange={(e) => setSelectedAgeCategory(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium text-white"
+                className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium bg-gray-700 text-white"
               >
                 <option value="">All Ages</option>
                 {['Primary', 'Junior', 'Senior', 'Youth', 'Adult', 'Elite'].map(age => (
@@ -554,13 +554,13 @@ function AdminRankingsPage() {
                 ))}
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Performance Type</label>
               <select
                 value={selectedPerformanceType}
                 onChange={(e) => setSelectedPerformanceType(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium text-white"
+                className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium bg-gray-700 text-white"
               >
                 <option value="">All Types</option>
                 {['Solo', 'Duet', 'Trio', 'Group'].map(type => (
@@ -568,13 +568,13 @@ function AdminRankingsPage() {
                 ))}
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Mastery Level</label>
               <select
                 value={masteryFilter}
                 onChange={(e) => setMasteryFilter(e.target.value as 'all' | 'competitive' | 'advanced')}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium text-white"
+                className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium bg-gray-700 text-white"
               >
                 <option value="all">All Levels</option>
                 <option value="competitive">Competitive (Water)</option>
@@ -629,12 +629,12 @@ function AdminRankingsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
+                    <tr className="border-b border-gray-600">
                       <th className="text-left py-4 px-6 font-bold text-white">Rank</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Item #</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Performance</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Contestant</th>
-                      
+
                       <th className="text-left py-4 px-6 font-bold text-white">Score</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Level</th>
                     </tr>
@@ -643,7 +643,7 @@ function AdminRankingsPage() {
                     {filteredRankings.map((ranking, index) => {
                       const { percentage, rankingLevel, rankingColor, medalEmoji } = calculatePercentageAndRanking(ranking.totalScore, ranking.judgeCount);
                       return (
-                        <tr key={ranking.performanceId} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                        <tr key={ranking.performanceId} className="border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
                           <td className="py-4 px-6">
                             <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border ${getRankBadgeColor(ranking.rank)}`}>
                               {getRankIcon(ranking.rank)}
@@ -659,7 +659,7 @@ function AdminRankingsPage() {
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-sm text-gray-400">{ranking.itemStyle}</span>
                               {ranking.mastery && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-700 text-emerald-200">
                                   {ranking.mastery}
                                 </span>
                               )}

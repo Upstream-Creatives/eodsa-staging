@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all event entries for this contestant (owned OR participating in)
-    const allEntries = await db.getAllEventEntries();
+    // CRITICAL FIX: Query BOTH event_entries AND nationals_event_entries
+    const regularEntries = await db.getAllEventEntries();
+    const nationalsEntries = await db.getAllNationalsEventEntries();
+    const allEntries = [...regularEntries, ...nationalsEntries];
     const contestantEntries = allEntries.filter(entry => {
       // Include if user owns the entry
       if (entry.eodsaId === eodsaId) return true;
@@ -28,17 +31,22 @@ export async function GET(request: NextRequest) {
     });
     
     // Filter entries that need video upload (virtual entries without video)
-    const entriesNeedingVideo = contestantEntries.filter(entry => 
-      entry.entryType === 'virtual' && !entry.videoFileUrl && !entry.videoExternalUrl
-    );
+    // Nationals entries are all virtual and don't have entryType field
+    const entriesNeedingVideo = contestantEntries.filter(entry => {
+      const isVirtual = (entry as any).entryType === 'virtual' || (entry as any).nationalsEventId; // nationals entries are virtual
+      const hasNoVideo = !(entry as any).videoFileUrl && !(entry as any).videoExternalUrl;
+      return isVirtual && hasNoVideo;
+    });
     
     // Get additional info for each entry
     const entriesWithDetails = await Promise.all(
       entriesNeedingVideo.map(async (entry) => {
         try {
           // Get event details
+          // Handle both eventId (regular entries) and nationalsEventId (nationals entries)
           const events = await db.getAllEvents();
-          const event = events.find(e => e.id === entry.eventId);
+          const eventId = (entry as any).eventId || (entry as any).nationalsEventId;
+          const event = events.find(e => e.id === eventId);
           
           return {
             ...entry,

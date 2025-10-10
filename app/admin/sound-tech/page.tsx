@@ -62,6 +62,14 @@ function SoundTechPage() {
   const [entryTypeFilter, setEntryTypeFilter] = useState<string>('live');
   const [searchTerm, setSearchTerm] = useState('');
   const [removingMusic, setRemovingMusic] = useState<Set<string>>(new Set());
+  // Local completion state - not broadcasted to other dashboards
+  const [localCompletedItems, setLocalCompletedItems] = useState<Set<string>>(new Set());
+  // Track currently playing item for mini player
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<{
+    entryId: string;
+    itemName: string;
+    isPlaying: boolean;
+  } | null>(null);
 
   useEffect(() => {
     // Check admin authentication
@@ -71,8 +79,26 @@ function SoundTechPage() {
       return;
     }
 
+    // Load local completion state from localStorage
+    const savedCompletions = localStorage.getItem('soundDeskCompletions');
+    if (savedCompletions) {
+      try {
+        const parsed = JSON.parse(savedCompletions);
+        setLocalCompletedItems(new Set(parsed));
+      } catch (e) {
+        console.error('Failed to load completion state:', e);
+      }
+    }
+
     fetchData();
   }, [router]);
+
+  // Save completion state to localStorage whenever it changes
+  useEffect(() => {
+    if (localCompletedItems.size > 0) {
+      localStorage.setItem('soundDeskCompletions', JSON.stringify(Array.from(localCompletedItems)));
+    }
+  }, [localCompletedItems]);
 
   // Join sound room for real-time updates
   useEffect(() => {
@@ -107,15 +133,22 @@ function SoundTechPage() {
             if (perfData.success) {
               const numMap = new Map<string, number>();
               const cueMap = new Map<string, 'onstage' | 'offstage'>();
+              const orderMap = new Map<string, number>();
               for (const p of perfData.performances) {
                 if (p.eventEntryId && p.itemNumber) {
                   numMap.set(p.eventEntryId, p.itemNumber);
                 }
                 if (p.eventEntryId && p.musicCue) cueMap.set(p.eventEntryId, p.musicCue);
+                if (p.eventEntryId && p.performanceOrder) orderMap.set(p.eventEntryId, p.performanceOrder);
               }
               baseEntries = baseEntries.map((e: any) => (
                 e.eventId === selectedEvent
-                  ? { ...e, itemNumber: numMap.get(e.id) ?? e.itemNumber, musicCue: cueMap.get(e.id) }
+                  ? {
+                      ...e,
+                      itemNumber: numMap.get(e.id) ?? e.itemNumber,
+                      musicCue: cueMap.get(e.id) ?? e.musicCue,
+                      performanceOrder: orderMap.get(e.id) ?? e.performanceOrder
+                    }
                   : e
               ));
             }
@@ -187,6 +220,18 @@ function SoundTechPage() {
       }
     });
     success(`Started download of ${liveEntries.length} music files`);
+  };
+
+  const toggleCompletion = (entryId: string) => {
+    setLocalCompletedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
   };
 
   const removeMusic = async (entryId: string, itemName: string) => {
@@ -357,6 +402,40 @@ function SoundTechPage() {
         </div>
       </div>
 
+      {/* Mini Player - Fixed at top */}
+      {currentlyPlaying && (
+        <div className="bg-purple-600 border-b border-purple-700 sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-xl">🎵</span>
+                </div>
+                <div>
+                  <p className="text-sm text-purple-200">Now Playing</p>
+                  <p className="text-lg font-semibold text-white">{currentlyPlaying.itemName}</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                  currentlyPlaying.isPlaying
+                    ? 'bg-green-500 text-white animate-pulse'
+                    : 'bg-gray-500 text-white'
+                }`}>
+                  {currentlyPlaying.isPlaying ? '▶️ Playing' : '⏸️ Paused'}
+                </span>
+                <button
+                  onClick={() => setCurrentlyPlaying(null)}
+                  className="px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-sm"
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -465,7 +544,14 @@ function SoundTechPage() {
             {liveEntries.length > 0 ? (
               <div className="divide-y divide-gray-200">
                 {liveEntries.map((entry) => (
-                  <div key={entry.id} className="p-6">
+                  <div
+                    key={entry.id}
+                    className={`p-6 ${
+                      localCompletedItems.has(entry.id)
+                        ? 'bg-green-50 border-l-4 border-l-green-500'
+                        : ''
+                    }`}
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-3 mb-3">
@@ -480,11 +566,13 @@ function SoundTechPage() {
                             </h3>
                             <p className="text-sm text-black">
                               {getPerformanceType(entry.participantIds)} • Style: {entry.itemStyle}
-                              {entry.musicCue && (
-                                <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-800">
-                                  {entry.musicCue === 'onstage' ? 'Music: Onstage' : 'Music: Offstage'}
-                                </span>
-                              )}
+                              <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                entry.musicCue === 'onstage'
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {entry.musicCue === 'onstage' ? '🎭 On Stage' : '📴 Off Stage'}
+                              </span>
                             </p>
                             {/* Nicely formatted contestant/dancer names */}
                             <div className="mb-2">
@@ -526,9 +614,23 @@ function SoundTechPage() {
                           <div className="mt-4">
                             <MusicPlayer
                               musicUrl={entry.musicFileUrl}
-                              filename="" 
+                              filename={entry.musicFileName || entry.itemName}
                               className="max-w-2xl"
                               showDownload={true}
+                              onPlayingChange={(isPlaying) => {
+                                if (isPlaying) {
+                                  setCurrentlyPlaying({
+                                    entryId: entry.id,
+                                    itemName: entry.itemName,
+                                    isPlaying: true
+                                  });
+                                } else if (currentlyPlaying?.entryId === entry.id) {
+                                  setCurrentlyPlaying({
+                                    ...currentlyPlaying,
+                                    isPlaying: false
+                                  });
+                                }
+                              }}
                             />
                           </div>
                         )}
@@ -566,12 +668,25 @@ function SoundTechPage() {
                       
                       <div className="ml-4 flex flex-col items-end space-y-2">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          entry.approved 
-                            ? 'bg-green-100 text-green-800' 
+                          entry.approved
+                            ? 'bg-green-100 text-green-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}>
                           {entry.approved ? 'Approved' : 'Pending'}
                         </span>
+
+                        {/* Completion Toggle - Local Only */}
+                        <button
+                          onClick={() => toggleCompletion(entry.id)}
+                          className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${
+                            localCompletedItems.has(entry.id)
+                              ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                              : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
+                          }`}
+                          title="Mark as complete (local view only - doesn't affect other dashboards)"
+                        >
+                          {localCompletedItems.has(entry.id) ? '✅ Completed' : '◻️ Mark Complete'}
+                        </button>
 
                         {/* Remove Music Button */}
                         <button
@@ -589,7 +704,7 @@ function SoundTechPage() {
                             '🗑️ Remove Music'
                           )}
                         </button>
-                        
+
                         {/* Hide filename to avoid confusion */}
                       </div>
                     </div>
