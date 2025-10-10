@@ -17,17 +17,16 @@ class SocketClient {
     console.log('🔧 Environment SOCKET_URL:', process.env.NEXT_PUBLIC_SOCKET_URL);
 
     this.socket = io(socketUrl, {
-      transports: ['polling', 'websocket'], // Polling first for Render.com
+      transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 15, // More attempts for Render.com
-      reconnectionDelay: 2000, // Longer delay
-      reconnectionDelayMax: 10000, // Longer max delay
-      timeout: 60000, // Much longer timeout for Render.com cold starts
+      reconnectionAttempts: 15,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 30000,
       forceNew: false,
-      // Render.com optimizations
       upgrade: true,
-      rememberUpgrade: false // Don't remember upgrades on Render.com
+      rememberUpgrade: true
     });
 
     this.socket.on('connect', () => {
