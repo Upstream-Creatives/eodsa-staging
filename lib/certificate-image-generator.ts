@@ -81,12 +81,13 @@ export async function generateCertificateImage(data: CertificateImageData): Prom
     const dateBaselineOffset = pos.dateFontSize * 0.9;
 
     // Create SVG overlay with text
+    // Using Arial as primary font since it's available on Vercel serverless
     const svgOverlay = `
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <style>
           .dancer-name {
             fill: white;
-            font-family: 'Montserrat', Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: bold;
             font-size: ${pos.nameFontSize}px;
             text-anchor: middle;
@@ -94,34 +95,34 @@ export async function generateCertificateImage(data: CertificateImageData): Prom
           }
           .percentage {
             fill: white;
-            font-family: 'Montserrat', Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: bold;
             font-size: ${pos.percentageFontSize}px;
           }
           .style-text {
             fill: white;
-            font-family: 'Montserrat', Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: bold;
             font-size: ${pos.styleFontSize}px;
             text-transform: uppercase;
           }
           .title-text {
             fill: white;
-            font-family: 'Montserrat', Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: bold;
             font-size: ${pos.titleFontSize}px;
             text-transform: uppercase;
           }
           .medallion-text {
             fill: white;
-            font-family: 'Montserrat', Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: bold;
             font-size: ${pos.medallionFontSize}px;
             text-transform: uppercase;
           }
           .date-text {
             fill: white;
-            font-family: 'Montserrat', Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-size: ${pos.dateFontSize}px;
           }
         </style>
