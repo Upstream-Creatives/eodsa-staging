@@ -26,11 +26,8 @@ export async function GET(request: NextRequest) {
     const medallion = searchParams.get('medallion') || 'GOLD';
     const date = searchParams.get('date') || '4 October 2025';
 
-    // Upload template to Cloudinary if not already there (one-time)
-    // For now, let's assume it's uploaded as "certificate-template"
-    
     // Use Cloudinary's text overlay feature to add text
-    const certificateUrl = cloudinary.url('certificate-template', {
+    const certificateUrl = cloudinary.url('Template_syz7di', {
       transformation: [
         {
           overlay: {
