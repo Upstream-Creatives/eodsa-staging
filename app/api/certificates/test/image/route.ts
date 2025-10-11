@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCertificateWithCanvas } from '@/lib/certificate-canvas-generator';
+import { generateCertificateWithJimp } from '@/lib/certificate-jimp-generator';
 
 /**
  * GET /api/certificates/test/image
@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
       date: searchParams.get('date') || '4 October 2025'
     };
 
-    // Generate certificate image using Canvas
-    const certificateBuffer = await generateCertificateWithCanvas(testData);
+    // Generate certificate image using Jimp (serverless-friendly)
+    const certificateBuffer = await generateCertificateWithJimp(testData);
 
     // Return image
     return new NextResponse(certificateBuffer, {

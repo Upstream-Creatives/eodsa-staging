@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCertificateWithCanvas } from '@/lib/certificate-canvas-generator';
+import { generateCertificateWithJimp } from '@/lib/certificate-jimp-generator';
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    const certificateBuffer = await generateCertificateWithCanvas(certificateData);
+    const certificateBuffer = await generateCertificateWithJimp(certificateData);
 
     return new NextResponse(certificateBuffer, {
       headers: {
