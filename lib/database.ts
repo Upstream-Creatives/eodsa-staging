@@ -1389,16 +1389,64 @@ export const db = {
         }
       }
       
-      // Third pass: build final result objects
-      return rankedResults.map((row: any) => {
+      // Third pass: build final result objects with participant names
+      const finalResults = await Promise.all(rankedResults.map(async (row: any) => {
         
         // Parse participant names from JSON
         let participantNames: string[] = [];
         try {
-          participantNames = JSON.parse(row.participant_names || '[]');
+          // participant_names might be a JSON string or already parsed array
+          if (typeof row.participant_names === 'string') {
+            participantNames = JSON.parse(row.participant_names || '[]');
+          } else if (Array.isArray(row.participant_names)) {
+            participantNames = row.participant_names;
+          }
+          
+          // Filter out null, undefined, and empty strings
+          participantNames = participantNames.filter((name: any) => name && typeof name === 'string' && name.trim() !== '');
         } catch (error) {
           console.warn('Error parsing participant names:', error);
-          participantNames = [row.contestant_name]; // Fallback to contestant name
+        }
+        
+        // If participant_names is empty but we have participant_ids, fetch names from dancers table
+        if (participantNames.length === 0 && row.participant_ids) {
+          try {
+            const participantIds = typeof row.participant_ids === 'string' 
+              ? JSON.parse(row.participant_ids) 
+              : row.participant_ids;
+            
+            if (Array.isArray(participantIds) && participantIds.length > 0) {
+              // Fetch dancer names from database using SQL directly
+              // Try both by ID and by EODSA ID (participant_ids might contain either)
+              const sqlClient = getSql();
+              
+              // First try by internal ID
+              let dancerResults = await sqlClient`
+                SELECT id, eodsa_id, name FROM dancers WHERE id = ANY(${participantIds})
+              ` as any[];
+              
+              // If no results, try by EODSA ID
+              if (dancerResults.length === 0) {
+                dancerResults = await sqlClient`
+                  SELECT id, eodsa_id, name FROM dancers WHERE eodsa_id = ANY(${participantIds})
+                ` as any[];
+              }
+              
+              // Add names in the order they appear in participant_ids
+              for (const pid of participantIds) {
+                const dancer = dancerResults.find((d: any) => d.id === pid || d.eodsa_id === pid);
+                if (dancer?.name) {
+                  participantNames.push(dancer.name);
+                } else {
+                  // Log missing dancer for debugging
+                  console.warn(`⚠️ Dancer not found for participant ID: ${pid} in performance ${row.performance_id}`);
+                  participantNames.push('Unknown Dancer');
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Error fetching participant names from IDs:', error);
+          }
         }
         
         // Create display name based on performance type and data available
@@ -1409,8 +1457,12 @@ export const db = {
           // Use actual participant names (the dancers)
           displayName = participantNames.join(', ');
         } else {
-          // Fallback to contestant name if no participant names
-          displayName = row.contestant_name || 'Unknown Participant';
+          // Fallback: use contestant name or title
+          if (row.contestant_name && row.contestant_name !== 'Unknown') {
+            displayName = row.contestant_name;
+          } else {
+            displayName = row.title || 'Unknown Participants';
+          }
         }
         
         // Add studio information if available
@@ -1438,7 +1490,9 @@ export const db = {
           mastery: row.mastery,
           entryType: row.entry_type || 'live' // Add entry type (live/virtual)
         };
-      });
+      }));
+      
+      return finalResults;
     } catch (error) {
       console.error('Error in calculateRankings:', error);
       return [];
