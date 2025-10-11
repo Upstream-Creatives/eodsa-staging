@@ -37,34 +37,13 @@ export async function GET(request: NextRequest) {
     const dateLeft = parseFloat(searchParams.get('dateLeft') || '67.5');
     const dateFontSize = parseInt(searchParams.get('dateFontSize') || '24');
 
-    const certificateData = {
-      dancerName: 'ANGELO SOLIS',
-      percentage: 92,
-      style: 'CONTEMPORARY',
-      title: 'RISING PHOENIX',
-      medallion: 'Gold' as const,
-      date: '4 October 2025',
-      positions: {
-        nameTop,
-        nameLeft,
-        nameFontSize,
-        percentageTop,
-        percentageLeft,
-        percentageFontSize,
-        styleTop,
-        styleLeft,
-        styleFontSize,
-        titleTop,
-        titleLeft,
-        titleFontSize,
-        medallionTop,
-        medallionLeft,
-        medallionFontSize,
-        dateTop,
-        dateLeft,
-        dateFontSize
-      }
-    };
+    // Get actual certificate data from query params
+    const dancerName = searchParams.get('name') || 'ANGELO SOLIS';
+    const percentage = searchParams.get('percentage') || '92';
+    const style = searchParams.get('style') || 'CONTEMPORARY';
+    const title = searchParams.get('title') || 'RISING PHOENIX';
+    const medallion = searchParams.get('medallion') || 'Gold';
+    const date = searchParams.get('date') || '4 October 2025';
 
     // Use Cloudinary to generate certificate with text overlays (Montserrat font)
     const certificateUrl = cloudinary.url('Template_syz7di', {
@@ -74,7 +53,7 @@ export async function GET(request: NextRequest) {
             font_family: 'Montserrat',
             font_size: nameFontSize,
             font_weight: 'bold',
-            text: 'ANGELO SOLIS',
+            text: dancerName.toUpperCase(),
             letter_spacing: 2
           },
           color: 'white',
@@ -86,7 +65,7 @@ export async function GET(request: NextRequest) {
             font_family: 'Montserrat',
             font_size: percentageFontSize,
             font_weight: 'bold',
-            text: '92'
+            text: percentage
           },
           color: 'white',
           gravity: 'north_west',
@@ -98,7 +77,7 @@ export async function GET(request: NextRequest) {
             font_family: 'Montserrat',
             font_size: styleFontSize,
             font_weight: 'bold',
-            text: 'CONTEMPORARY'
+            text: style.toUpperCase()
           },
           color: 'white',
           gravity: 'north',
@@ -110,7 +89,7 @@ export async function GET(request: NextRequest) {
             font_family: 'Montserrat',
             font_size: titleFontSize,
             font_weight: 'bold',
-            text: 'RISING PHOENIX'
+            text: title.toUpperCase()
           },
           color: 'white',
           gravity: 'north',
@@ -122,7 +101,7 @@ export async function GET(request: NextRequest) {
             font_family: 'Montserrat',
             font_size: medallionFontSize,
             font_weight: 'bold',
-            text: 'GOLD'
+            text: medallion.toUpperCase()
           },
           color: 'white',
           gravity: 'north',
@@ -133,7 +112,7 @@ export async function GET(request: NextRequest) {
           overlay: {
             font_family: 'Montserrat',
             font_size: dateFontSize,
-            text: '4 October 2025'
+            text: date
           },
           color: 'white',
           gravity: 'north',

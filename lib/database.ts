@@ -221,6 +221,34 @@ export const initializeDatabase = async () => {
       )
     `;
 
+    // Certificate position settings per dancer
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS certificate_positions (
+        id TEXT PRIMARY KEY,
+        dancer_id TEXT NOT NULL UNIQUE,
+        dancer_name TEXT NOT NULL,
+        name_top DECIMAL(5,2),
+        name_font_size INTEGER,
+        percentage_top DECIMAL(5,2),
+        percentage_left DECIMAL(5,2),
+        percentage_font_size INTEGER,
+        style_top DECIMAL(5,2),
+        style_left DECIMAL(5,2),
+        style_font_size INTEGER,
+        title_top DECIMAL(5,2),
+        title_left DECIMAL(5,2),
+        title_font_size INTEGER,
+        medallion_top DECIMAL(5,2),
+        medallion_left DECIMAL(5,2),
+        medallion_font_size INTEGER,
+        date_top DECIMAL(5,2),
+        date_left DECIMAL(5,2),
+        date_font_size INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `;
+
     console.log('✅ Database schema is up to date.');
     
     // Return the database object for use in API routes

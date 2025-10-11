@@ -143,6 +143,14 @@ function AdminRankingsPage() {
   const applyFilters = () => {
     let filtered = rankings;
     
+    // Check if any filter is active
+    const hasActiveFilters = 
+      selectedAgeCategory !== '' ||
+      selectedPerformanceType !== '' ||
+      entryTypeFilter !== 'all' ||
+      masteryFilter !== 'all' ||
+      viewMode !== 'all';
+    
     // Apply age category filter (client-side for Nationals due to dynamic age calculation)
     if (selectedAgeCategory) {
       filtered = filtered.filter(ranking => ranking.ageCategory === selectedAgeCategory);
@@ -163,6 +171,20 @@ function AdminRankingsPage() {
       filtered = filtered.filter(ranking => ranking.mastery?.toLowerCase().includes('water') || ranking.mastery?.toLowerCase().includes('competition'));
     } else if (masteryFilter === 'advanced') {
       filtered = filtered.filter(ranking => ranking.mastery?.toLowerCase().includes('fire') || ranking.mastery?.toLowerCase().includes('advanced'));
+    }
+    
+    // If any filter is active, deduplicate by contestant name (keep only best performance per person)
+    if (hasActiveFilters) {
+      const bestPerformanceByContestant = new Map<string, RankingData>();
+      
+      filtered.forEach(ranking => {
+        const existing = bestPerformanceByContestant.get(ranking.contestantName);
+        if (!existing || ranking.totalScore > existing.totalScore) {
+          bestPerformanceByContestant.set(ranking.contestantName, ranking);
+        }
+      });
+      
+      filtered = Array.from(bestPerformanceByContestant.values());
     }
     
     // Apply view mode filters

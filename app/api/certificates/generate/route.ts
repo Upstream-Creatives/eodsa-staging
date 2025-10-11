@@ -50,79 +50,107 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate certificate using Cloudinary with exact positioning
+    // Check if this dancer has custom position settings
+    const sqlClient = getSql();
+    const positionsResult = await sqlClient`
+      SELECT * FROM certificate_positions WHERE dancer_id = ${dancerId}
+    ` as any[];
+
+    // Use custom positions if available, otherwise use defaults
+    const hasCustom = positionsResult.length > 0;
+    const pos = hasCustom ? positionsResult[0] : null;
+
+    const nameTop = pos?.name_top || 48.5;
+    const nameFontSize = pos?.name_font_size || 65;
+    const percentageTop = pos?.percentage_top || 65.5;
+    const percentageLeft = pos?.percentage_left || 15.5;
+    const percentageFontSize = pos?.percentage_font_size || 76;
+    const styleTop = pos?.style_top || 67;
+    const styleLeft = pos?.style_left || 77.5;
+    const styleFontSize = pos?.style_font_size || 33;
+    const titleTop = pos?.title_top || 74;
+    const titleLeft = pos?.title_left || 74;
+    const titleFontSize = pos?.title_font_size || 29;
+    const medallionTop = pos?.medallion_top || 80.5;
+    const medallionLeft = pos?.medallion_left || 72;
+    const medallionFontSize = pos?.medallion_font_size || 46;
+    const dateTop = pos?.date_top || 90;
+    const dateLeft = pos?.date_left || 66.5;
+    const dateFontSize = pos?.date_font_size || 39;
+
+    // Generate certificate using Cloudinary with custom or default positioning
     const certificateUrl = cloudinary.url('Template_syz7di', {
       transformation: [
         {
           overlay: {
             font_family: 'Montserrat',
-            font_size: 65,
+            font_size: nameFontSize,
             font_weight: 'bold',
             text: dancerName.toUpperCase(),
             letter_spacing: 2
           },
           color: 'white',
           gravity: 'north',
-          y: Math.floor(48.5 * 13)
+          y: Math.floor(nameTop * 13)
         },
         {
           overlay: {
             font_family: 'Montserrat',
-            font_size: 76,
+            font_size: percentageFontSize,
             font_weight: 'bold',
             text: percentage.toString()
           },
           color: 'white',
           gravity: 'north_west',
-          x: Math.floor(15.5 * 9),
-          y: Math.floor(65.5 * 13)
+          x: Math.floor(percentageLeft * 9),
+          y: Math.floor(percentageTop * 13)
         },
         {
           overlay: {
             font_family: 'Montserrat',
-            font_size: 33,
+            font_size: styleFontSize,
             font_weight: 'bold',
             text: style.toUpperCase()
           },
           color: 'white',
           gravity: 'north',
-          x: Math.floor((77.5 - 50) * 9),
-          y: Math.floor(67 * 13)
+          x: Math.floor((styleLeft - 50) * 9),
+          y: Math.floor(styleTop * 13)
         },
         {
           overlay: {
             font_family: 'Montserrat',
-            font_size: 29,
+            font_size: titleFontSize,
             font_weight: 'bold',
             text: title.toUpperCase()
           },
           color: 'white',
           gravity: 'north',
-          x: Math.floor((74 - 50) * 9),
-          y: Math.floor(74 * 13)
+          x: Math.floor((titleLeft - 50) * 9),
+          y: Math.floor(titleTop * 13)
         },
         {
           overlay: {
             font_family: 'Montserrat',
-            font_size: 46,
+            font_size: medallionFontSize,
             font_weight: 'bold',
             text: medallion.toUpperCase()
           },
           color: 'white',
           gravity: 'north',
-          x: Math.floor((72 - 50) * 9),
-          y: Math.floor(80.5 * 13)
+          x: Math.floor((medallionLeft - 50) * 9),
+          y: Math.floor(medallionTop * 13)
         },
         {
           overlay: {
             font_family: 'Montserrat',
-            font_size: 39,
+            font_size: dateFontSize,
             text: eventDate
           },
           color: 'white',
           gravity: 'north',
-          x: Math.floor((66.5 - 50) * 9),
-          y: Math.floor(90 * 13)
+          x: Math.floor((dateLeft - 50) * 9),
+          y: Math.floor(dateTop * 13)
         }
       ],
       format: 'jpg',
@@ -133,8 +161,7 @@ export async function POST(request: NextRequest) {
     const certificateId = `cert_${Date.now()}${Math.random().toString(36).substring(2, 9)}`;
     const createdAt = new Date().toISOString();
 
-    // Save certificate to database
-    const sqlClient = getSql();
+    // Save certificate to database (sqlClient already declared above)
     await sqlClient`
       INSERT INTO certificates (
         id, dancer_id, dancer_name, eodsa_id, email,
