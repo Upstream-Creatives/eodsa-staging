@@ -66,15 +66,16 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    // Use Cloudinary to generate certificate with text overlays
+    // Use Cloudinary to generate certificate with text overlays (Montserrat font)
     const certificateUrl = cloudinary.url('Template_syz7di', {
       transformation: [
         {
           overlay: {
-            font_family: 'Arial',
+            font_family: 'Montserrat',
             font_size: nameFontSize,
             font_weight: 'bold',
-            text: 'ANGELO SOLIS'
+            text: 'ANGELO SOLIS',
+            letter_spacing: 2
           },
           color: 'white',
           gravity: 'north',
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
         },
         {
           overlay: {
-            font_family: 'Arial',
+            font_family: 'Montserrat',
             font_size: percentageFontSize,
             font_weight: 'bold',
             text: '92'
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
         },
         {
           overlay: {
-            font_family: 'Arial',
+            font_family: 'Montserrat',
             font_size: styleFontSize,
             font_weight: 'bold',
             text: 'CONTEMPORARY'
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
         },
         {
           overlay: {
-            font_family: 'Arial',
+            font_family: 'Montserrat',
             font_size: titleFontSize,
             font_weight: 'bold',
             text: 'RISING PHOENIX'
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
         },
         {
           overlay: {
-            font_family: 'Arial',
+            font_family: 'Montserrat',
             font_size: medallionFontSize,
             font_weight: 'bold',
             text: 'GOLD'
@@ -130,7 +131,7 @@ export async function GET(request: NextRequest) {
         },
         {
           overlay: {
-            font_family: 'Arial',
+            font_family: 'Montserrat',
             font_size: dateFontSize,
             text: '4 October 2025'
           },
