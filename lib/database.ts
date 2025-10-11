@@ -1334,32 +1334,63 @@ export const db = {
         })
       );
     
-      // Add rankings within each category
-      let currentRank = 1;
-      let currentCategory = '';
-      let categoryPosition = 0;
-      let previousScore: number | null = null;
+      // Group by category and filter to ensure each person only appears once per category (highest score)
+      const categorizedResults = new Map<string, any[]>();
+      const seenParticipantsPerCategory = new Map<string, Set<string>>();
       
-      return resultsWithAgeCategories.map((row: any, index: number) => {
+      // First pass: group by category and track participants
+      for (const row of resultsWithAgeCategories) {
         const categoryKey = `${row.region}-${row.calculated_age_category}-${row.performance_type}`;
-        const currentScore = parseFloat(row.total_score) || 0;
         
-        if (categoryKey !== currentCategory) {
-          // New category - reset everything
-          currentRank = 1;
-          categoryPosition = 1;
-          currentCategory = categoryKey;
-          previousScore = currentScore;
-        } else {
-          // Same category
+        if (!categorizedResults.has(categoryKey)) {
+          categorizedResults.set(categoryKey, []);
+          seenParticipantsPerCategory.set(categoryKey, new Set<string>());
+        }
+        
+        // Parse participant names to check for duplicates
+        let participantNames: string[] = [];
+        try {
+          participantNames = JSON.parse(row.participant_names || '[]');
+        } catch {
+          participantNames = [row.contestant_name];
+        }
+        
+        // Create a unique key for this participant (using all names)
+        const participantKey = participantNames.sort().join('|').toLowerCase();
+        const seenParticipants = seenParticipantsPerCategory.get(categoryKey)!;
+        
+        // Only include if this participant hasn't been seen in this category
+        if (!seenParticipants.has(participantKey)) {
+          seenParticipants.add(participantKey);
+          categorizedResults.get(categoryKey)!.push(row);
+        }
+      }
+      
+      // Second pass: assign ranks within each category
+      const rankedResults: any[] = [];
+      
+      for (const [categoryKey, categoryRows] of categorizedResults.entries()) {
+        let currentRank = 1;
+        let categoryPosition = 0;
+        let previousScore: number | null = null;
+        
+        for (const row of categoryRows) {
+          const currentScore = parseFloat(row.total_score) || 0;
           categoryPosition++;
-          if (previousScore !== null && currentScore < previousScore) {
-            // Score is different from previous, update rank to current position
+          
+          if (previousScore === null || currentScore < previousScore) {
+            // New score, update rank
             currentRank = categoryPosition;
           }
           // If score is same as previous, keep the same rank (ties)
           previousScore = currentScore;
+          
+          rankedResults.push({ ...row, assigned_rank: currentRank });
         }
+      }
+      
+      // Third pass: build final result objects
+      return rankedResults.map((row: any) => {
         
         // Parse participant names from JSON
         let participantNames: string[] = [];
@@ -1401,7 +1432,7 @@ export const db = {
           studioName: studioInfo, // Studio information for display
           totalScore: parseFloat(row.total_score) || 0,
           averageScore: parseFloat(row.average_score) || 0,
-          rank: currentRank,
+          rank: row.assigned_rank, // Use the assigned rank from filtering
           judgeCount: parseInt(row.judge_count) || 0,
           itemNumber: row.item_number,
           mastery: row.mastery,
