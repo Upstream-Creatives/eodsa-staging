@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCertificateWithJimp } from '@/lib/certificate-jimp-generator';
+import { v2 as cloudinary } from 'cloudinary';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,9 +66,89 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    const certificateBuffer = await generateCertificateWithJimp(certificateData);
+    // Use Cloudinary to generate certificate with text overlays
+    const certificateUrl = cloudinary.url('Template_syz7di', {
+      transformation: [
+        {
+          overlay: {
+            font_family: 'Arial',
+            font_size: nameFontSize,
+            font_weight: 'bold',
+            text: 'ANGELO SOLIS'
+          },
+          color: 'white',
+          gravity: 'north',
+          y: Math.floor(nameTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Arial',
+            font_size: percentageFontSize,
+            font_weight: 'bold',
+            text: '92'
+          },
+          color: 'white',
+          gravity: 'north_west',
+          x: Math.floor(percentageLeft * 9),
+          y: Math.floor(percentageTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Arial',
+            font_size: styleFontSize,
+            font_weight: 'bold',
+            text: 'CONTEMPORARY'
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((styleLeft - 50) * 9),
+          y: Math.floor(styleTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Arial',
+            font_size: titleFontSize,
+            font_weight: 'bold',
+            text: 'RISING PHOENIX'
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((titleLeft - 50) * 9),
+          y: Math.floor(titleTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Arial',
+            font_size: medallionFontSize,
+            font_weight: 'bold',
+            text: 'GOLD'
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((medallionLeft - 50) * 9),
+          y: Math.floor(medallionTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Arial',
+            font_size: dateFontSize,
+            text: '4 October 2025'
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((dateLeft - 50) * 9),
+          y: Math.floor(dateTop * 13)
+        }
+      ],
+      format: 'jpg',
+      quality: 95
+    });
 
-    return new NextResponse(certificateBuffer, {
+    // Fetch the generated image from Cloudinary
+    const response = await fetch(certificateUrl);
+    const imageBuffer = await response.arrayBuffer();
+
+    return new NextResponse(Buffer.from(imageBuffer), {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'no-store, max-age=0',
