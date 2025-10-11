@@ -26,6 +26,7 @@ interface RankingData {
   rankingLevel: string;
   itemNumber?: number; // Item number for program order
   mastery?: string; // Mastery level
+  entryType?: string; // Entry type (live/virtual)
 }
 
 interface EventWithScores {
@@ -56,6 +57,7 @@ function AdminRankingsPage() {
   const [selectedPerformanceType, setSelectedPerformanceType] = useState('');
   const [viewMode, setViewMode] = useState<'all' | 'top3_age' | 'top3_style' | 'top3_duets' | 'top3_groups' | 'top3_trios' | 'top10_soloists'>('all');
   const [masteryFilter, setMasteryFilter] = useState<'all' | 'competitive' | 'advanced'>('all');
+  const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'live' | 'virtual'>('all');
 
   useEffect(() => {
     // Check admin authentication
@@ -82,7 +84,7 @@ function AdminRankingsPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [rankings, viewMode, masteryFilter]);
+  }, [rankings, viewMode, masteryFilter, entryTypeFilter]);
 
   // Trigger rankings reload when server-side filters change
   useEffect(() => {
@@ -142,7 +144,12 @@ function AdminRankingsPage() {
   const applyFilters = () => {
     let filtered = rankings;
     
-    // Apply mastery level filter first
+    // Apply entry type filter first
+    if (entryTypeFilter !== 'all') {
+      filtered = filtered.filter(ranking => (ranking.entryType || 'live') === entryTypeFilter);
+    }
+    
+    // Apply mastery level filter
     if (masteryFilter === 'competitive') {
       filtered = filtered.filter(ranking => ranking.mastery?.toLowerCase().includes('water') || ranking.mastery?.toLowerCase().includes('competition'));
     } else if (masteryFilter === 'advanced') {
@@ -210,6 +217,7 @@ function AdminRankingsPage() {
     setSelectedPerformanceType('');
     setViewMode('all');
     setMasteryFilter('all');
+    setEntryTypeFilter('all');
   };
 
   const getRankBadgeColor = (rank: number) => {
@@ -533,7 +541,7 @@ function AdminRankingsPage() {
             <h2 className="text-xl font-bold text-white">Filter Avalon Rankings</h2>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Competition</label>
               <div className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl bg-gray-700 text-white font-medium">
@@ -581,6 +589,19 @@ function AdminRankingsPage() {
                 <option value="advanced">Advanced (Fire)</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-300 mb-3">Entry Type</label>
+              <select
+                value={entryTypeFilter}
+                onChange={(e) => setEntryTypeFilter(e.target.value as 'all' | 'live' | 'virtual')}
+                className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium bg-gray-700 text-white"
+              >
+                <option value="all">All Entries</option>
+                <option value="live">Live Only</option>
+                <option value="virtual">Virtual Only</option>
+              </select>
+            </div>
             
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Actions</label>
@@ -592,7 +613,7 @@ function AdminRankingsPage() {
                   Clear Filters
                 </button>
                 <button
-                  onClick={loadRankings}
+                  onClick={() => loadRankings()}
                   disabled={isRefreshing}
                   className="w-full px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 font-semibold shadow-md"
                 >
@@ -650,9 +671,19 @@ function AdminRankingsPage() {
                             </div>
                           </td>
                           <td className="py-4 px-6">
-                            <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-blue-500 to-purple-600 text-white border border-blue-300 shadow-md">
-                              {ranking.itemNumber ? `Item ${ranking.itemNumber}` : 'Unassigned'}
-                            </div>
+                            {ranking.itemNumber ? (
+                              <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-blue-500 to-purple-600 text-white border border-blue-300 shadow-md">
+                                Item {ranking.itemNumber}
+                              </div>
+                            ) : (
+                              <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border shadow-md ${
+                                (ranking.entryType || 'live') === 'virtual'
+                                  ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300'
+                                  : 'bg-gradient-to-r from-orange-500 to-red-600 text-white border-orange-300'
+                              }`}>
+                                {(ranking.entryType || 'live') === 'virtual' ? '📹 Virtual' : '⚠️ Unassigned'}
+                              </div>
+                            )}
                           </td>
                           <td className="py-4 px-6">
                             <div className="font-semibold text-white">{ranking.title}</div>

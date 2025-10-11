@@ -1066,6 +1066,7 @@ export const db = {
               c.type as contestant_type,
               c.studio_name,
               ee.participant_ids,
+              ee.entry_type,
               SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
               AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
@@ -1075,7 +1076,7 @@ export const db = {
             LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
             WHERE e.id = ${eventId} AND p.scores_published = true
-            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
             HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
@@ -1102,6 +1103,7 @@ export const db = {
                 c.type as contestant_type,
                 c.studio_name,
                 ee.participant_ids,
+                ee.entry_type,
                 SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
                 AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
                 COUNT(s.id) as judge_count
@@ -1111,7 +1113,7 @@ export const db = {
               LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
               LEFT JOIN scores s ON p.id = s.performance_id
               WHERE e.id = ${eventId} AND p.scores_published = true
-              GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids
+              GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
               HAVING COUNT(s.id) > 0
               ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
             ` as any[];
@@ -1141,6 +1143,7 @@ export const db = {
               c.type as contestant_type,
               c.studio_name,
               ee.participant_ids,
+              ee.entry_type,
               SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
               AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
@@ -1150,7 +1153,7 @@ export const db = {
             LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
             WHERE e.region = ${region} AND e.age_category = ${ageCategory} AND e.performance_type = ${performanceType} AND p.scores_published = true
-            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
             HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
@@ -1174,6 +1177,7 @@ export const db = {
               c.type as contestant_type,
               c.studio_name,
               ee.participant_ids,
+              ee.entry_type,
               SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
               AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
@@ -1183,7 +1187,7 @@ export const db = {
             LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
             WHERE e.region = ${region} AND e.age_category = ${ageCategory} AND p.scores_published = true
-            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
             HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
@@ -1207,6 +1211,7 @@ export const db = {
               c.type as contestant_type,
               c.studio_name,
               ee.participant_ids,
+              ee.entry_type,
               SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
               AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
@@ -1216,7 +1221,7 @@ export const db = {
             LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
             WHERE e.region = ${region} AND p.scores_published = true
-            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
             HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
@@ -1240,6 +1245,7 @@ export const db = {
               c.type as contestant_type,
               c.studio_name,
               ee.participant_ids,
+              ee.entry_type,
               SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
               AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
@@ -1249,7 +1255,7 @@ export const db = {
             LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
             WHERE p.scores_published = true
-            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
             HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
@@ -1305,7 +1311,7 @@ export const db = {
       let currentRank = 1;
       let currentCategory = '';
       let categoryPosition = 0;
-      let previousScore = null;
+      let previousScore: number | null = null;
       
       return resultsWithAgeCategories.map((row: any, index: number) => {
         const categoryKey = `${row.region}-${row.calculated_age_category}-${row.performance_type}`;
@@ -1371,7 +1377,8 @@ export const db = {
           rank: currentRank,
           judgeCount: parseInt(row.judge_count) || 0,
           itemNumber: row.item_number,
-          mastery: row.mastery
+          mastery: row.mastery,
+          entryType: row.entry_type || 'live' // Add entry type (live/virtual)
         };
       });
     } catch (error) {
