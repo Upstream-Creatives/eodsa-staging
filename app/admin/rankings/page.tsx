@@ -856,25 +856,11 @@ function AdminRankingsPage() {
                   <tbody>
                     {filteredRankings.map((ranking, index) => {
                       const { percentage, rankingLevel, rankingColor, medalEmoji } = calculatePercentageAndRanking(ranking.totalScore, ranking.judgeCount);
-                      
+
                       // Use the recalculated rank from applyFilters
-                      // For top3_age and top3_style, calculate rank within groups
-                      let displayRank = ranking.rank;
-                      
-                      // For top3_age view, calculate rank within age group
-                      if (viewMode === 'top3_age') {
-                        const sameAgeBeforeThis = filteredRankings.slice(0, index).filter(
-                          r => r.ageCategory === ranking.ageCategory
-                        ).length;
-                        displayRank = sameAgeBeforeThis + 1;
-                      }
-                      // For top3_style view, calculate rank within style group
-                      else if (viewMode === 'top3_style') {
-                        const sameStyleBeforeThis = filteredRankings.slice(0, index).filter(
-                          r => r.itemStyle === ranking.itemStyle
-                        ).length;
-                        displayRank = sameStyleBeforeThis + 1;
-                      }
+                      // The rank is already correctly calculated in applyFilters()
+                      // No need for special handling - just use ranking.rank directly
+                      const displayRank = ranking.rank;
                       
                       return (
                         <tr key={ranking.performanceId} className="border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
