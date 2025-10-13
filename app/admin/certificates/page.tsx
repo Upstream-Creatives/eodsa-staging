@@ -280,11 +280,26 @@ export default function AdminCertificatesPage() {
         try {
           const percentage = Math.round(winner.averageScore);
           const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+          
+          // Fetch the performance to get the actual dancer ID
+          let dancerId = winner.performanceId; // fallback to performanceId
+          try {
+            const perfResponse = await fetch(`/api/performances/${winner.performanceId}`);
+            if (perfResponse.ok) {
+              const perfData = await perfResponse.json();
+              if (perfData.performance?.contestantId) {
+                dancerId = perfData.performance.contestantId;
+              }
+            }
+          } catch (err) {
+            console.warn('Could not fetch performance details, using performanceId as dancerId');
+          }
+          
           const response = await fetch('/api/certificates/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              dancerId: winner.performanceId, // Use performanceId as temporary dancer ID
+              dancerId: dancerId, // Use actual dancer/contestant ID
               dancerName: winner.contestantName,
               performanceId: winner.performanceId,
               percentage: percentage,

@@ -429,6 +429,30 @@ function ScoresFeedbackSection({ dancerSession }: { dancerSession: DancerSession
       const data = await response.json();
 
       if (data.success) {
+        // Group scores by performance
+        const groupedScores = data.scores.reduce((acc: any, score: any) => {
+          const perfId = score.performanceId;
+          if (!acc[perfId]) {
+            acc[perfId] = {
+              performanceId: perfId,
+              performanceTitle: score.performanceTitle,
+              scores: [],
+              averageScore: 0
+            };
+          }
+          acc[perfId].scores.push(score);
+          return acc;
+        }, {});
+
+        // Calculate average scores
+        Object.keys(groupedScores).forEach(perfId => {
+          const group = groupedScores[perfId];
+          const totalScores = group.scores.map((s: any) => calculateTotalScore(s));
+          const avgScore = totalScores.reduce((sum: number, score: number) => sum + score, 0) / totalScores.length;
+          group.averageScore = Math.round(avgScore * 100) / 100; // Round to 2 decimals
+        });
+
+        // Convert back to array and flatten
         setScores(data.scores);
       } else {
         setError(data.error || 'Failed to load scores');
@@ -516,69 +540,115 @@ function ScoresFeedbackSection({ dancerSession }: { dancerSession: DancerSession
           </div>
         ) : (
           <div className="p-6">
-            <div className="space-y-4">
-              {scores.map((score) => {
-                const totalScore = calculateTotalScore(score);
-                return (
-                  <div
-                    key={score.id}
-                    className="bg-gray-700/50 rounded-xl p-4 border border-gray-600 hover:border-purple-500 transition-all duration-300 cursor-pointer"
-                    onClick={() => {
-                      setSelectedScore(score);
-                      setShowScoreDetails(true);
-                    }}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <h4 className="text-lg font-bold text-white mb-1">{score.performanceTitle}</h4>
-                        <p className="text-sm text-gray-400">Judge: {score.judgeName}</p>
-                        <p className="text-xs text-gray-500">{new Date(score.scoredAt).toLocaleDateString()}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-3xl font-bold ${getMedalColor(totalScore)}`}>
-                          {totalScore}<span className="text-lg text-gray-400">/100</span>
+            <div className="space-y-6">
+              {(() => {
+                // Group scores by performance
+                const groupedScores = scores.reduce((acc: any, score: any) => {
+                  const perfId = score.performanceId;
+                  if (!acc[perfId]) {
+                    acc[perfId] = {
+                      performanceId: perfId,
+                      performanceTitle: score.performanceTitle,
+                      scores: []
+                    };
+                  }
+                  acc[perfId].scores.push(score);
+                  return acc;
+                }, {});
+
+                return Object.values(groupedScores).map((group: any) => {
+                  // Calculate average score for this performance
+                  const totalScores = group.scores.map((s: any) => calculateTotalScore(s));
+                  const avgScore = totalScores.reduce((sum: number, score: number) => sum + score, 0) / totalScores.length;
+                  const roundedAvg = Math.round(avgScore * 100) / 100;
+
+                  return (
+                    <div key={group.performanceId} className="bg-gray-700/50 rounded-xl p-4 border border-gray-600">
+                      <div className="mb-4 pb-3 border-b border-gray-600">
+                        <div className="flex justify-between items-start">
+                          <h4 className="text-xl font-bold text-white">{group.performanceTitle}</h4>
+                          <div className="text-right">
+                            <div className={`text-4xl font-bold ${getMedalColor(roundedAvg)}`}>
+                              {roundedAvg}<span className="text-xl text-gray-400">/100</span>
+                            </div>
+                            <div className={`text-sm font-semibold ${getMedalColor(roundedAvg)}`}>
+                              ⭐ AVERAGE SCORE
+                            </div>
+                            <div className={`text-xs font-semibold ${getMedalColor(roundedAvg)} mt-1`}>
+                              {getMedalName(roundedAvg)} Medal
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              From {group.scores.length} {group.scores.length === 1 ? 'judge' : 'judges'}
+                            </div>
+                          </div>
                         </div>
-                        <div className={`text-xs font-semibold ${getMedalColor(totalScore)}`}>
-                          {getMedalName(totalScore)}
-                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <p className="text-sm text-gray-400 font-semibold mb-2">Individual Judge Scores:</p>
+                        {group.scores.map((score: any) => {
+                          const totalScore = calculateTotalScore(score);
+                          return (
+                            <div
+                              key={score.id}
+                              className="bg-gray-800/50 rounded-lg p-3 border border-gray-600 hover:border-purple-500 transition-all duration-300 cursor-pointer"
+                              onClick={() => {
+                                setSelectedScore(score);
+                                setShowScoreDetails(true);
+                              }}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-white">Judge: {score.judgeName}</p>
+                                  <p className="text-xs text-gray-500">{new Date(score.scoredAt).toLocaleDateString()}</p>
+                                </div>
+                                <div className="text-right">
+                                  <div className={`text-2xl font-bold ${getMedalColor(totalScore)}`}>
+                                    {totalScore}<span className="text-sm text-gray-400">/100</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-5 gap-2">
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-blue-400">{score.technicalScore}</div>
+                                  <div className="text-[9px] text-gray-500">Technical</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-purple-400">{score.musicalScore}</div>
+                                  <div className="text-[9px] text-gray-500">Musical</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-green-400">{score.performanceScore}</div>
+                                  <div className="text-[9px] text-gray-500">Performance</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-orange-400">{score.stylingScore}</div>
+                                  <div className="text-[9px] text-gray-500">Styling</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-pink-400">{score.overallImpressionScore}</div>
+                                  <div className="text-[9px] text-gray-500">Overall</div>
+                                </div>
+                              </div>
+
+                              {score.comments && (
+                                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                                  <p className="text-xs text-blue-300 italic line-clamp-1">{score.comments}</p>
+                                </div>
+                              )}
+
+                              <div className="mt-2 text-xs text-purple-400 text-right">
+                                Click to view full details →
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-5 gap-2">
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-blue-400">{score.technicalScore}</div>
-                        <div className="text-[10px] text-gray-500">Technical</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-purple-400">{score.musicalScore}</div>
-                        <div className="text-[10px] text-gray-500">Musical</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-green-400">{score.performanceScore}</div>
-                        <div className="text-[10px] text-gray-500">Performance</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-orange-400">{score.stylingScore}</div>
-                        <div className="text-[10px] text-gray-500">Styling</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-pink-400">{score.overallImpressionScore}</div>
-                        <div className="text-[10px] text-gray-500">Overall</div>
-                      </div>
-                    </div>
-
-                    {score.comments && (
-                      <div className="mt-3 p-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                        <p className="text-xs text-blue-300 italic line-clamp-2">{score.comments}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-2 text-xs text-purple-400 text-right">
-                      Click to view full details →
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}

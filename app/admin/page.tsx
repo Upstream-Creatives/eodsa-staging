@@ -138,7 +138,7 @@ function AdminDashboard() {
   const { success, error, warning, info } = useToast();
   const { showAlert, showConfirm, showPrompt } = useAlert();
   
-  // Event creation state - simplified to remove age category and entry fee
+  // Event creation state
   const [newEvent, setNewEvent] = useState({
     name: '',
     description: '',
@@ -146,7 +146,8 @@ function AdminDashboard() {
     eventDate: '',
     eventEndDate: '',
     registrationDeadline: '',
-    venue: ''
+    venue: '',
+    entryFee: 0
   });
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
@@ -433,7 +434,7 @@ function AdminDashboard() {
           performanceType: 'All', // Set to 'All' to accommodate all performance types
           // Set defaults for simplified event creation
           ageCategory: 'All',
-          entryFee: 0,
+          entryFee: Number(newEvent.entryFee) || 0, // Use the entryFee from the form
           maxParticipants: null,
           createdBy: adminData.id,
           status: 'upcoming'
@@ -451,7 +452,8 @@ function AdminDashboard() {
           eventDate: '',
           eventEndDate: '',
           registrationDeadline: '',
-          venue: ''
+          venue: '',
+          entryFee: 0
         });
         fetchData();
         setShowCreateEventModal(false);
@@ -3013,6 +3015,20 @@ function AdminDashboard() {
                     required
                     placeholder="Describe the event..."
                   />
+                </div>
+
+                <div className="lg:col-span-1">
+                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Entry Fee (R)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newEvent.entryFee}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, entryFee: parseFloat(e.target.value) || 0 }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Set to 0 for free events</p>
                 </div>
 
                 <div className="lg:col-span-1">
