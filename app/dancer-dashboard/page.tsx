@@ -472,17 +472,23 @@ function ScoresFeedbackSection({ dancerSession }: { dancerSession: DancerSession
   };
 
   const getMedalColor = (total: number) => {
-    if (total >= 90) return 'text-yellow-400'; // Gold
-    if (total >= 80) return 'text-gray-300'; // Silver
-    if (total >= 70) return 'text-orange-400'; // Bronze
-    return 'text-blue-400'; // Participation
+    if (total < 69) return 'text-orange-400'; // Bronze
+    if (total >= 70 && total <= 74) return 'text-gray-300'; // Silver
+    if (total >= 75 && total <= 79) return 'text-slate-300'; // Silver+
+    if (total >= 80 && total <= 84) return 'text-yellow-400'; // Gold
+    if (total >= 85 && total <= 89) return 'text-yellow-400'; // Legend
+    if (total >= 90 && total <= 94) return 'text-yellow-500'; // Opus
+    return 'text-yellow-600'; // Elite (95+)
   };
 
   const getMedalName = (total: number) => {
-    if (total >= 90) return 'Gold';
-    if (total >= 80) return 'Silver';
-    if (total >= 70) return 'Bronze';
-    return 'Participation';
+    if (total < 69) return 'Bronze';
+    if (total >= 70 && total <= 74) return 'Silver';
+    if (total >= 75 && total <= 79) return 'Silver+';
+    if (total >= 80 && total <= 84) return 'Gold';
+    if (total >= 85 && total <= 89) return 'Legend';
+    if (total >= 90 && total <= 94) return 'Opus';
+    return 'Elite'; // 95+
   };
 
   if (loading) {
