@@ -181,7 +181,7 @@ export default function EventTypeManagerPage() {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                 🎭 Event Type Manager
               </h1>
-              <p className="text-gray-300 text-sm mt-1">Karabo's Dashboard - Switch entries between Live and Virtual</p>
+              <p className="text-gray-300 text-sm mt-1">Switch entries between Live and Virtual</p>
             </div>
             <button
               onClick={loadData}
