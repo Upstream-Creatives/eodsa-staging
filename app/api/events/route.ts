@@ -73,8 +73,17 @@ export async function POST(request: Request) {
       venue: body.venue,
       status: initialStatus,
       maxParticipants: body.maxParticipants,
-      entryFee: body.entryFee,
-      createdBy: body.createdBy
+      entryFee: 0, // Deprecated - use detailed fee structure instead
+      createdBy: body.createdBy,
+      registrationFeePerDancer: body.registrationFeePerDancer,
+      solo1Fee: body.solo1Fee,
+      solo2Fee: body.solo2Fee,
+      solo3Fee: body.solo3Fee,
+      soloAdditionalFee: body.soloAdditionalFee,
+      duoTrioFeePerDancer: body.duoTrioFeePerDancer,
+      groupFeePerDancer: body.groupFeePerDancer,
+      largeGroupFeePerDancer: body.largeGroupFeePerDancer,
+      currency: body.currency
     });
 
     // 🚀 AUTO-ASSIGN: Automatically assign judges who are already assigned to this region

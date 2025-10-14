@@ -93,7 +93,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate payment amount
-    const baseAmount = amount || event.entry_fee || 25.00;
+    // NOTE: amount should be calculated by the frontend using event-specific fee configuration
+    // The event.entry_fee field is deprecated and should not be used
+    const baseAmount = amount || 25.00; // Fallback only for legacy compatibility
     const fees = calculateEntryFees(baseAmount);
 
     // Build PayFast payment payload FIRST so we use the SAME payment_id everywhere

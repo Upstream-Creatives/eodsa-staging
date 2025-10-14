@@ -59,6 +59,17 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_by TEXT`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_at TEXT`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announcer_notes TEXT`;
+    
+    // Add configurable fee structure columns to events table
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_fee_per_dancer DECIMAL(10,2) DEFAULT 300`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_1_fee DECIMAL(10,2) DEFAULT 400`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_2_fee DECIMAL(10,2) DEFAULT 750`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_3_fee DECIMAL(10,2) DEFAULT 1050`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_additional_fee DECIMAL(10,2) DEFAULT 100`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS duo_trio_fee_per_dancer DECIMAL(10,2) DEFAULT 280`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS group_fee_per_dancer DECIMAL(10,2) DEFAULT 220`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS large_group_fee_per_dancer DECIMAL(10,2) DEFAULT 190`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'ZAR'`;
 
     // Phase 2: Virtual entry support columns
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS entry_type TEXT DEFAULT 'live'`;
@@ -2014,8 +2025,21 @@ export const db = {
     const createdAt = new Date().toISOString();
     
     await sqlClient`
-      INSERT INTO events (id, name, description, region, age_category, performance_type, event_date, event_end_date, registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at)
-      VALUES (${id}, ${event.name}, ${event.description}, ${event.region}, ${event.ageCategory}, ${event.performanceType}, ${event.eventDate}, ${event.eventEndDate || null}, ${event.registrationDeadline}, ${event.venue}, ${event.status}, ${event.maxParticipants || null}, ${event.entryFee}, ${event.createdBy}, ${createdAt})
+      INSERT INTO events (
+        id, name, description, region, age_category, performance_type, event_date, event_end_date, 
+        registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at,
+        registration_fee_per_dancer, solo_1_fee, solo_2_fee, solo_3_fee, solo_additional_fee,
+        duo_trio_fee_per_dancer, group_fee_per_dancer, large_group_fee_per_dancer, currency
+      )
+      VALUES (
+        ${id}, ${event.name}, ${event.description}, ${event.region}, ${event.ageCategory}, 
+        ${event.performanceType}, ${event.eventDate}, ${event.eventEndDate || null}, 
+        ${event.registrationDeadline}, ${event.venue}, ${event.status}, ${event.maxParticipants || null}, 
+        ${event.entryFee}, ${event.createdBy}, ${createdAt},
+        ${event.registrationFeePerDancer || 300}, ${event.solo1Fee || 400}, ${event.solo2Fee || 750}, 
+        ${event.solo3Fee || 1050}, ${event.soloAdditionalFee || 100}, ${event.duoTrioFeePerDancer || 280},
+        ${event.groupFeePerDancer || 220}, ${event.largeGroupFeePerDancer || 190}, ${event.currency || 'ZAR'}
+      )
     `;
     
     return { ...event, id, createdAt };
@@ -2039,7 +2063,16 @@ export const db = {
       maxParticipants: row.max_participants,
       entryFee: parseFloat(row.entry_fee),
       createdBy: row.created_by,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      registrationFeePerDancer: row.registration_fee_per_dancer ? parseFloat(row.registration_fee_per_dancer) : 300,
+      solo1Fee: row.solo_1_fee ? parseFloat(row.solo_1_fee) : 400,
+      solo2Fee: row.solo_2_fee ? parseFloat(row.solo_2_fee) : 750,
+      solo3Fee: row.solo_3_fee ? parseFloat(row.solo_3_fee) : 1050,
+      soloAdditionalFee: row.solo_additional_fee ? parseFloat(row.solo_additional_fee) : 100,
+      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
+      groupFeePerDancer: row.group_fee_per_dancer ? parseFloat(row.group_fee_per_dancer) : 220,
+      largeGroupFeePerDancer: row.large_group_fee_per_dancer ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      currency: row.currency || 'ZAR'
     })) as Event[];
   },
 
@@ -2064,7 +2097,16 @@ export const db = {
       maxParticipants: row.max_participants,
       entryFee: parseFloat(row.entry_fee),
       createdBy: row.created_by,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      registrationFeePerDancer: row.registration_fee_per_dancer ? parseFloat(row.registration_fee_per_dancer) : 300,
+      solo1Fee: row.solo_1_fee ? parseFloat(row.solo_1_fee) : 400,
+      solo2Fee: row.solo_2_fee ? parseFloat(row.solo_2_fee) : 750,
+      solo3Fee: row.solo_3_fee ? parseFloat(row.solo_3_fee) : 1050,
+      soloAdditionalFee: row.solo_additional_fee ? parseFloat(row.solo_additional_fee) : 100,
+      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
+      groupFeePerDancer: row.group_fee_per_dancer ? parseFloat(row.group_fee_per_dancer) : 220,
+      largeGroupFeePerDancer: row.large_group_fee_per_dancer ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      currency: row.currency || 'ZAR'
     } as Event;
   },
 
@@ -3020,10 +3062,26 @@ export const db = {
   },
 
   // Calculate nationals fee based on performance type and number of solos
-  async calculateNationalsFee(performanceType: string, soloCount: number = 1, participantCount: number = 1, participantIds: string[] = []) {
+  async calculateNationalsFee(performanceType: string, soloCount: number = 1, participantCount: number = 1, participantIds: string[] = [], eventId?: string) {
     const sqlClient = getSql();
     let registrationFee = 0;
     let performanceFee = 0;
+    
+    // Get event-specific fee configuration if eventId is provided
+    let event: Event | null = null;
+    if (eventId) {
+      event = await this.getEventById(eventId);
+    }
+    
+    // Default fees (can be overridden by event config)
+    const regFeePerDancer = event?.registrationFeePerDancer || 300;
+    const solo1Fee = event?.solo1Fee || 400;
+    const solo2Fee = event?.solo2Fee || 750;
+    const solo3Fee = event?.solo3Fee || 1050;
+    const soloAdditionalFee = event?.soloAdditionalFee || 100;
+    const duoTrioFee = event?.duoTrioFeePerDancer || 280;
+    const groupFee = event?.groupFeePerDancer || 220;
+    const largeGroupFee = event?.largeGroupFeePerDancer || 190;
     
     // Check registration fee status for participants
     if (participantIds.length > 0) {
@@ -3032,50 +3090,40 @@ export const db = {
         try {
           const registrationStatus = await this.getDancerRegistrationStatus(participantId);
           if (!registrationStatus.registrationFeePaid) {
-            registrationFee += 300; // R300 per dancer who hasn't paid
+            registrationFee += regFeePerDancer; // Per dancer who hasn't paid
           }
         } catch (error) {
           // If dancer not found or error, assume they need to pay registration
-          registrationFee += 300;
+          registrationFee += regFeePerDancer;
         }
       }
     } else {
       // For single participant (solo), assume they need to pay if not specified
-      registrationFee = 300;
+      registrationFee = regFeePerDancer;
     }
     
     // Calculate performance fees based on type
     if (performanceType === 'Solo') {
-      // Solo fee structure - exactly as specified
-      switch (soloCount) {
-        case 1:
-          performanceFee = 400;
-          break;
-        case 2:
-          performanceFee = 750;
-          break;
-        case 3:
-          performanceFee = 1000;
-          break;
-        case 4:
-          performanceFee = 1200;
-          break;
-        case 5:
-          performanceFee = 1200; // 5th solo is FREE
-          break;
-        default:
-          // More than 5 solos: 1200 + (additional solos * 100)
-          performanceFee = 1200 + ((soloCount - 5) * 100);
+      // Solo fee structure - using event-specific fees
+      if (soloCount === 1) {
+        performanceFee = solo1Fee;
+      } else if (soloCount === 2) {
+        performanceFee = solo2Fee;
+      } else if (soloCount === 3) {
+        performanceFee = solo3Fee;
+      } else {
+        // More than 3 solos: 3-solo package + additional solos
+        performanceFee = solo3Fee + ((soloCount - 3) * soloAdditionalFee);
       }
     } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      // Duos/trios - R280 per person
-      performanceFee = 280 * participantCount;
+      // Duos/trios - per person
+      performanceFee = duoTrioFee * participantCount;
     } else if (performanceType === 'Group') {
       // Group pricing - determine pricing based on participant count
       if (participantCount >= 10) {
-        performanceFee = 190 * participantCount; // Large group pricing (10+)
+        performanceFee = largeGroupFee * participantCount; // Large group pricing (10+)
       } else {
-        performanceFee = 220 * participantCount; // Small group pricing (4-9)
+        performanceFee = groupFee * participantCount; // Small group pricing (4-9)
       }
     }
     
