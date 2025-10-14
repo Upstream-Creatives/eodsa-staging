@@ -3,23 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { PERFORMANCE_TYPES, EODSA_FEES } from '@/lib/types';
+import { PERFORMANCE_TYPES, EODSA_FEES, Event } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
-
-interface Event {
-  id: string;
-  name: string;
-  description: string;
-  region: string;
-  ageCategory: string;
-  performanceType: string;
-  eventDate: string;
-  registrationDeadline: string;
-  venue: string;
-  status: string;
-  maxParticipants?: number;
-  entryFee: number;
-}
 
 interface Contestant {
   id: string;

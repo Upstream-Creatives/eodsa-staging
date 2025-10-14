@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { PERFORMANCE_TYPES, MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
+import { PERFORMANCE_TYPES, MASTERY_LEVELS, ITEM_STYLES, Event } from '@/lib/types';
 import CountdownTimer from '@/app/components/CountdownTimer';
 import { useToast } from '@/components/ui/simple-toast';
 import MusicUpload from '@/components/MusicUpload';
@@ -106,21 +106,6 @@ function TourOverlay({
       </div>
     </div>
   );
-}
-
-interface Event {
-  id: string;
-  name: string;
-  description: string;
-  region: string;
-  ageCategory: string;
-  performanceType: string;
-  eventDate: string;
-  registrationDeadline: string;
-  venue: string;
-  status: string;
-  maxParticipants?: number;
-  entryFee: number;
 }
 
 interface Contestant {
