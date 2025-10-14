@@ -78,6 +78,16 @@ export interface Event {
   entryFee: number;
   createdBy: string; // admin id
   createdAt: string;
+  // Configurable fee structure
+  registrationFeePerDancer?: number;
+  solo1Fee?: number;
+  solo2Fee?: number;
+  solo3Fee?: number;
+  soloAdditionalFee?: number;
+  duoTrioFeePerDancer?: number;
+  groupFeePerDancer?: number;
+  largeGroupFeePerDancer?: number;
+  currency?: string;
 }
 
 export interface EventEntry {

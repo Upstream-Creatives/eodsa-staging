@@ -87,7 +87,9 @@ export async function PUT(
     const allowedFields = [
       'name', 'description', 'region', 'ageCategory', 'performanceType',
       'eventDate', 'eventEndDate', 'registrationDeadline', 'venue', 'entryFee', 
-      'maxParticipants', 'status'
+      'maxParticipants', 'status', 'registrationFeePerDancer', 'solo1Fee', 'solo2Fee',
+      'solo3Fee', 'soloAdditionalFee', 'duoTrioFeePerDancer', 'groupFeePerDancer',
+      'largeGroupFeePerDancer', 'currency'
     ];
 
     // Filter only allowed fields from the request body
@@ -142,7 +144,16 @@ export async function PUT(
         status = COALESCE(${updates.status || null}, status),
         max_participants = COALESCE(${updates.max_participants || null}, max_participants),
         entry_fee = COALESCE(${updates.entry_fee || null}, entry_fee),
-        payment_required = COALESCE(${updates.payment_required || null}, payment_required)
+        payment_required = COALESCE(${updates.payment_required || null}, payment_required),
+        registration_fee_per_dancer = COALESCE(${updates.registration_fee_per_dancer || null}, registration_fee_per_dancer),
+        solo_1_fee = COALESCE(${updates.solo_1_fee || null}, solo_1_fee),
+        solo_2_fee = COALESCE(${updates.solo_2_fee || null}, solo_2_fee),
+        solo_3_fee = COALESCE(${updates.solo_3_fee || null}, solo_3_fee),
+        solo_additional_fee = COALESCE(${updates.solo_additional_fee || null}, solo_additional_fee),
+        duo_trio_fee_per_dancer = COALESCE(${updates.duo_trio_fee_per_dancer || null}, duo_trio_fee_per_dancer),
+        group_fee_per_dancer = COALESCE(${updates.group_fee_per_dancer || null}, group_fee_per_dancer),
+        large_group_fee_per_dancer = COALESCE(${updates.large_group_fee_per_dancer || null}, large_group_fee_per_dancer),
+        currency = COALESCE(${updates.currency || null}, currency)
       WHERE id = ${eventId}
       RETURNING *
     `;

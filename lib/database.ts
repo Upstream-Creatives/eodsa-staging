@@ -59,6 +59,17 @@ export const initializeDatabase = async () => {
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_by TEXT`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announced_at TEXT`;
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS announcer_notes TEXT`;
+    
+    // Add configurable fee structure columns to events table
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_fee_per_dancer DECIMAL(10,2) DEFAULT 300`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_1_fee DECIMAL(10,2) DEFAULT 400`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_2_fee DECIMAL(10,2) DEFAULT 750`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_3_fee DECIMAL(10,2) DEFAULT 1050`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS solo_additional_fee DECIMAL(10,2) DEFAULT 100`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS duo_trio_fee_per_dancer DECIMAL(10,2) DEFAULT 280`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS group_fee_per_dancer DECIMAL(10,2) DEFAULT 220`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS large_group_fee_per_dancer DECIMAL(10,2) DEFAULT 190`;
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'ZAR'`;
 
     // Phase 2: Virtual entry support columns
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS entry_type TEXT DEFAULT 'live'`;
@@ -192,6 +203,60 @@ export const initializeDatabase = async () => {
         edited_by TEXT NOT NULL,
         edited_by_name TEXT,
         edited_at TEXT NOT NULL
+      )
+    `;
+
+    // Certificates table
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS certificates (
+        id TEXT PRIMARY KEY,
+        dancer_id TEXT NOT NULL,
+        dancer_name TEXT NOT NULL,
+        eodsa_id TEXT,
+        email TEXT,
+        performance_id TEXT,
+        event_entry_id TEXT,
+        percentage DECIMAL(5,2) NOT NULL,
+        style TEXT NOT NULL,
+        title TEXT NOT NULL,
+        medallion TEXT NOT NULL,
+        event_date TEXT,
+        certificate_url TEXT,
+        cloudinary_public_id TEXT,
+        sent_at TEXT,
+        sent_by TEXT,
+        downloaded BOOLEAN DEFAULT FALSE,
+        downloaded_at TEXT,
+        created_at TEXT NOT NULL,
+        created_by TEXT
+      )
+    `;
+
+    // Certificate position settings per dancer
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS certificate_positions (
+        id TEXT PRIMARY KEY,
+        dancer_id TEXT NOT NULL UNIQUE,
+        dancer_name TEXT NOT NULL,
+        name_top DECIMAL(5,2),
+        name_font_size INTEGER,
+        percentage_top DECIMAL(5,2),
+        percentage_left DECIMAL(5,2),
+        percentage_font_size INTEGER,
+        style_top DECIMAL(5,2),
+        style_left DECIMAL(5,2),
+        style_font_size INTEGER,
+        title_top DECIMAL(5,2),
+        title_left DECIMAL(5,2),
+        title_font_size INTEGER,
+        medallion_top DECIMAL(5,2),
+        medallion_left DECIMAL(5,2),
+        medallion_font_size INTEGER,
+        date_top DECIMAL(5,2),
+        date_left DECIMAL(5,2),
+        date_font_size INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       )
     `;
 
@@ -1050,29 +1115,44 @@ export const db = {
           result = await sqlClient`
             SELECT 
               p.id as performance_id,
+              p.item_number,
+              p.mastery,
+              p.event_entry_id,
               e.id as event_id,
               e.name as event_name,
               e.region,
               e.age_category,
-              e.performance_type,
+              COALESCE(
+                ee.performance_type,
+                CASE 
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) = 1 THEN 'Solo'
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) = 2 THEN 'Duet'
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) = 3 THEN 'Trio'
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) >= 4 THEN 'Group'
+                  ELSE e.performance_type
+                END
+              ) as performance_type,
+              e.event_date,
               p.title,
               p.item_style,
               p.participant_names,
               c.name as contestant_name,
               c.type as contestant_type,
               c.studio_name,
-              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
-              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
+              ee.participant_ids,
+              ee.entry_type,
+              SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
             JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
-            LEFT JOIN score_approvals sa ON s.id = sa.score_id AND sa.status = 'approved'
-            WHERE e.id = ${eventId} AND sa.id IS NOT NULL
-            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name
-            HAVING COUNT(sa.id) > 0
-            ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+            WHERE e.id = ${eventId} AND p.scores_published = true
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, ee.performance_type, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
+            HAVING COUNT(s.id) > 0
+            ORDER BY e.region, e.age_category, performance_type, total_score DESC
           ` as any[];
         } else {
           // For multiple events, we'll query each separately and combine
@@ -1081,29 +1161,44 @@ export const db = {
             const eventResult = await sqlClient`
               SELECT 
                 p.id as performance_id,
+                p.item_number,
+                p.mastery,
+                p.event_entry_id,
                 e.id as event_id,
                 e.name as event_name,
                 e.region,
                 e.age_category,
-                e.performance_type,
+                COALESCE(
+                  ee.performance_type,
+                  CASE 
+                    WHEN jsonb_array_length(ee.participant_ids::jsonb) = 1 THEN 'Solo'
+                    WHEN jsonb_array_length(ee.participant_ids::jsonb) = 2 THEN 'Duet'
+                    WHEN jsonb_array_length(ee.participant_ids::jsonb) = 3 THEN 'Trio'
+                    WHEN jsonb_array_length(ee.participant_ids::jsonb) >= 4 THEN 'Group'
+                    ELSE e.performance_type
+                  END
+                ) as performance_type,
+                e.event_date,
                 p.title,
                 p.item_style,
                 p.participant_names,
                 c.name as contestant_name,
                 c.type as contestant_type,
                 c.studio_name,
-                AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
-                AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
+                ee.participant_ids,
+                ee.entry_type,
+                SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+                AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
                 COUNT(s.id) as judge_count
               FROM performances p
               JOIN events e ON p.event_id = e.id
               JOIN contestants c ON p.contestant_id = c.id
+              LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
               LEFT JOIN scores s ON p.id = s.performance_id
-            LEFT JOIN score_approvals sa ON s.id = sa.score_id AND sa.status = 'approved'
-              WHERE e.id = ${eventId}
-              GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name
+              WHERE e.id = ${eventId} AND p.scores_published = true
+              GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, ee.performance_type, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
               HAVING COUNT(s.id) > 0
-              ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+              ORDER BY e.region, e.age_category, performance_type, total_score DESC
             ` as any[];
             allResults.push(...eventResult);
           }
@@ -1115,113 +1210,146 @@ export const db = {
           result = await sqlClient`
             SELECT 
               p.id as performance_id,
+              p.item_number,
+              p.mastery,
+              p.event_entry_id,
               e.id as event_id,
               e.name as event_name,
               e.region,
               e.age_category,
               e.performance_type,
+              e.event_date,
               p.title,
               p.item_style,
               p.participant_names,
               c.name as contestant_name,
               c.type as contestant_type,
               c.studio_name,
-              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
-              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
+              ee.participant_ids,
+              ee.entry_type,
+              SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
             JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
-            LEFT JOIN score_approvals sa ON s.id = sa.score_id AND sa.status = 'approved'
-            WHERE e.region = ${region} AND e.age_category = ${ageCategory} AND e.performance_type = ${performanceType} AND sa.id IS NOT NULL
-            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name
-            HAVING COUNT(sa.id) > 0
+            WHERE e.region = ${region} AND e.age_category = ${ageCategory} AND e.performance_type = ${performanceType} AND p.scores_published = true
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
+            HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
         } else if (region && ageCategory) {
           result = await sqlClient`
             SELECT 
               p.id as performance_id,
+              p.item_number,
+              p.mastery,
+              p.event_entry_id,
               e.id as event_id,
               e.name as event_name,
               e.region,
               e.age_category,
               e.performance_type,
+              e.event_date,
               p.title,
               p.item_style,
               p.participant_names,
               c.name as contestant_name,
               c.type as contestant_type,
               c.studio_name,
-              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
-              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
+              ee.participant_ids,
+              ee.entry_type,
+              SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
             JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
-            LEFT JOIN score_approvals sa ON s.id = sa.score_id AND sa.status = 'approved'
-            WHERE e.region = ${region} AND e.age_category = ${ageCategory} AND sa.id IS NOT NULL
-            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name
-            HAVING COUNT(sa.id) > 0
+            WHERE e.region = ${region} AND e.age_category = ${ageCategory} AND p.scores_published = true
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
+            HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
         } else if (region) {
           result = await sqlClient`
             SELECT 
               p.id as performance_id,
+              p.item_number,
+              p.mastery,
+              p.event_entry_id,
               e.id as event_id,
               e.name as event_name,
               e.region,
               e.age_category,
               e.performance_type,
+              e.event_date,
               p.title,
               p.item_style,
               p.participant_names,
               c.name as contestant_name,
               c.type as contestant_type,
               c.studio_name,
-              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
-              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
+              ee.participant_ids,
+              ee.entry_type,
+              SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
             JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
-            LEFT JOIN score_approvals sa ON s.id = sa.score_id AND sa.status = 'approved'
-            WHERE e.region = ${region} AND sa.id IS NOT NULL
-            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name
-            HAVING COUNT(sa.id) > 0
+            WHERE e.region = ${region} AND p.scores_published = true
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
+            HAVING COUNT(s.id) > 0
             ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
           ` as any[];
         } else {
           result = await sqlClient`
             SELECT 
               p.id as performance_id,
+              p.item_number,
+              p.mastery,
+              p.event_entry_id,
               e.id as event_id,
               e.name as event_name,
               e.region,
               e.age_category,
-              e.performance_type,
+              COALESCE(
+                ee.performance_type,
+                CASE 
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) = 1 THEN 'Solo'
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) = 2 THEN 'Duet'
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) = 3 THEN 'Trio'
+                  WHEN jsonb_array_length(ee.participant_ids::jsonb) >= 4 THEN 'Group'
+                  ELSE e.performance_type
+                END
+              ) as performance_type,
+              e.event_date,
               p.title,
               p.item_style,
               p.participant_names,
               c.name as contestant_name,
               c.type as contestant_type,
               c.studio_name,
-              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
-              AVG((s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) / 5) as average_score,
+              ee.participant_ids,
+              ee.entry_type,
+              SUM(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as total_score,
+              AVG(s.technical_score + s.musical_score + s.performance_score + s.styling_score + s.overall_impression_score) as average_score,
               COUNT(s.id) as judge_count
             FROM performances p
             JOIN events e ON p.event_id = e.id
             JOIN contestants c ON p.contestant_id = c.id
+            LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
             LEFT JOIN scores s ON p.id = s.performance_id
-            LEFT JOIN score_approvals sa ON s.id = sa.score_id AND sa.status = 'approved'
-            WHERE sa.id IS NOT NULL
-            GROUP BY p.id, e.id, e.name, e.region, e.age_category, e.performance_type, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name
-            HAVING COUNT(sa.id) > 0
-            ORDER BY e.region, e.age_category, e.performance_type, total_score DESC
+            WHERE p.scores_published = true
+            GROUP BY p.id, p.item_number, p.mastery, p.event_entry_id, e.id, e.name, e.region, e.age_category, ee.performance_type, e.performance_type, e.event_date, p.title, p.item_style, p.participant_names, c.name, c.type, c.studio_name, ee.participant_ids, ee.entry_type
+            HAVING COUNT(s.id) > 0
+            ORDER BY e.region, e.age_category, performance_type, total_score DESC
           ` as any[];
         }
       }
@@ -1241,26 +1369,95 @@ export const db = {
         return [];
       }
     
-      // Add rankings within each category
-      let currentRank = 1;
-      let currentCategory = '';
-      
-      return result.map((row: any, index: number) => {
-        const categoryKey = `${row.region}-${row.age_category}-${row.performance_type}`;
-        if (categoryKey !== currentCategory) {
-          currentRank = 1;
-          currentCategory = categoryKey;
-        } else if (index > 0 && result[index - 1].total_score !== row.total_score) {
-          currentRank = index + 1;
-        }
+      // Calculate age categories for all results first
+      const { calculateAgeCategoryForEntry } = await import('./age-category-calculator');
+      const resultsWithAgeCategories = await Promise.all(
+        result.map(async (row: any) => {
+          let calculatedAgeCategory = row.age_category;
+          
+          // Try to calculate age category from participant_ids if available
+          if (row.participant_ids && row.event_date) {
+            try {
+              const participantIds = JSON.parse(row.participant_ids || '[]');
+              if (participantIds.length > 0) {
+                calculatedAgeCategory = await calculateAgeCategoryForEntry(
+                  participantIds,
+                  row.event_date,
+                  sqlClient
+                );
+              }
+            } catch (error) {
+              console.warn('Error calculating age category for ranking:', error);
+              // Fall back to event age category
+            }
+          }
+          
+          return {
+            ...row,
+            calculated_age_category: calculatedAgeCategory
+          };
+        })
+      );
+    
+      // Build final result objects with participant names
+      // Note: No deduplication here - the frontend handles deduplication when filters are applied
+      const finalResults = await Promise.all(resultsWithAgeCategories.map(async (row: any) => {
         
         // Parse participant names from JSON
         let participantNames: string[] = [];
         try {
-          participantNames = JSON.parse(row.participant_names || '[]');
+          // participant_names might be a JSON string or already parsed array
+          if (typeof row.participant_names === 'string') {
+            participantNames = JSON.parse(row.participant_names || '[]');
+          } else if (Array.isArray(row.participant_names)) {
+            participantNames = row.participant_names;
+          }
+          
+          // Filter out null, undefined, and empty strings
+          participantNames = participantNames.filter((name: any) => name && typeof name === 'string' && name.trim() !== '');
         } catch (error) {
           console.warn('Error parsing participant names:', error);
-          participantNames = [row.contestant_name]; // Fallback to contestant name
+        }
+        
+        // If participant_names is empty but we have participant_ids, fetch names from dancers table
+        if (participantNames.length === 0 && row.participant_ids) {
+          try {
+            const participantIds = typeof row.participant_ids === 'string' 
+              ? JSON.parse(row.participant_ids) 
+              : row.participant_ids;
+            
+            if (Array.isArray(participantIds) && participantIds.length > 0) {
+              // Fetch dancer names from database using SQL directly
+              // Try both by ID and by EODSA ID (participant_ids might contain either)
+              const sqlClient = getSql();
+              
+              // First try by internal ID
+              let dancerResults = await sqlClient`
+                SELECT id, eodsa_id, name FROM dancers WHERE id = ANY(${participantIds})
+              ` as any[];
+              
+              // If no results, try by EODSA ID
+              if (dancerResults.length === 0) {
+                dancerResults = await sqlClient`
+                  SELECT id, eodsa_id, name FROM dancers WHERE eodsa_id = ANY(${participantIds})
+                ` as any[];
+              }
+              
+              // Add names in the order they appear in participant_ids
+              for (const pid of participantIds) {
+                const dancer = dancerResults.find((d: any) => d.id === pid || d.eodsa_id === pid);
+                if (dancer?.name) {
+                  participantNames.push(dancer.name);
+                } else {
+                  // Log missing dancer for debugging
+                  console.warn(`⚠️ Dancer not found for participant ID: ${pid} in performance ${row.performance_id}`);
+                  participantNames.push('Unknown Dancer');
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Error fetching participant names from IDs:', error);
+          }
         }
         
         // Create display name based on performance type and data available
@@ -1271,8 +1468,12 @@ export const db = {
           // Use actual participant names (the dancers)
           displayName = participantNames.join(', ');
         } else {
-          // Fallback to contestant name if no participant names
-          displayName = row.contestant_name || 'Unknown Participant';
+          // Fallback: use contestant name or title
+          if (row.contestant_name && row.contestant_name !== 'Unknown') {
+            displayName = row.contestant_name;
+          } else {
+            displayName = row.title || 'Unknown Participants';
+          }
         }
         
         // Add studio information if available
@@ -1285,7 +1486,7 @@ export const db = {
           eventId: row.event_id,
           eventName: row.event_name,
           region: row.region,
-          ageCategory: row.age_category,
+          ageCategory: row.calculated_age_category, // Use calculated age category
           performanceType: row.performance_type,
           title: row.title,
           itemStyle: row.item_style,
@@ -1294,10 +1495,15 @@ export const db = {
           studioName: studioInfo, // Studio information for display
           totalScore: parseFloat(row.total_score) || 0,
           averageScore: parseFloat(row.average_score) || 0,
-          rank: currentRank,
-          judgeCount: parseInt(row.judge_count) || 0
+          rank: 0, // Rank is calculated on the frontend based on view mode
+          judgeCount: parseInt(row.judge_count) || 0,
+          itemNumber: row.item_number,
+          mastery: row.mastery,
+          entryType: row.entry_type || 'live' // Add entry type (live/virtual)
         };
-      });
+      }));
+      
+      return finalResults;
     } catch (error) {
       console.error('Error in calculateRankings:', error);
       return [];
@@ -1323,10 +1529,9 @@ export const db = {
         FROM events e
         JOIN performances p ON e.id = p.event_id
         LEFT JOIN scores s ON p.id = s.performance_id
-        LEFT JOIN score_approvals sa ON s.id = sa.score_id AND sa.status = 'approved'
-        WHERE sa.id IS NOT NULL
+        WHERE p.scores_published = true
         GROUP BY e.id, e.name, e.region, e.age_category, e.performance_type, e.event_date, e.venue
-        HAVING COUNT(DISTINCT sa.id) > 0
+        HAVING COUNT(DISTINCT s.id) > 0
         ORDER BY e.event_date DESC, e.name
       ` as any[];
       
@@ -1743,7 +1948,16 @@ export const db = {
   async getDancerScores(eodsaId: string) {
     const sqlClient = getSql();
 
+    // First, get the dancer's ID from their EODSA ID
+    // This is needed because participant_ids may contain dancer IDs instead of EODSA IDs
+    const dancerResult = await sqlClient`
+      SELECT id FROM dancers WHERE eodsa_id = ${eodsaId}
+    ` as any[];
+    
+    const dancerId = dancerResult.length > 0 ? dancerResult[0].id : null;
+
     // Get all published scores for performances where this dancer participated
+    // Check both EODSA ID and dancer ID in participant_ids for consistency
     const result = await sqlClient`
       SELECT
         s.*,
@@ -1751,14 +1965,16 @@ export const db = {
         p.id as performance_id,
         p.title as performance_title,
         p.scores_published,
-        p.scores_published_at
-      FROM nationals_event_entries nee
-      JOIN scores s ON s.performance_id = nee.id
+        p.scores_published_at,
+        ee.item_name as entry_title
+      FROM event_entries ee
+      JOIN performances p ON p.event_entry_id = ee.id
+      JOIN scores s ON s.performance_id = p.id
       JOIN judges j ON j.id = s.judge_id
-      JOIN performances p ON p.id = nee.id
       WHERE (
-        nee.eodsa_id = ${eodsaId}
-        OR nee.participant_ids::text LIKE ${`%${eodsaId}%`}
+        ee.eodsa_id = ${eodsaId}
+        OR ee.participant_ids::text LIKE ${`%${eodsaId}%`}
+        ${dancerId ? sqlClient`OR ee.participant_ids::text LIKE ${`%${dancerId}%`}` : sqlClient``}
       )
       AND p.scores_published = true
       ORDER BY s.submitted_at DESC
@@ -1769,7 +1985,7 @@ export const db = {
       judgeId: row.judge_id,
       judgeName: row.judge_name,
       performanceId: row.performance_id,
-      performanceTitle: row.performance_title,
+      performanceTitle: row.performance_title || row.entry_title,
       technicalScore: parseFloat(row.technical_score),
       musicalScore: parseFloat(row.musical_score || 0),
       performanceScore: parseFloat(row.performance_score || 0),
@@ -1809,8 +2025,21 @@ export const db = {
     const createdAt = new Date().toISOString();
     
     await sqlClient`
-      INSERT INTO events (id, name, description, region, age_category, performance_type, event_date, event_end_date, registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at)
-      VALUES (${id}, ${event.name}, ${event.description}, ${event.region}, ${event.ageCategory}, ${event.performanceType}, ${event.eventDate}, ${event.eventEndDate || null}, ${event.registrationDeadline}, ${event.venue}, ${event.status}, ${event.maxParticipants || null}, ${event.entryFee}, ${event.createdBy}, ${createdAt})
+      INSERT INTO events (
+        id, name, description, region, age_category, performance_type, event_date, event_end_date, 
+        registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at,
+        registration_fee_per_dancer, solo_1_fee, solo_2_fee, solo_3_fee, solo_additional_fee,
+        duo_trio_fee_per_dancer, group_fee_per_dancer, large_group_fee_per_dancer, currency
+      )
+      VALUES (
+        ${id}, ${event.name}, ${event.description}, ${event.region}, ${event.ageCategory}, 
+        ${event.performanceType}, ${event.eventDate}, ${event.eventEndDate || null}, 
+        ${event.registrationDeadline}, ${event.venue}, ${event.status}, ${event.maxParticipants || null}, 
+        ${event.entryFee}, ${event.createdBy}, ${createdAt},
+        ${event.registrationFeePerDancer || 300}, ${event.solo1Fee || 400}, ${event.solo2Fee || 750}, 
+        ${event.solo3Fee || 1050}, ${event.soloAdditionalFee || 100}, ${event.duoTrioFeePerDancer || 280},
+        ${event.groupFeePerDancer || 220}, ${event.largeGroupFeePerDancer || 190}, ${event.currency || 'ZAR'}
+      )
     `;
     
     return { ...event, id, createdAt };
@@ -1834,7 +2063,16 @@ export const db = {
       maxParticipants: row.max_participants,
       entryFee: parseFloat(row.entry_fee),
       createdBy: row.created_by,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      registrationFeePerDancer: row.registration_fee_per_dancer ? parseFloat(row.registration_fee_per_dancer) : 300,
+      solo1Fee: row.solo_1_fee ? parseFloat(row.solo_1_fee) : 400,
+      solo2Fee: row.solo_2_fee ? parseFloat(row.solo_2_fee) : 750,
+      solo3Fee: row.solo_3_fee ? parseFloat(row.solo_3_fee) : 1050,
+      soloAdditionalFee: row.solo_additional_fee ? parseFloat(row.solo_additional_fee) : 100,
+      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
+      groupFeePerDancer: row.group_fee_per_dancer ? parseFloat(row.group_fee_per_dancer) : 220,
+      largeGroupFeePerDancer: row.large_group_fee_per_dancer ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      currency: row.currency || 'ZAR'
     })) as Event[];
   },
 
@@ -1859,7 +2097,16 @@ export const db = {
       maxParticipants: row.max_participants,
       entryFee: parseFloat(row.entry_fee),
       createdBy: row.created_by,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      registrationFeePerDancer: row.registration_fee_per_dancer ? parseFloat(row.registration_fee_per_dancer) : 300,
+      solo1Fee: row.solo_1_fee ? parseFloat(row.solo_1_fee) : 400,
+      solo2Fee: row.solo_2_fee ? parseFloat(row.solo_2_fee) : 750,
+      solo3Fee: row.solo_3_fee ? parseFloat(row.solo_3_fee) : 1050,
+      soloAdditionalFee: row.solo_additional_fee ? parseFloat(row.solo_additional_fee) : 100,
+      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
+      groupFeePerDancer: row.group_fee_per_dancer ? parseFloat(row.group_fee_per_dancer) : 220,
+      largeGroupFeePerDancer: row.large_group_fee_per_dancer ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      currency: row.currency || 'ZAR'
     } as Event;
   },
 
@@ -2815,10 +3062,26 @@ export const db = {
   },
 
   // Calculate nationals fee based on performance type and number of solos
-  async calculateNationalsFee(performanceType: string, soloCount: number = 1, participantCount: number = 1, participantIds: string[] = []) {
+  async calculateNationalsFee(performanceType: string, soloCount: number = 1, participantCount: number = 1, participantIds: string[] = [], eventId?: string) {
     const sqlClient = getSql();
     let registrationFee = 0;
     let performanceFee = 0;
+    
+    // Get event-specific fee configuration if eventId is provided
+    let event: Event | null = null;
+    if (eventId) {
+      event = await this.getEventById(eventId);
+    }
+    
+    // Default fees (can be overridden by event config)
+    const regFeePerDancer = event?.registrationFeePerDancer || 300;
+    const solo1Fee = event?.solo1Fee || 400;
+    const solo2Fee = event?.solo2Fee || 750;
+    const solo3Fee = event?.solo3Fee || 1050;
+    const soloAdditionalFee = event?.soloAdditionalFee || 100;
+    const duoTrioFee = event?.duoTrioFeePerDancer || 280;
+    const groupFee = event?.groupFeePerDancer || 220;
+    const largeGroupFee = event?.largeGroupFeePerDancer || 190;
     
     // Check registration fee status for participants
     if (participantIds.length > 0) {
@@ -2827,50 +3090,40 @@ export const db = {
         try {
           const registrationStatus = await this.getDancerRegistrationStatus(participantId);
           if (!registrationStatus.registrationFeePaid) {
-            registrationFee += 300; // R300 per dancer who hasn't paid
+            registrationFee += regFeePerDancer; // Per dancer who hasn't paid
           }
         } catch (error) {
           // If dancer not found or error, assume they need to pay registration
-          registrationFee += 300;
+          registrationFee += regFeePerDancer;
         }
       }
     } else {
       // For single participant (solo), assume they need to pay if not specified
-      registrationFee = 300;
+      registrationFee = regFeePerDancer;
     }
     
     // Calculate performance fees based on type
     if (performanceType === 'Solo') {
-      // Solo fee structure - exactly as specified
-      switch (soloCount) {
-        case 1:
-          performanceFee = 400;
-          break;
-        case 2:
-          performanceFee = 750;
-          break;
-        case 3:
-          performanceFee = 1000;
-          break;
-        case 4:
-          performanceFee = 1200;
-          break;
-        case 5:
-          performanceFee = 1200; // 5th solo is FREE
-          break;
-        default:
-          // More than 5 solos: 1200 + (additional solos * 100)
-          performanceFee = 1200 + ((soloCount - 5) * 100);
+      // Solo fee structure - using event-specific fees
+      if (soloCount === 1) {
+        performanceFee = solo1Fee;
+      } else if (soloCount === 2) {
+        performanceFee = solo2Fee;
+      } else if (soloCount === 3) {
+        performanceFee = solo3Fee;
+      } else {
+        // More than 3 solos: 3-solo package + additional solos
+        performanceFee = solo3Fee + ((soloCount - 3) * soloAdditionalFee);
       }
     } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      // Duos/trios - R280 per person
-      performanceFee = 280 * participantCount;
+      // Duos/trios - per person
+      performanceFee = duoTrioFee * participantCount;
     } else if (performanceType === 'Group') {
       // Group pricing - determine pricing based on participant count
       if (participantCount >= 10) {
-        performanceFee = 190 * participantCount; // Large group pricing (10+)
+        performanceFee = largeGroupFee * participantCount; // Large group pricing (10+)
       } else {
-        performanceFee = 220 * participantCount; // Small group pricing (4-9)
+        performanceFee = groupFee * participantCount; // Small group pricing (4-9)
       }
     }
     

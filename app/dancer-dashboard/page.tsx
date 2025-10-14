@@ -24,6 +24,20 @@ interface StudioApplication {
   rejectionReason?: string;
 }
 
+interface Certificate {
+  id: string;
+  dancerName: string;
+  percentage: number;
+  style: string;
+  title: string;
+  medallion: string;
+  eventDate: string;
+  certificateUrl: string;
+  sentAt?: string;
+  downloaded: boolean;
+  createdAt: string;
+}
+
 // Music Upload Section Component
 function MusicUploadSection({ dancerSession }: { dancerSession: DancerSession }) {
   const [musicEntries, setMusicEntries] = useState<any[]>([]);
@@ -415,6 +429,30 @@ function ScoresFeedbackSection({ dancerSession }: { dancerSession: DancerSession
       const data = await response.json();
 
       if (data.success) {
+        // Group scores by performance
+        const groupedScores = data.scores.reduce((acc: any, score: any) => {
+          const perfId = score.performanceId;
+          if (!acc[perfId]) {
+            acc[perfId] = {
+              performanceId: perfId,
+              performanceTitle: score.performanceTitle,
+              scores: [],
+              averageScore: 0
+            };
+          }
+          acc[perfId].scores.push(score);
+          return acc;
+        }, {});
+
+        // Calculate average scores
+        Object.keys(groupedScores).forEach(perfId => {
+          const group = groupedScores[perfId];
+          const totalScores = group.scores.map((s: any) => calculateTotalScore(s));
+          const avgScore = totalScores.reduce((sum: number, score: number) => sum + score, 0) / totalScores.length;
+          group.averageScore = Math.round(avgScore * 100) / 100; // Round to 2 decimals
+        });
+
+        // Convert back to array and flatten
         setScores(data.scores);
       } else {
         setError(data.error || 'Failed to load scores');
@@ -434,17 +472,23 @@ function ScoresFeedbackSection({ dancerSession }: { dancerSession: DancerSession
   };
 
   const getMedalColor = (total: number) => {
-    if (total >= 90) return 'text-yellow-400'; // Gold
-    if (total >= 80) return 'text-gray-300'; // Silver
-    if (total >= 70) return 'text-orange-400'; // Bronze
-    return 'text-blue-400'; // Participation
+    if (total < 69) return 'text-orange-400'; // Bronze
+    if (total >= 70 && total <= 74) return 'text-gray-300'; // Silver
+    if (total >= 75 && total <= 79) return 'text-slate-300'; // Silver+
+    if (total >= 80 && total <= 84) return 'text-yellow-400'; // Gold
+    if (total >= 85 && total <= 89) return 'text-yellow-400'; // Legend
+    if (total >= 90 && total <= 94) return 'text-yellow-500'; // Opus
+    return 'text-yellow-600'; // Elite (95+)
   };
 
   const getMedalName = (total: number) => {
-    if (total >= 90) return 'Gold';
-    if (total >= 80) return 'Silver';
-    if (total >= 70) return 'Bronze';
-    return 'Participation';
+    if (total < 69) return 'Bronze';
+    if (total >= 70 && total <= 74) return 'Silver';
+    if (total >= 75 && total <= 79) return 'Silver+';
+    if (total >= 80 && total <= 84) return 'Gold';
+    if (total >= 85 && total <= 89) return 'Legend';
+    if (total >= 90 && total <= 94) return 'Opus';
+    return 'Elite'; // 95+
   };
 
   if (loading) {
@@ -502,69 +546,115 @@ function ScoresFeedbackSection({ dancerSession }: { dancerSession: DancerSession
           </div>
         ) : (
           <div className="p-6">
-            <div className="space-y-4">
-              {scores.map((score) => {
-                const totalScore = calculateTotalScore(score);
-                return (
-                  <div
-                    key={score.id}
-                    className="bg-gray-700/50 rounded-xl p-4 border border-gray-600 hover:border-purple-500 transition-all duration-300 cursor-pointer"
-                    onClick={() => {
-                      setSelectedScore(score);
-                      setShowScoreDetails(true);
-                    }}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <h4 className="text-lg font-bold text-white mb-1">{score.performanceTitle}</h4>
-                        <p className="text-sm text-gray-400">Judge: {score.judgeName}</p>
-                        <p className="text-xs text-gray-500">{new Date(score.scoredAt).toLocaleDateString()}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-3xl font-bold ${getMedalColor(totalScore)}`}>
-                          {totalScore}<span className="text-lg text-gray-400">/100</span>
+            <div className="space-y-6">
+              {(() => {
+                // Group scores by performance
+                const groupedScores = scores.reduce((acc: any, score: any) => {
+                  const perfId = score.performanceId;
+                  if (!acc[perfId]) {
+                    acc[perfId] = {
+                      performanceId: perfId,
+                      performanceTitle: score.performanceTitle,
+                      scores: []
+                    };
+                  }
+                  acc[perfId].scores.push(score);
+                  return acc;
+                }, {});
+
+                return Object.values(groupedScores).map((group: any) => {
+                  // Calculate average score for this performance
+                  const totalScores = group.scores.map((s: any) => calculateTotalScore(s));
+                  const avgScore = totalScores.reduce((sum: number, score: number) => sum + score, 0) / totalScores.length;
+                  const roundedAvg = Math.round(avgScore * 100) / 100;
+
+                  return (
+                    <div key={group.performanceId} className="bg-gray-700/50 rounded-xl p-4 border border-gray-600">
+                      <div className="mb-4 pb-3 border-b border-gray-600">
+                        <div className="flex justify-between items-start">
+                          <h4 className="text-xl font-bold text-white">{group.performanceTitle}</h4>
+                          <div className="text-right">
+                            <div className={`text-4xl font-bold ${getMedalColor(roundedAvg)}`}>
+                              {roundedAvg}<span className="text-xl text-gray-400">/100</span>
+                            </div>
+                            <div className={`text-sm font-semibold ${getMedalColor(roundedAvg)}`}>
+                              ⭐ AVERAGE SCORE
+                            </div>
+                            <div className={`text-xs font-semibold ${getMedalColor(roundedAvg)} mt-1`}>
+                              {getMedalName(roundedAvg)} Medal
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              From {group.scores.length} {group.scores.length === 1 ? 'judge' : 'judges'}
+                            </div>
+                          </div>
                         </div>
-                        <div className={`text-xs font-semibold ${getMedalColor(totalScore)}`}>
-                          {getMedalName(totalScore)}
-                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <p className="text-sm text-gray-400 font-semibold mb-2">Individual Judge Scores:</p>
+                        {group.scores.map((score: any) => {
+                          const totalScore = calculateTotalScore(score);
+                          return (
+                            <div
+                              key={score.id}
+                              className="bg-gray-800/50 rounded-lg p-3 border border-gray-600 hover:border-purple-500 transition-all duration-300 cursor-pointer"
+                              onClick={() => {
+                                setSelectedScore(score);
+                                setShowScoreDetails(true);
+                              }}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-white">Judge: {score.judgeName}</p>
+                                  <p className="text-xs text-gray-500">{new Date(score.scoredAt).toLocaleDateString()}</p>
+                                </div>
+                                <div className="text-right">
+                                  <div className={`text-2xl font-bold ${getMedalColor(totalScore)}`}>
+                                    {totalScore}<span className="text-sm text-gray-400">/100</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-5 gap-2">
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-blue-400">{score.technicalScore}</div>
+                                  <div className="text-[9px] text-gray-500">Technical</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-purple-400">{score.musicalScore}</div>
+                                  <div className="text-[9px] text-gray-500">Musical</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-green-400">{score.performanceScore}</div>
+                                  <div className="text-[9px] text-gray-500">Performance</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-orange-400">{score.stylingScore}</div>
+                                  <div className="text-[9px] text-gray-500">Styling</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs font-bold text-pink-400">{score.overallImpressionScore}</div>
+                                  <div className="text-[9px] text-gray-500">Overall</div>
+                                </div>
+                              </div>
+
+                              {score.comments && (
+                                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                                  <p className="text-xs text-blue-300 italic line-clamp-1">{score.comments}</p>
+                                </div>
+                              )}
+
+                              <div className="mt-2 text-xs text-purple-400 text-right">
+                                Click to view full details →
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-5 gap-2">
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-blue-400">{score.technicalScore}</div>
-                        <div className="text-[10px] text-gray-500">Technical</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-purple-400">{score.musicalScore}</div>
-                        <div className="text-[10px] text-gray-500">Musical</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-green-400">{score.performanceScore}</div>
-                        <div className="text-[10px] text-gray-500">Performance</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-orange-400">{score.stylingScore}</div>
-                        <div className="text-[10px] text-gray-500">Styling</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-pink-400">{score.overallImpressionScore}</div>
-                        <div className="text-[10px] text-gray-500">Overall</div>
-                      </div>
-                    </div>
-
-                    {score.comments && (
-                      <div className="mt-3 p-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                        <p className="text-xs text-blue-300 italic line-clamp-2">{score.comments}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-2 text-xs text-purple-400 text-right">
-                      Click to view full details →
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
@@ -904,6 +994,168 @@ function CompetitionEntriesSection({ dancerSession }: { dancerSession: DancerSes
   );
 }
 
+// Certificates Section Component
+function CertificatesSection({ dancerSession }: { dancerSession: DancerSession }) {
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadCertificates();
+  }, [dancerSession.id]);
+
+  const loadCertificates = async () => {
+    try {
+      const response = await fetch(`/api/certificates/generate?dancerId=${dancerSession.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCertificates(data);
+      } else {
+        setError('Failed to load certificates');
+      }
+    } catch (err) {
+      console.error('Error loading certificates:', err);
+      setError('Failed to load certificates');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = async (cert: Certificate) => {
+    try {
+      window.open(cert.certificateUrl, '_blank');
+      
+      // Mark as downloaded
+      await fetch(`/api/certificates/mark-downloaded`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ certificateId: cert.id })
+      });
+      
+      // Reload certificates
+      loadCertificates();
+    } catch (err) {
+      console.error('Error downloading certificate:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+        <div className="p-6 border-b border-gray-700">
+          <h3 className="text-xl font-bold text-white">🎖️ My Certificates</h3>
+          <p className="text-gray-400 text-sm mt-1">View and download your achievement certificates</p>
+        </div>
+        <div className="p-12 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading certificates...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+      <div className="p-6 border-b border-gray-700">
+        <h3 className="text-xl font-bold text-white">🎖️ My Certificates</h3>
+        <p className="text-gray-400 text-sm mt-1">View and download your achievement certificates</p>
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-900/20 border-b border-red-700/30">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      {certificates.length === 0 ? (
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">📜</span>
+          </div>
+          <p className="text-gray-400 mb-2">No certificates yet</p>
+          <p className="text-gray-500 text-sm">
+            Certificates will appear here once you've achieved a ranking position in competitions.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6">
+          {certificates.map((cert) => (
+            <div key={cert.id} className="bg-gray-900/50 rounded-xl border border-gray-700 overflow-hidden hover:border-purple-500/50 transition-all">
+              <div
+                className="relative h-48 cursor-pointer"
+                onClick={() => setPreviewUrl(cert.certificateUrl)}
+              >
+                <img
+                  src={cert.certificateUrl}
+                  alt={`Certificate for ${cert.title}`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-opacity flex items-center justify-center">
+                  <span className="text-white text-4xl opacity-0 hover:opacity-100 transition-opacity">🔍</span>
+                </div>
+              </div>
+              <div className="p-4">
+                <h4 className="font-semibold text-white mb-2">{cert.title}</h4>
+                <div className="space-y-1 text-sm">
+                  <p className="text-gray-400">
+                    <span className="text-gray-500">Style:</span> {cert.style}
+                  </p>
+                  <p className="text-gray-400">
+                    <span className="text-gray-500">Score:</span> {cert.percentage}%
+                  </p>
+                  <p className="text-gray-400">
+                    <span className="text-gray-500">Medal:</span> {cert.medallion}
+                  </p>
+                  <p className="text-gray-400">
+                    <span className="text-gray-500">Date:</span> {cert.eventDate}
+                  </p>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => handleDownload(cert)}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold"
+                  >
+                    📥 Download
+                  </button>
+                  <button
+                    onClick={() => setPreviewUrl(cert.certificateUrl)}
+                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                  >
+                    👁️
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewUrl(null)}
+              className="absolute -top-12 right-0 text-white text-xl hover:text-gray-300 bg-gray-800/50 px-4 py-2 rounded-lg"
+            >
+              ✕ Close
+            </button>
+            <img
+              src={previewUrl}
+              alt="Certificate Preview"
+              className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DancerDashboardPage() {
   const [dancerSession, setDancerSession] = useState<DancerSession | null>(null);
   const [applications, setApplications] = useState<StudioApplication[]>([]);
@@ -1030,6 +1282,9 @@ export default function DancerDashboardPage() {
       <div className="container mx-auto p-4 space-y-6">
         {/* Scores & Feedback Section */}
         <ScoresFeedbackSection dancerSession={dancerSession} />
+
+        {/* Certificates Section */}
+        <CertificatesSection dancerSession={dancerSession} />
 
         {/* Competition Entries Section */}
         <CompetitionEntriesSection dancerSession={dancerSession} />

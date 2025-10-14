@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCertificateImage } from '@/lib/certificate-image-generator';
+import { v2 as cloudinary } from 'cloudinary';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,38 +37,98 @@ export async function GET(request: NextRequest) {
     const dateLeft = parseFloat(searchParams.get('dateLeft') || '67.5');
     const dateFontSize = parseInt(searchParams.get('dateFontSize') || '24');
 
-    const certificateData = {
-      dancerName: 'ANGELO SOLIS',
-      percentage: 92,
-      style: 'CONTEMPORARY',
-      title: 'RISING PHOENIX',
-      medallion: 'Gold' as const,
-      date: '4 October 2025',
-      positions: {
-        nameTop,
-        nameLeft,
-        nameFontSize,
-        percentageTop,
-        percentageLeft,
-        percentageFontSize,
-        styleTop,
-        styleLeft,
-        styleFontSize,
-        titleTop,
-        titleLeft,
-        titleFontSize,
-        medallionTop,
-        medallionLeft,
-        medallionFontSize,
-        dateTop,
-        dateLeft,
-        dateFontSize
-      }
-    };
+    // Get actual certificate data from query params
+    const dancerName = searchParams.get('name') || 'ANGELO SOLIS';
+    const percentage = searchParams.get('percentage') || '92';
+    const style = searchParams.get('style') || 'CONTEMPORARY';
+    const title = searchParams.get('title') || 'RISING PHOENIX';
+    const medallion = searchParams.get('medallion') || 'Gold';
+    const date = searchParams.get('date') || '4 October 2025';
 
-    const certificateBuffer = await generateCertificateImage(certificateData);
+    // Use Cloudinary to generate certificate with text overlays (Montserrat font)
+    const certificateUrl = cloudinary.url('Template_syz7di', {
+      transformation: [
+        {
+          overlay: {
+            font_family: 'Montserrat',
+            font_size: nameFontSize,
+            font_weight: 'bold',
+            text: dancerName.toUpperCase(),
+            letter_spacing: 2
+          },
+          color: 'white',
+          gravity: 'north',
+          y: Math.floor(nameTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Montserrat',
+            font_size: percentageFontSize,
+            font_weight: 'bold',
+            text: percentage
+          },
+          color: 'white',
+          gravity: 'north_west',
+          x: Math.floor(percentageLeft * 9),
+          y: Math.floor(percentageTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Montserrat',
+            font_size: styleFontSize,
+            font_weight: 'bold',
+            text: style.toUpperCase()
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((styleLeft - 50) * 9),
+          y: Math.floor(styleTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Montserrat',
+            font_size: titleFontSize,
+            font_weight: 'bold',
+            text: title.toUpperCase()
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((titleLeft - 50) * 9),
+          y: Math.floor(titleTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Montserrat',
+            font_size: medallionFontSize,
+            font_weight: 'bold',
+            text: medallion.toUpperCase()
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((medallionLeft - 50) * 9),
+          y: Math.floor(medallionTop * 13)
+        },
+        {
+          overlay: {
+            font_family: 'Montserrat',
+            font_size: dateFontSize,
+            text: date
+          },
+          color: 'white',
+          gravity: 'north',
+          x: Math.floor((dateLeft - 50) * 9),
+          y: Math.floor(dateTop * 13)
+        }
+      ],
+      format: 'jpg',
+      quality: 95
+    });
 
-    return new NextResponse(certificateBuffer, {
+    // Fetch the generated image from Cloudinary
+    const response = await fetch(certificateUrl);
+    const imageBuffer = await response.arrayBuffer();
+
+    return new NextResponse(Buffer.from(imageBuffer), {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'no-store, max-age=0',

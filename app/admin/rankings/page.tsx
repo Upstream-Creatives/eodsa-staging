@@ -26,6 +26,7 @@ interface RankingData {
   rankingLevel: string;
   itemNumber?: number; // Item number for program order
   mastery?: string; // Mastery level
+  entryType?: string; // Entry type (live/virtual)
 }
 
 interface EventWithScores {
@@ -54,8 +55,10 @@ function AdminRankingsPage() {
   // Region filtering removed - Nationals only now
   const [selectedAgeCategory, setSelectedAgeCategory] = useState('');
   const [selectedPerformanceType, setSelectedPerformanceType] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState('');
   const [viewMode, setViewMode] = useState<'all' | 'top3_age' | 'top3_style' | 'top3_duets' | 'top3_groups' | 'top3_trios' | 'top10_soloists'>('all');
   const [masteryFilter, setMasteryFilter] = useState<'all' | 'competitive' | 'advanced'>('all');
+  const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'live' | 'virtual'>('all');
 
   useEffect(() => {
     // Check admin authentication
@@ -82,22 +85,22 @@ function AdminRankingsPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [rankings, viewMode, masteryFilter]);
+  }, [rankings, viewMode, masteryFilter, entryTypeFilter, selectedAgeCategory, selectedPerformanceType, selectedStyle]);
 
-  // Trigger rankings reload when server-side filters change
+  // Load rankings only once on authentication (all filters are client-side for Nationals)
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
       loadRankings();
     }
-  }, [selectedAgeCategory, selectedPerformanceType]);
+  }, [isAuthenticated]);
 
   const loadInitialData = async () => {
     setIsLoading(true);
     setError('');
     
     try {
-      // Load all rankings
-      await loadRankings();
+      // Load all rankings (force load since this is initial data load)
+      await loadRankings(true);
     } catch (error) {
       setError('Failed to load data');
     } finally {
@@ -105,8 +108,8 @@ function AdminRankingsPage() {
     }
   };
 
-  const loadRankings = async () => {
-    if (!isAuthenticated) return;
+  const loadRankings = async (forceLoad = false) => {
+    if (!isAuthenticated && !forceLoad) return;
     
     setIsRefreshing(true);
     setError('');
@@ -116,9 +119,8 @@ function AdminRankingsPage() {
       const params = new URLSearchParams();
       params.append('type', 'nationals'); // Only nationals now
       
-      // No region filter needed - only Nationals now
-      if (selectedAgeCategory) params.append('ageCategory', selectedAgeCategory);
-      if (selectedPerformanceType) params.append('performanceType', selectedPerformanceType);
+      // All filters are client-side for Nationals (due to dynamic age calculation)
+      // Load all data and filter on client
       
       const url = `/api/rankings?${params.toString()}`;
       console.log('Loading rankings from:', url);
@@ -142,15 +144,46 @@ function AdminRankingsPage() {
   const applyFilters = () => {
     let filtered = rankings;
     
-    // Apply mastery level filter first
+    // Apply age category filter (client-side for Nationals due to dynamic age calculation)
+    if (selectedAgeCategory) {
+      filtered = filtered.filter(ranking => ranking.ageCategory === selectedAgeCategory);
+    }
+    
+    // Apply performance type filter (client-side for Nationals)
+    if (selectedPerformanceType) {
+      filtered = filtered.filter(ranking => ranking.performanceType === selectedPerformanceType);
+    }
+    
+    // Apply style filter
+    if (selectedStyle) {
+      filtered = filtered.filter(ranking => ranking.itemStyle === selectedStyle);
+    }
+    
+    // Apply entry type filter
+    if (entryTypeFilter !== 'all') {
+      filtered = filtered.filter(ranking => (ranking.entryType || 'live') === entryTypeFilter);
+    }
+    
+    // Apply mastery level filter
     if (masteryFilter === 'competitive') {
       filtered = filtered.filter(ranking => ranking.mastery?.toLowerCase().includes('water') || ranking.mastery?.toLowerCase().includes('competition'));
     } else if (masteryFilter === 'advanced') {
       filtered = filtered.filter(ranking => ranking.mastery?.toLowerCase().includes('fire') || ranking.mastery?.toLowerCase().includes('advanced'));
     }
     
-    // Apply view mode filters
+    // Apply view mode filters with deduplication
+    // When using "Top X" view modes, deduplicate by contestant name (keep only best performance per person)
     if (viewMode === 'top3_age') {
+      // Deduplicate first: keep only best performance per contestant
+      const bestPerformanceByContestant = new Map<string, RankingData>();
+      filtered.forEach(ranking => {
+        const existing = bestPerformanceByContestant.get(ranking.contestantName);
+        if (!existing || ranking.totalScore > existing.totalScore) {
+          bestPerformanceByContestant.set(ranking.contestantName, ranking);
+        }
+      });
+      filtered = Array.from(bestPerformanceByContestant.values());
+      
       // Group by age category and get top 3 from each
       const groupedByAge = filtered.reduce((groups, ranking) => {
         if (!groups[ranking.ageCategory]) {
@@ -164,6 +197,16 @@ function AdminRankingsPage() {
         group.sort((a, b) => b.totalScore - a.totalScore).slice(0, 3)
       );
     } else if (viewMode === 'top3_style') {
+      // Deduplicate first: keep only best performance per contestant
+      const bestPerformanceByContestant = new Map<string, RankingData>();
+      filtered.forEach(ranking => {
+        const existing = bestPerformanceByContestant.get(ranking.contestantName);
+        if (!existing || ranking.totalScore > existing.totalScore) {
+          bestPerformanceByContestant.set(ranking.contestantName, ranking);
+        }
+      });
+      filtered = Array.from(bestPerformanceByContestant.values());
+      
       // Group by style and get top 3 from each
       const groupedByStyle = filtered.reduce((groups, ranking) => {
         if (!groups[ranking.itemStyle]) {
@@ -177,39 +220,173 @@ function AdminRankingsPage() {
         group.sort((a, b) => b.totalScore - a.totalScore).slice(0, 3)
       );
     } else if (viewMode === 'top3_duets') {
-      // Filter for duets only and get top 3
-      filtered = filtered
+      // Deduplicate first: keep only best performance per contestant
+      const bestPerformanceByContestant = new Map<string, RankingData>();
+      filtered
         .filter(ranking => ranking.performanceType === 'Duet')
+        .forEach(ranking => {
+          const existing = bestPerformanceByContestant.get(ranking.contestantName);
+          if (!existing || ranking.totalScore > existing.totalScore) {
+            bestPerformanceByContestant.set(ranking.contestantName, ranking);
+          }
+        });
+      
+      // Filter for duets only and get top 3
+      filtered = Array.from(bestPerformanceByContestant.values())
         .sort((a, b) => b.totalScore - a.totalScore)
         .slice(0, 3);
     } else if (viewMode === 'top3_groups') {
-      // Filter for groups only and get top 3
-      filtered = filtered
+      // Deduplicate first: keep only best performance per contestant
+      const bestPerformanceByContestant = new Map<string, RankingData>();
+      filtered
         .filter(ranking => ranking.performanceType === 'Group')
+        .forEach(ranking => {
+          const existing = bestPerformanceByContestant.get(ranking.contestantName);
+          if (!existing || ranking.totalScore > existing.totalScore) {
+            bestPerformanceByContestant.set(ranking.contestantName, ranking);
+          }
+        });
+      
+      // Filter for groups only and get top 3
+      filtered = Array.from(bestPerformanceByContestant.values())
         .sort((a, b) => b.totalScore - a.totalScore)
         .slice(0, 3);
     } else if (viewMode === 'top3_trios') {
-      // Filter for trios only and get top 3
-      filtered = filtered
+      // Deduplicate first: keep only best performance per contestant
+      const bestPerformanceByContestant = new Map<string, RankingData>();
+      filtered
         .filter(ranking => ranking.performanceType === 'Trio')
+        .forEach(ranking => {
+          const existing = bestPerformanceByContestant.get(ranking.contestantName);
+          if (!existing || ranking.totalScore > existing.totalScore) {
+            bestPerformanceByContestant.set(ranking.contestantName, ranking);
+          }
+        });
+      
+      // Filter for trios only and get top 3
+      filtered = Array.from(bestPerformanceByContestant.values())
         .sort((a, b) => b.totalScore - a.totalScore)
         .slice(0, 3);
     } else if (viewMode === 'top10_soloists') {
-      // Filter for solos only and get top 10
-      filtered = filtered
+      // Deduplicate first: keep only best performance per contestant
+      const bestPerformanceByContestant = new Map<string, RankingData>();
+      filtered
         .filter(ranking => ranking.performanceType === 'Solo')
+        .forEach(ranking => {
+          const existing = bestPerformanceByContestant.get(ranking.contestantName);
+          if (!existing || ranking.totalScore > existing.totalScore) {
+            bestPerformanceByContestant.set(ranking.contestantName, ranking);
+          }
+        });
+      
+      // Filter for solos only and get top 10
+      filtered = Array.from(bestPerformanceByContestant.values())
         .sort((a, b) => b.totalScore - a.totalScore)
         .slice(0, 10);
     }
     
-    setFilteredRankings(filtered);
+    // Sort filtered results by total score (descending) and recalculate ranks
+    filtered.sort((a, b) => b.totalScore - a.totalScore);
+    
+    // Recalculate ranks for filtered results
+    const rankedFiltered = filtered.map((ranking, index) => ({
+      ...ranking,
+      rank: index + 1 // Assign new rank based on position in filtered list
+    }));
+    
+    setFilteredRankings(rankedFiltered);
   };
 
   const clearFilters = () => {
     setSelectedAgeCategory('');
     setSelectedPerformanceType('');
+    setSelectedStyle('');
     setViewMode('all');
     setMasteryFilter('all');
+    setEntryTypeFilter('all');
+  };
+
+  const exportToCSV = () => {
+    if (filteredRankings.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Define CSV headers
+    const headers = [
+      'Rank',
+      'Item Number',
+      'Performance Title',
+      'Contestant Name',
+      'Studio',
+      'Performance Type',
+      'Age Category',
+      'Style',
+      'Mastery Level',
+      'Entry Type',
+      'Total Score',
+      'Average Score',
+      'Percentage',
+      'Medal/Level',
+      'Judge Count',
+      'Event Name',
+      'Region'
+    ];
+
+    // Convert data to CSV rows
+    const rows = filteredRankings.map((ranking, index) => {
+      const { percentage, rankingLevel } = calculatePercentageAndRanking(ranking.totalScore, ranking.judgeCount);
+      
+      return [
+        index + 1, // Rank
+        ranking.itemNumber || 'N/A',
+        `"${ranking.title.replace(/"/g, '""')}"`, // Escape quotes in title
+        `"${ranking.contestantName.replace(/"/g, '""')}"`,
+        `"${(ranking.studioName || '').replace(/"/g, '""')}"`,
+        ranking.performanceType,
+        ranking.ageCategory,
+        `"${ranking.itemStyle.replace(/"/g, '""')}"`,
+        ranking.mastery || 'N/A',
+        ranking.entryType || 'live',
+        ranking.totalScore.toFixed(2),
+        ranking.averageScore.toFixed(2),
+        percentage.toFixed(2),
+        rankingLevel,
+        ranking.judgeCount,
+        `"${ranking.eventName.replace(/"/g, '""')}"`,
+        ranking.region
+      ];
+    });
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Generate filename with timestamp and current view mode
+    const timestamp = new Date().toISOString().split('T')[0];
+    const viewModeLabel = viewMode === 'all' ? 'All' : 
+                          viewMode === 'top3_age' ? 'Top3ByAge' :
+                          viewMode === 'top3_style' ? 'Top3ByStyle' :
+                          viewMode === 'top3_duets' ? 'Top3Duets' :
+                          viewMode === 'top3_groups' ? 'Top3Groups' :
+                          viewMode === 'top3_trios' ? 'Top3Trios' :
+                          viewMode === 'top10_soloists' ? 'Top10Soloists' : 'Rankings';
+    
+    const filename = `Nationals_Rankings_${viewModeLabel}_${timestamp}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const getRankBadgeColor = (rank: number) => {
@@ -222,12 +399,7 @@ function AdminRankingsPage() {
   };
 
   const getRankIcon = (rank: number) => {
-    switch (rank) {
-      case 1: return '🥇';
-      case 2: return '🥈';
-      case 3: return '🥉';
-      default: return `#${rank}`;
-    }
+    return `#${rank}`;
   };
 
   const calculatePercentageAndRanking = (totalScore: number, judgeCount: number) => {
@@ -316,6 +488,13 @@ function AdminRankingsPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={exportToCSV}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+              >
+                <span>📊</span>
+                <span>Export CSV</span>
+              </button>
               <button
                 onClick={() => window.location.href = '/admin'}
                 className="px-4 py-2 text-gray-400 hover:text-white font-medium"
@@ -533,7 +712,7 @@ function AdminRankingsPage() {
             <h2 className="text-xl font-bold text-white">Filter Avalon Rankings</h2>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Competition</label>
               <div className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl bg-gray-700 text-white font-medium">
@@ -549,7 +728,7 @@ function AdminRankingsPage() {
                 className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium bg-gray-700 text-white"
               >
                 <option value="">All Ages</option>
-                {['Primary', 'Junior', 'Senior', 'Youth', 'Adult', 'Elite'].map(age => (
+                {['4 & Under', '6 & Under', '7-9', '10-12', '13-14', '15-17', '18-24', '25-39', '40+', '60+'].map(age => (
                   <option key={age} value={age}>{age}</option>
                 ))}
               </select>
@@ -570,6 +749,20 @@ function AdminRankingsPage() {
             </div>
 
             <div>
+              <label className="block text-sm font-semibold text-gray-300 mb-3">Style</label>
+              <select
+                value={selectedStyle}
+                onChange={(e) => setSelectedStyle(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium bg-gray-700 text-white"
+              >
+                <option value="">All Styles</option>
+                {Array.from(new Set(rankings.map(r => r.itemStyle).filter(s => s))).sort().map(style => (
+                  <option key={style} value={style}>{style}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Mastery Level</label>
               <select
                 value={masteryFilter}
@@ -581,10 +774,30 @@ function AdminRankingsPage() {
                 <option value="advanced">Advanced (Fire)</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-300 mb-3">Entry Type</label>
+              <select
+                value={entryTypeFilter}
+                onChange={(e) => setEntryTypeFilter(e.target.value as 'all' | 'live' | 'virtual')}
+                className="w-full px-4 py-3 border-2 border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 font-medium bg-gray-700 text-white"
+              >
+                <option value="all">All Entries</option>
+                <option value="live">Live Only</option>
+                <option value="virtual">Virtual Only</option>
+              </select>
+            </div>
             
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-3">Actions</label>
               <div className="flex flex-col space-y-2">
+                <button
+                  onClick={exportToCSV}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-md flex items-center justify-center space-x-2"
+                >
+                  <span>📊</span>
+                  <span>Export to CSV</span>
+                </button>
                 <button
                   onClick={clearFilters}
                   className="w-full px-4 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-200 font-semibold shadow-md"
@@ -592,7 +805,7 @@ function AdminRankingsPage() {
                   Clear Filters
                 </button>
                 <button
-                  onClick={loadRankings}
+                  onClick={() => loadRankings()}
                   disabled={isRefreshing}
                   className="w-full px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 font-semibold shadow-md"
                 >
@@ -634,7 +847,8 @@ function AdminRankingsPage() {
                       <th className="text-left py-4 px-6 font-bold text-white">Item #</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Performance</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Contestant</th>
-
+                      <th className="text-left py-4 px-6 font-bold text-white">Type</th>
+                      <th className="text-left py-4 px-6 font-bold text-white">Age</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Score</th>
                       <th className="text-left py-4 px-6 font-bold text-white">Level</th>
                     </tr>
@@ -642,17 +856,33 @@ function AdminRankingsPage() {
                   <tbody>
                     {filteredRankings.map((ranking, index) => {
                       const { percentage, rankingLevel, rankingColor, medalEmoji } = calculatePercentageAndRanking(ranking.totalScore, ranking.judgeCount);
+
+                      // Use the recalculated rank from applyFilters
+                      // The rank is already correctly calculated in applyFilters()
+                      // No need for special handling - just use ranking.rank directly
+                      const displayRank = ranking.rank;
+                      
                       return (
                         <tr key={ranking.performanceId} className="border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
                           <td className="py-4 px-6">
-                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border ${getRankBadgeColor(ranking.rank)}`}>
-                              {getRankIcon(ranking.rank)}
+                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border ${getRankBadgeColor(displayRank)}`}>
+                              {getRankIcon(displayRank)}
                             </div>
                           </td>
                           <td className="py-4 px-6">
-                            <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-blue-500 to-purple-600 text-white border border-blue-300 shadow-md">
-                              {ranking.itemNumber ? `Item ${ranking.itemNumber}` : 'Unassigned'}
-                            </div>
+                            {ranking.itemNumber ? (
+                              <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-blue-500 to-purple-600 text-white border border-blue-300 shadow-md">
+                                Item {ranking.itemNumber}
+                              </div>
+                            ) : (
+                              <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border shadow-md ${
+                                (ranking.entryType || 'live') === 'virtual'
+                                  ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300'
+                                  : 'bg-gradient-to-r from-orange-500 to-red-600 text-white border-orange-300'
+                              }`}>
+                                {(ranking.entryType || 'live') === 'virtual' ? '📹 Virtual' : '⚠️ Unassigned'}
+                              </div>
+                            )}
                           </td>
                           <td className="py-4 px-6">
                             <div className="font-semibold text-white">{ranking.title}</div>
@@ -671,7 +901,16 @@ function AdminRankingsPage() {
                               <div className="text-xs text-gray-400 mt-1">{ranking.studioName}</div>
                             )}
                           </td>
-
+                          <td className="py-4 px-6">
+                            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-700 text-blue-200 border border-blue-500">
+                              {ranking.performanceType}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-indigo-700 text-indigo-200 border border-indigo-500">
+                              {ranking.ageCategory}
+                            </div>
+                          </td>
                           <td className="py-4 px-6">
                             <div className="font-bold text-white">{ranking.totalScore.toFixed(1)}</div>
                             <div className="text-sm text-gray-400">{percentage}% • {ranking.judgeCount} judges</div>

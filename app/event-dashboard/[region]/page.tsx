@@ -196,27 +196,41 @@ export default function NationalsEventsPage() {
     }
   };
 
-  const getStartingFee = (performanceType: string) => {
-    // Use the Nationals fee structure
+  const getStartingFee = (performanceType: string, event?: Event) => {
+    // Use event-specific fee structure if available, otherwise use defaults
+    const currency = event?.currency || 'ZAR';
+    const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : 'R';
+    
     if (performanceType === 'Solo') {
-      return 400; // R400 for 1 solo (plus R300 registration)
+      return event?.solo1Fee || 400; // First solo fee
     } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      return 280; // R280 per person (plus R300 registration each)
+      return event?.duoTrioFeePerDancer || 280; // Per person
     } else if (performanceType === 'Group') {
-      return 220; // R220 per person for small groups (plus R300 registration each)
+      return event?.groupFeePerDancer || 220; // Per person for small groups
     }
     return 0; // Default case
   };
 
-  const getFeeExplanation = (performanceType: string) => {
+  const getFeeExplanation = (performanceType: string, event?: Event) => {
+    const currency = event?.currency || 'ZAR';
+    const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : 'R';
+    const regFee = event?.registrationFeePerDancer || 300;
+    
     if (performanceType === 'Solo') {
-      return 'Solo packages: 1st solo R400, 2nd R350, 3rd R300, 4th R250, 5th FREE, additional solos R100 each. Plus R300 registration.';
+      const solo1 = event?.solo1Fee || 400;
+      const solo2 = event?.solo2Fee || 750;
+      const solo3 = event?.solo3Fee || 1050;
+      const additional = event?.soloAdditionalFee || 100;
+      return `Solo packages: 1st solo ${symbol}${solo1}, 2 solos ${symbol}${solo2}, 3 solos ${symbol}${solo3}, additional solos ${symbol}${additional} each. Plus ${symbol}${regFee} registration.`;
     } else if (performanceType === 'Duet' || performanceType === 'Trio') {
-      return 'R280 per person + R300 registration each';
+      const duoTrioFee = event?.duoTrioFeePerDancer || 280;
+      return `${symbol}${duoTrioFee} per person + ${symbol}${regFee} registration each`;
     } else if (performanceType === 'Group') {
-      return 'Small groups (4-9): R220pp, Large groups (10+): R190pp. Plus R300 registration each.';
+      const smallGroupFee = event?.groupFeePerDancer || 220;
+      const largeGroupFee = event?.largeGroupFeePerDancer || 190;
+      return `Small groups (4-9): ${symbol}${smallGroupFee}pp, Large groups (10+): ${symbol}${largeGroupFee}pp. Plus ${symbol}${regFee} registration each.`;
     }
-    return 'Per person + R300 registration each';
+    return `Per person + ${symbol}${regFee} registration each`;
   };
 
   if (!region || (!eodsaId && !studioId)) {
