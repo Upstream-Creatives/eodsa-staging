@@ -4502,15 +4502,26 @@ export const unifiedDb = {
   // Get accepted dancers for a studio
   async getStudioDancers(studioId: string) {
     const sqlClient = getSql();
-    const result = await sqlClient`
+
+    // Get NEW system dancers with studio applications
+    const newDancers = await sqlClient`
       SELECT d.*, sa.applied_at, sa.responded_at
       FROM dancers d
       JOIN studio_applications sa ON d.id = sa.dancer_id
       WHERE sa.studio_id = ${studioId} AND sa.status = 'accepted' AND d.approved = true
       ORDER BY sa.responded_at DESC
     ` as any[];
-    
-    return result.map((row: any) => ({
+
+    // Get studio info to match legacy contestants
+    const studio = await this.getStudioById(studioId);
+    const legacyContestants = studio ? await sqlClient`
+      SELECT DISTINCT c.eodsa_id, c.id
+      FROM contestants c
+      WHERE c.type = 'studio' AND (c.email = ${studio.email} OR c.studio_name = ${studio.name})
+    ` as any[] : [];
+
+    // Map new dancers
+    const mappedNewDancers = newDancers.map((row: any) => ({
       id: row.id,
       eodsaId: row.eodsa_id,
       name: row.name,
@@ -4520,8 +4531,26 @@ export const unifiedDb = {
       email: row.email,
       phone: row.phone,
       approved: row.approved,
-      joinedAt: row.responded_at
+      joinedAt: row.responded_at,
+      isLegacy: false
     }));
+
+    // Map legacy contestants
+    const mappedLegacyContestants = legacyContestants.map((row: any) => ({
+      id: row.id,
+      eodsaId: row.eodsa_id,
+      isLegacy: true
+    }));
+
+    // Combine both lists, avoiding duplicates
+    const combinedDancers = [...mappedNewDancers];
+    for (const legacy of mappedLegacyContestants) {
+      if (!combinedDancers.find(d => d.eodsaId === legacy.eodsaId)) {
+        combinedDancers.push(legacy);
+      }
+    }
+
+    return combinedDancers;
   },
 
   // Get all competition entries for a studio's dancers
