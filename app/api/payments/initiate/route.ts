@@ -34,10 +34,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Get event details to determine payment amount
+    // Get event details to determine payment amount and currency
     const [event] = await sql`
-      SELECT id, name, entry_fee, payment_required 
-      FROM events 
+      SELECT id, name, entry_fee, payment_required, currency
+      FROM events
       WHERE id = ${eventId}
     `;
 
@@ -98,6 +98,9 @@ export async function POST(request: NextRequest) {
     const baseAmount = amount || 25.00; // Fallback only for legacy compatibility
     const fees = calculateEntryFees(baseAmount);
 
+    // Get currency from event configuration, default to ZAR if not set
+    const currency = event.currency || 'ZAR';
+
     // Build PayFast payment payload FIRST so we use the SAME payment_id everywhere
     const paymentData = createPaymentData({
       entryId,
@@ -123,8 +126,8 @@ export async function POST(request: NextRequest) {
           description, status, ip_address, user_agent, pending_entries_data
         )
         VALUES (
-          ${paymentId}, ${eventId}, ${userId || 'unknown'}, 
-          ${fees.total}, 'ZAR',
+          ${paymentId}, ${eventId}, ${userId || 'unknown'},
+          ${fees.total}, ${currency},
           ${`Payment for ${paymentData.item_name} - ${event.name}`}, 'pending',
           ${request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'},
           ${request.headers.get('user-agent') || 'unknown'}, ${pendingEntriesJson}
@@ -138,8 +141,8 @@ export async function POST(request: NextRequest) {
           description, status, ip_address, user_agent
         )
         VALUES (
-          ${paymentId}, ${entryId}, ${eventId}, ${userId || 'unknown'}, 
-          ${fees.total}, 'ZAR',
+          ${paymentId}, ${entryId}, ${eventId}, ${userId || 'unknown'},
+          ${fees.total}, ${currency},
           ${`Payment for ${paymentData.item_name} - ${event.name}`}, 'pending',
           ${request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'},
           ${request.headers.get('user-agent') || 'unknown'}
