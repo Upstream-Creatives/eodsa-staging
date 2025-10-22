@@ -29,23 +29,52 @@ export const calculateSmartEODSAFee = async (
   // REGISTRATION FEE CHECKING FOR ALL PERFORMANCE TYPES
   // Get dancer registration status for all participants regardless of performance type
   const dancers = await unifiedDb.getDancersWithRegistrationStatus(participantIds);
-  
-  // SIMPLE FIX: Check for any pending entries that include registration fees for these dancers
+
+  // IMPORTANT FIX: Check if dancer has paid registration for THIS SPECIFIC EVENT, not globally
+  // A dancer must pay registration for EACH event, even if they paid before
   const dancersWithPendingCheck = await Promise.all(
     dancers.map(async (dancer) => {
+      // Check if this dancer has any PAID entries for THIS specific event
+      // Only waive registration fee if they've already paid for THIS event
+      let hasPaidForThisEvent = false;
+
+      if (options?.eventId) {
+        try {
+          const { db } = await import('./database');
+          // Check for any paid entries for this dancer in this event
+          const paidEntries = await db.sql`
+            SELECT COUNT(*) as count FROM event_entries
+            WHERE contestant_id = ${dancer.id}
+            AND event_id = ${options.eventId}
+            AND payment_status = 'paid'
+            LIMIT 1
+          ` as any[];
+
+          hasPaidForThisEvent = paidEntries && paidEntries[0] && paidEntries[0].count > 0;
+
+          console.log(`🔍 Dancer ${dancer.name} (${dancer.id}):`);
+          console.log(`   - Has paid entry for this event (${options.eventId}): ${hasPaidForThisEvent}`);
+        } catch (error) {
+          console.error(`Error checking paid entries for dancer ${dancer.id}:`, error);
+        }
+      }
+
       // Check if this dancer has any pending entries that include registration fees
       const hasPendingRegistrationEntry = await unifiedDb.hasPendingRegistrationEntry(dancer.id, masteryLevel);
-      
+
       console.log(`🔍 Dancer ${dancer.name} (${dancer.id}):`);
-      console.log(`   - Registration fee paid: ${dancer.registrationFeePaid}`);
+      console.log(`   - Registration fee paid (global): ${dancer.registrationFeePaid}`);
       console.log(`   - Registration fee mastery level: ${dancer.registrationFeeMasteryLevel}`);
       console.log(`   - Has pending registration entry: ${hasPendingRegistrationEntry}`);
-      
+      console.log(`   - Has paid entry for THIS event: ${hasPaidForThisEvent}`);
+
       return {
         ...dancer,
-        // If they have a pending entry with registration fee, consider it as "paid" for calculation purposes
-        registrationFeePaid: dancer.registrationFeePaid || hasPendingRegistrationEntry,
-        registrationFeeMasteryLevel: dancer.registrationFeeMasteryLevel || (hasPendingRegistrationEntry ? masteryLevel : undefined)
+        // Only consider registration fee as "paid" if:
+        // 1. They have a pending entry with registration fee, OR
+        // 2. They've already paid for THIS specific event
+        registrationFeePaid: hasPendingRegistrationEntry || hasPaidForThisEvent,
+        registrationFeeMasteryLevel: (hasPendingRegistrationEntry || hasPaidForThisEvent) ? masteryLevel : undefined
       };
     })
   );
