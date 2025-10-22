@@ -121,12 +121,32 @@ export async function PUT(
       }
     }
 
-    // Build update object for each field
+    // Build update object for each field with proper camelCase to snake_case conversion
     const updates: Record<string, any> = {};
+    
+    // Manual mapping for fee fields to ensure correct snake_case conversion
+    const fieldMapping: Record<string, string> = {
+      'registrationFeePerDancer': 'registration_fee_per_dancer',
+      'solo1Fee': 'solo_1_fee',
+      'solo2Fee': 'solo_2_fee',
+      'solo3Fee': 'solo_3_fee',
+      'soloAdditionalFee': 'solo_additional_fee',
+      'duoTrioFeePerDancer': 'duo_trio_fee_per_dancer',
+      'groupFeePerDancer': 'group_fee_per_dancer',
+      'largeGroupFeePerDancer': 'large_group_fee_per_dancer',
+    };
+    
     Object.entries(updateData).forEach(([key, value]) => {
-      const dbField = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      // Use manual mapping if available, otherwise use regex conversion
+      const dbField = fieldMapping[key] || key.replace(/([A-Z])/g, '_$1').toLowerCase();
       updates[dbField] = value;
     });
+
+    console.log('📝 Update data received:', updateData);
+    console.log('🔄 Converted to DB fields:', updates);
+    console.log('🔍 Fee fields specifically:');
+    console.log('  - solo1Fee (received):', updateData.solo1Fee, 'type:', typeof updateData.solo1Fee);
+    console.log('  - solo_1_fee (converted):', updates.solo_1_fee, 'type:', typeof updates.solo_1_fee);
 
     // Execute single update query with all fields that match database schema
     // Use !== undefined to allow 0 values

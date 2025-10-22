@@ -2036,9 +2036,9 @@ export const db = {
         ${event.performanceType}, ${event.eventDate}, ${event.eventEndDate || null}, 
         ${event.registrationDeadline}, ${event.venue}, ${event.status}, ${event.maxParticipants || null}, 
         ${event.entryFee}, ${event.createdBy}, ${createdAt},
-        ${event.registrationFeePerDancer || 300}, ${event.solo1Fee || 400}, ${event.solo2Fee || 750}, 
-        ${event.solo3Fee || 1050}, ${event.soloAdditionalFee || 100}, ${event.duoTrioFeePerDancer || 280},
-        ${event.groupFeePerDancer || 220}, ${event.largeGroupFeePerDancer || 190}, ${event.currency || 'ZAR'}
+        ${event.registrationFeePerDancer ?? 300}, ${event.solo1Fee ?? 400}, ${event.solo2Fee ?? 750}, 
+        ${event.solo3Fee ?? 1050}, ${event.soloAdditionalFee ?? 100}, ${event.duoTrioFeePerDancer ?? 280},
+        ${event.groupFeePerDancer ?? 220}, ${event.largeGroupFeePerDancer ?? 190}, ${event.currency || 'ZAR'}
       )
     `;
     
@@ -2064,14 +2064,14 @@ export const db = {
       entryFee: parseFloat(row.entry_fee),
       createdBy: row.created_by,
       createdAt: row.created_at,
-      registrationFeePerDancer: row.registration_fee_per_dancer ? parseFloat(row.registration_fee_per_dancer) : 300,
-      solo1Fee: row.solo_1_fee ? parseFloat(row.solo_1_fee) : 400,
-      solo2Fee: row.solo_2_fee ? parseFloat(row.solo_2_fee) : 750,
-      solo3Fee: row.solo_3_fee ? parseFloat(row.solo_3_fee) : 1050,
-      soloAdditionalFee: row.solo_additional_fee ? parseFloat(row.solo_additional_fee) : 100,
-      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
-      groupFeePerDancer: row.group_fee_per_dancer ? parseFloat(row.group_fee_per_dancer) : 220,
-      largeGroupFeePerDancer: row.large_group_fee_per_dancer ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      registrationFeePerDancer: row.registration_fee_per_dancer != null ? parseFloat(row.registration_fee_per_dancer) : 300,
+      solo1Fee: row.solo_1_fee != null ? parseFloat(row.solo_1_fee) : 400,
+      solo2Fee: row.solo_2_fee != null ? parseFloat(row.solo_2_fee) : 750,
+      solo3Fee: row.solo_3_fee != null ? parseFloat(row.solo_3_fee) : 1050,
+      soloAdditionalFee: row.solo_additional_fee != null ? parseFloat(row.solo_additional_fee) : 100,
+      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
+      groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
+      largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
       currency: row.currency || 'ZAR'
     })) as Event[];
   },
@@ -2098,14 +2098,14 @@ export const db = {
       entryFee: parseFloat(row.entry_fee),
       createdBy: row.created_by,
       createdAt: row.created_at,
-      registrationFeePerDancer: row.registration_fee_per_dancer ? parseFloat(row.registration_fee_per_dancer) : 300,
-      solo1Fee: row.solo_1_fee ? parseFloat(row.solo_1_fee) : 400,
-      solo2Fee: row.solo_2_fee ? parseFloat(row.solo_2_fee) : 750,
-      solo3Fee: row.solo_3_fee ? parseFloat(row.solo_3_fee) : 1050,
-      soloAdditionalFee: row.solo_additional_fee ? parseFloat(row.solo_additional_fee) : 100,
-      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
-      groupFeePerDancer: row.group_fee_per_dancer ? parseFloat(row.group_fee_per_dancer) : 220,
-      largeGroupFeePerDancer: row.large_group_fee_per_dancer ? parseFloat(row.large_group_fee_per_dancer) : 190,
+      registrationFeePerDancer: row.registration_fee_per_dancer != null ? parseFloat(row.registration_fee_per_dancer) : 300,
+      solo1Fee: row.solo_1_fee != null ? parseFloat(row.solo_1_fee) : 400,
+      solo2Fee: row.solo_2_fee != null ? parseFloat(row.solo_2_fee) : 750,
+      solo3Fee: row.solo_3_fee != null ? parseFloat(row.solo_3_fee) : 1050,
+      soloAdditionalFee: row.solo_additional_fee != null ? parseFloat(row.solo_additional_fee) : 100,
+      duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
+      groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
+      largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
       currency: row.currency || 'ZAR'
     } as Event;
   },
