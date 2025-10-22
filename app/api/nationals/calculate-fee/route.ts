@@ -17,15 +17,18 @@ export async function POST(request: NextRequest) {
       performanceType,
       soloCount = 1,
       participantCount = 1,
-      participantIds = []
+      participantIds = [],
+      eventId
     } = body;
 
     // Calculate nationals fee using the unified database function
+    // Pass eventId so registration fee is calculated per event
     const feeBreakdown = await unifiedDb.calculateNationalsFee(
       performanceType,
       soloCount,
       participantCount,
-      participantIds
+      participantIds,
+      eventId
     );
 
     return NextResponse.json({

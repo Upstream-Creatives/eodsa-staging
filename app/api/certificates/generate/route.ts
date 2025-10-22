@@ -217,24 +217,52 @@ export async function GET(request: NextRequest) {
     if (dancerId) {
       // Try to find certificates by dancer_id, eodsa_id, or by looking up the dancer first
       let result = await sqlClient`
-        SELECT * FROM certificates 
+        SELECT * FROM certificates
         WHERE dancer_id = ${dancerId}
         OR eodsa_id = ${dancerId}
         ORDER BY created_at DESC
       ` as any[];
-      
+
       // If no results, try to get the EODSA ID from the dancers table
       if (result.length === 0) {
         const dancerInfo = await sqlClient`
           SELECT eodsa_id FROM dancers WHERE id = ${dancerId}
         ` as any[];
-        
+
         if (dancerInfo.length > 0 && dancerInfo[0].eodsa_id) {
           result = await sqlClient`
-            SELECT * FROM certificates 
+            SELECT * FROM certificates
             WHERE eodsa_id = ${dancerInfo[0].eodsa_id}
             ORDER BY created_at DESC
           ` as any[];
+        }
+      }
+
+      // If still no results, check for group/duo entries where this dancer is a participant
+      // This handles certificates for group/duo performances
+      if (result.length === 0) {
+        try {
+          // Find performances where this dancer is a participant
+          const performanceResults = await sqlClient`
+            SELECT DISTINCT p.id
+            FROM performances p
+            JOIN event_entries ee ON p.event_entry_id = ee.id
+            WHERE ee.participant_ids::text ILIKE ${'%' + dancerId + '%'}
+            OR p.participant_names::text ILIKE ${'%' + dancerId + '%'}
+          ` as any[];
+
+          if (performanceResults.length > 0) {
+            const performanceIds = performanceResults.map(r => r.id);
+            // Get certificates for these performances
+            result = await sqlClient`
+              SELECT * FROM certificates
+              WHERE performance_id = ANY(${performanceIds})
+              ORDER BY created_at DESC
+            ` as any[];
+          }
+        } catch (groupError) {
+          console.warn('Error checking group/duo certificates:', groupError);
+          // Continue with empty result
         }
       }
 

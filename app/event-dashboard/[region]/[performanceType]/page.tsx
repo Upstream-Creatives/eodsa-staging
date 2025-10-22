@@ -267,7 +267,8 @@ export default function PerformanceTypeEntryPage() {
             performanceType: 'Solo',
             soloCount: formData.soloCount || 1,
             participantCount: formData.participantIds.length,
-            participantIds: formData.participantIds
+            participantIds: formData.participantIds,
+            eventId: formData.eventId
           }),
         });
 
@@ -293,7 +294,8 @@ export default function PerformanceTypeEntryPage() {
                 performanceType: capitalizedPerformanceType,
                 participantIds: formData.participantIds,
                 soloCount: formData.soloCount || 1,
-                includeRegistration: true
+                includeRegistration: true,
+                eventId: formData.eventId
               })
             });
             
