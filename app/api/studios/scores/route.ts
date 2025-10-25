@@ -20,9 +20,9 @@ export async function GET(request: NextRequest) {
     const studioDancers = await sqlClient`
       SELECT d.id, d.eodsa_id, d.name
       FROM dancers d
-      JOIN dancer_studio_assignments dsa ON d.id = dsa.dancer_id
-      WHERE dsa.studio_id = ${studioId}
-      AND dsa.status = 'accepted'
+      JOIN studio_applications sa ON d.id = sa.dancer_id
+      WHERE sa.studio_id = ${studioId}
+      AND sa.status = 'accepted'
     ` as any[];
 
     if (studioDancers.length === 0) {

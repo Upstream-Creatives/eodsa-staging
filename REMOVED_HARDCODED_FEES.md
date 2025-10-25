@@ -157,3 +157,4 @@ The admin panel is now **currency-agnostic** and **makes no assumptions** about 
 - Free/sponsored events (all 0)
 - Custom pricing for any event
 
+

@@ -4515,7 +4515,7 @@ export const unifiedDb = {
     // Get studio info to match legacy contestants
     const studio = await studioDb.getStudioById(studioId);
     const legacyContestants = studio ? await sqlClient`
-      SELECT DISTINCT c.eodsa_id, c.id, c.name, c.age, c.date_of_birth, c.national_id, c.email, c.phone
+      SELECT DISTINCT c.eodsa_id, c.id, c.name, c.date_of_birth, c.email, c.phone
       FROM contestants c
       WHERE c.type = 'studio' AND (c.email = ${studio.email} OR c.studio_name = ${studio.name})
     ` as any[] : [];
@@ -4536,19 +4536,37 @@ export const unifiedDb = {
     }));
 
     // Map legacy contestants with all required fields
-    const mappedLegacyContestants = legacyContestants.map((row: any) => ({
-      id: row.id,
-      eodsaId: row.eodsa_id,
-      name: row.name || 'Unknown',
-      age: row.age || 0,
-      dateOfBirth: row.date_of_birth || '',
-      nationalId: row.national_id || '',
-      email: row.email || '',
-      phone: row.phone || '',
-      approved: true, // Legacy contestants are considered approved
-      joinedAt: null,
-      isLegacy: true
-    }));
+    const mappedLegacyContestants = legacyContestants.map((row: any) => {
+      // Calculate age from date of birth if available
+      let age = 0;
+      if (row.date_of_birth) {
+        try {
+          const birthDate = new Date(row.date_of_birth);
+          const today = new Date();
+          age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+        } catch (e) {
+          age = 0;
+        }
+      }
+
+      return {
+        id: row.id,
+        eodsaId: row.eodsa_id,
+        name: row.name || 'Unknown',
+        age: age,
+        dateOfBirth: row.date_of_birth || '',
+        nationalId: '', // Legacy contestants don't have national_id in contestants table
+        email: row.email || '',
+        phone: row.phone || '',
+        approved: true, // Legacy contestants are considered approved
+        joinedAt: null,
+        isLegacy: true
+      };
+    });
 
     // Combine both lists, avoiding duplicates
     const combinedDancers = [...mappedNewDancers];

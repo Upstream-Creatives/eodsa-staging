@@ -63,3 +63,4 @@ All event fee configuration fields now save correctly, including:
 
 The system now properly supports event-specific pricing for international and local events!
 
+
