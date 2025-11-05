@@ -77,6 +77,7 @@ interface Dancer {
   guardianName?: string;
   guardianEmail?: string;
   guardianPhone?: string;
+  province?: string;
   approved: boolean;
   approvedBy?: string;
   approvedAt?: string;
@@ -1706,27 +1707,80 @@ function AdminDashboard() {
       setIsLoadingEvents(true);
       setDancerEvents([]); // Clear previous events
       try {
-        // Use EODSA ID instead of database ID
-        const response = await fetch(
-          `/api/dancers/${selectedDancer.eodsa_id}/events`
+        // Primary: fetch by internal dancer id (performances.dancer_id)
+        const primaryRes = await fetch(
+          `/api/dancers/${selectedDancer.id}/events`
         );
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log("Fetched events:", data); // Debug log
+        if (primaryRes.ok) {
+          const primaryData = await primaryRes.json();
+          console.log("Fetched events (by internal id):", primaryData);
 
-          // Handle both array and object with events property
-          if (Array.isArray(data)) {
-            setDancerEvents(data);
-          } else if (data.events && Array.isArray(data.events)) {
-            setDancerEvents(data.events);
-          } else {
-            setDancerEvents([]);
+          // If we got an array with entries, use it
+          if (Array.isArray(primaryData) && primaryData.length > 0) {
+            setDancerEvents(primaryData as DancerEvent[]);
+            setIsLoadingEvents(false);
+            return;
           }
         } else {
-          console.error("Failed to fetch events:", response.status);
-          setDancerEvents([]);
+          console.warn(
+            "Primary dancer events fetch failed:",
+            primaryRes.status
+          );
         }
+
+        // Fallback: try contestant entries API using EODSA ID (some data may be stored against EODSA)
+        if (selectedDancer.eodsa_id) {
+          try {
+            const fallbackRes = await fetch(
+              `/api/contestants/entries?eodsaId=${selectedDancer.eodsa_id}`
+            );
+            if (fallbackRes.ok) {
+              const fallbackData = await fallbackRes.json();
+              console.log(
+                "Fetched contestant entries (fallback):",
+                fallbackData
+              );
+
+              const entries = Array.isArray(fallbackData.entries)
+                ? fallbackData.entries
+                : [];
+
+              // Map entries to DancerEvent shape used by the modal
+              const mapped: DancerEvent[] = entries.map((e: any) => ({
+                event_name: e.eventName || e.event_name || "Unknown Event",
+                year: e.eventDate
+                  ? new Date(e.eventDate).getFullYear()
+                  : e.year || null,
+                region: e.region || null,
+                performance_type:
+                  e.performanceType || e.performance_type || null,
+                mastery_level: e.mastery || e.mastery_level || null,
+                entry_type: e.entryType || e.entry_type || null,
+                item_number: e.itemNumber || e.item_number || null,
+                medal_awarded: e.medal_awarded || null,
+                final_score: e.final_score || null,
+                ranking: e.ranking || null,
+              }));
+
+              if (mapped.length > 0) {
+                setDancerEvents(mapped);
+                setIsLoadingEvents(false);
+                return;
+              }
+            } else {
+              console.warn(
+                "Fallback contestant entries fetch failed:",
+                fallbackRes.status
+              );
+            }
+          } catch (err) {
+            console.error("Fallback fetch error:", err);
+          }
+        }
+
+        // No events found
+        setDancerEvents([]);
       } catch (error) {
         console.error("Error fetching dancer events:", error);
         setDancerEvents([]);
@@ -2781,7 +2835,7 @@ function AdminDashboard() {
                                       studio_name:
                                         dancer.studioName || undefined,
                                       studio_registration_number: undefined, // Will fetch below
-                                      province: undefined,
+                                      province: dancer.province || undefined,
                                       approved: dancer.approved,
                                       email: dancer.email || "",
                                       phone: dancer.phone,
