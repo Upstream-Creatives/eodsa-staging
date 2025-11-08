@@ -28,7 +28,7 @@ export interface CertificateImageData {
   percentage: number;
   style: string;
   title: string;
-  medallion: 'Gold' | 'Silver' | 'Bronze' | '';
+  medallion: 'Elite' | 'Opus' | 'Legend' | 'Gold' | 'Silver+' | 'Silver' | 'Bronze' | '';
   date: string;
   positions?: CertificatePositions;
 }

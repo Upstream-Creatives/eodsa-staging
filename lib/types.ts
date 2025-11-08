@@ -88,6 +88,8 @@ export interface Event {
   groupFeePerDancer?: number;
   largeGroupFeePerDancer?: number;
   currency?: string;
+  // NEW: Participation mode - determines what types of entries are allowed
+  participationMode?: 'live' | 'virtual' | 'hybrid'; // live = only live entries, virtual = only virtual entries, hybrid = both allowed
 }
 
 export interface EventEntry {
@@ -552,7 +554,7 @@ export interface MedalInfo {
 }
 
 export const getMedalFromPercentage = (percentage: number): MedalInfo => {
-  if (percentage < 69) {
+  if (percentage < 70) {
     return {
       type: 'bronze',
       label: 'Bronze',
@@ -561,7 +563,7 @@ export const getMedalFromPercentage = (percentage: number): MedalInfo => {
       borderColor: 'border-amber-300',
       emoji: '🥉'
     };
-  } else if (percentage >= 70 && percentage <= 74) {
+  } else if (percentage >= 70 && percentage < 75) {
     return {
       type: 'silver',
       label: 'Silver',
@@ -570,7 +572,7 @@ export const getMedalFromPercentage = (percentage: number): MedalInfo => {
       borderColor: 'border-gray-300',
       emoji: '🥈'
     };
-  } else if (percentage >= 75 && percentage <= 79) {
+  } else if (percentage >= 75 && percentage < 80) {
     return {
       type: 'silver_plus',
       label: 'Silver+',
@@ -579,7 +581,7 @@ export const getMedalFromPercentage = (percentage: number): MedalInfo => {
       borderColor: 'border-slate-300',
       emoji: '🥈+'
     };
-  } else if (percentage >= 80 && percentage <= 84) {
+  } else if (percentage >= 80 && percentage < 85) {
     return {
       type: 'gold',
       label: 'Gold',
@@ -588,7 +590,7 @@ export const getMedalFromPercentage = (percentage: number): MedalInfo => {
       borderColor: 'border-yellow-300',
       emoji: '🥇'
     };
-  } else if (percentage >= 85 && percentage <= 89) {
+  } else if (percentage >= 85 && percentage < 90) {
     return {
       type: 'legend',
       label: 'Legend',
@@ -597,7 +599,7 @@ export const getMedalFromPercentage = (percentage: number): MedalInfo => {
       borderColor: 'border-yellow-300',
       emoji: '🏅'
     };
-  } else if (percentage >= 90 && percentage <= 94) {
+  } else if (percentage >= 90 && percentage < 95) {
     return {
       type: 'opus',
       label: 'Opus',

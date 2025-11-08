@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../staging-eodsa/eodsa"
+		}
+	],
+	"settings": {}
+}
