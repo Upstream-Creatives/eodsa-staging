@@ -1,0 +1,24 @@
+{
+  "name": "eodsa-websocket-server",
+  "version": "1.0.0",
+  "description": "Real-time WebSocket server for EODSA backstage management system",
+  "main": "server-railway.js",
+  "scripts": {
+    "start": "node server-railway.js",
+    "dev": "node server-realtime.js",
+    "railway": "node server-railway.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "websocket",
+    "socket.io",
+    "real-time",
+    "backstage",
+    "eodsa"
+  ]
+}
