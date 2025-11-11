@@ -16,7 +16,7 @@ export async function GET(
     const sql = getSql();
 
     // Basic dancer + studio info
-    const [bio] = await sql`
+    const bioRows = await sql`
       SELECT 
         d.id,
         d.eodsa_id,
@@ -41,8 +41,9 @@ export async function GET(
       LEFT JOIN studios s ON (s.email = c.email OR s.name = c.studio_name)
       WHERE d.id = ${id}
       LIMIT 1
-    `;
+    ` as any[];
 
+    const bio = bioRows[0];
     if (!bio) {
       return NextResponse.json({ success: false, error: 'Dancer not found' }, { status: 404 });
     }
