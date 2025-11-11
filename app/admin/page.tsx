@@ -4409,25 +4409,33 @@ function AdminDashboard() {
                   {(() => {
                     const { studio, dancers, financial, performance } = selectedStudioProfile;
                     
+                    if (!studio || !financial || !performance) {
+                      return (
+                        <div className="text-center py-8">
+                          <p className={themeClasses.textMuted}>Invalid studio data.</p>
+                        </div>
+                      );
+                    }
+                    
                     return (
                       <>
                         {/* Studio Overview Card */}
                         <div className={`rounded-2xl border ${themeClasses.cardBorder} p-6 ${themeClasses.cardBg}`}>
                           <div className="flex items-start justify-between gap-6">
                             <div className="flex-1">
-                              <h1 className={`text-3xl font-bold mb-2 ${themeClasses.textPrimary}`}>🏢 {studio.name}</h1>
+                              <h1 className={`text-3xl font-bold mb-2 ${themeClasses.textPrimary}`}>🏢 {studio.name || '—'}</h1>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div>
                                   <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Registration Number</div>
-                                  <div className={`${themeClasses.textPrimary} font-medium`}>{studio.registrationNumber}</div>
+                                  <div className={`${themeClasses.textPrimary} font-medium`}>{studio.registrationNumber || '—'}</div>
                                 </div>
                                 <div>
                                   <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Contact Person</div>
-                                  <div className={`${themeClasses.textPrimary} font-medium`}>{studio.contactPerson}</div>
+                                  <div className={`${themeClasses.textPrimary} font-medium`}>{studio.contactPerson || '—'}</div>
                                 </div>
                                 <div>
                                   <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Email</div>
-                                  <div className={themeClasses.textPrimary}>{studio.email}</div>
+                                  <div className={themeClasses.textPrimary}>{studio.email || '—'}</div>
                                 </div>
                                 <div>
                                   <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Phone</div>
@@ -4466,19 +4474,19 @@ function AdminDashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Entries</div>
-                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{financial.totalEntries}</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{financial.totalEntries ?? 0}</div>
                           </div>
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Fees Invoiced</div>
-                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>R{financial.totalFeesInvoiced.toLocaleString()}</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>R{((financial.totalFeesInvoiced ?? 0)).toLocaleString()}</div>
                           </div>
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Paid</div>
-                            <div className={`text-2xl font-bold text-green-400`}>R{financial.totalPaid.toLocaleString()}</div>
+                            <div className={`text-2xl font-bold text-green-400`}>R{((financial.totalPaid ?? 0)).toLocaleString()}</div>
                           </div>
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Outstanding</div>
-                            <div className={`text-2xl font-bold text-yellow-400`}>R{financial.totalOutstanding.toLocaleString()}</div>
+                            <div className={`text-2xl font-bold text-yellow-400`}>R{((financial.totalOutstanding ?? 0)).toLocaleString()}</div>
                           </div>
                         </div>
 
@@ -4486,22 +4494,22 @@ function AdminDashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Solos</div>
-                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.totalSolos}</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.totalSolos ?? 0}</div>
                           </div>
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Group Entries</div>
-                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.totalGroupEntries}</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.totalGroupEntries ?? 0}</div>
                           </div>
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Average Score</div>
-                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.averageScore}%</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.averageScore ?? 0}%</div>
                           </div>
                           <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
                             <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Medals</div>
                             <div className="flex gap-2 mt-2">
-                              <span className="text-yellow-400">🥇 {performance.medalBreakdown.gold}</span>
-                              <span className={themeClasses.textPrimary}>🥈 {performance.medalBreakdown.silver}</span>
-                              <span className="text-amber-600">🥉 {performance.medalBreakdown.bronze}</span>
+                              <span className="text-yellow-400">🥇 {performance.medalBreakdown?.gold ?? 0}</span>
+                              <span className={themeClasses.textPrimary}>🥈 {performance.medalBreakdown?.silver ?? 0}</span>
+                              <span className="text-amber-600">🥉 {performance.medalBreakdown?.bronze ?? 0}</span>
                             </div>
                           </div>
                         </div>
@@ -4509,7 +4517,7 @@ function AdminDashboard() {
                         {/* Registered Dancers */}
                         <div className={`rounded-2xl border ${themeClasses.cardBorder} overflow-hidden`}>
                           <div className={`px-6 py-4 ${themeClasses.cardBg} border-b ${themeClasses.cardBorder}`}>
-                            <h2 className={`text-lg font-semibold ${themeClasses.textPrimary}`}>Registered Dancers ({dancers.length})</h2>
+                            <h2 className={`text-lg font-semibold ${themeClasses.textPrimary}`}>Registered Dancers ({(Array.isArray(dancers) ? dancers.length : 0)})</h2>
                             <div className={`text-sm ${themeClasses.textMuted}`}>All children/dancers affiliated with this studio</div>
                           </div>
 
@@ -4535,20 +4543,20 @@ function AdminDashboard() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-800">
-                                {dancers.length === 0 ? (
+                                {!Array.isArray(dancers) || dancers.length === 0 ? (
                                   <tr>
                                     <td colSpan={5} className={`px-6 py-6 text-center ${themeClasses.textMuted} text-sm`}>
                                       No registered dancers found.
                                     </td>
                                   </tr>
                                 ) : (
-                                  dancers.map((dancer: any) => (
-                                    <tr key={dancer.id} className="hover:bg-gray-900/40">
-                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary} font-medium`}>{dancer.name}</td>
-                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary} font-mono`}>{dancer.eodsaId}</td>
-                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary}`}>{dancer.age ?? '—'}</td>
+                                  dancers.map((dancer: any, index: number) => (
+                                    <tr key={dancer?.id || `dancer-${index}`} className="hover:bg-gray-900/40">
+                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary} font-medium`}>{dancer?.name || '—'}</td>
+                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary} font-mono`}>{dancer?.eodsaId || '—'}</td>
+                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary}`}>{dancer?.age ?? '—'}</td>
                                       <td className="px-6 py-3 text-sm">
-                                        {dancer.masteryLevel ? (
+                                        {dancer?.masteryLevel && typeof dancer.masteryLevel === 'string' ? (
                                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                             dancer.masteryLevel.toLowerCase().includes('water')
                                               ? 'bg-blue-900/60 text-blue-200'
@@ -4563,13 +4571,17 @@ function AdminDashboard() {
                                         )}
                                       </td>
                                       <td className="px-6 py-3 text-sm">
-                                        <Link
-                                          href={`/admin/dancers/${dancer.eodsaId}`}
-                                          className="text-blue-400 hover:text-blue-300 underline text-xs"
-                                          onClick={() => setShowStudioModal(false)}
-                                        >
-                                          View Profile →
-                                        </Link>
+                                        {dancer?.eodsaId ? (
+                                          <Link
+                                            href={`/admin/dancers/${dancer.eodsaId}`}
+                                            className="text-blue-400 hover:text-blue-300 underline text-xs"
+                                            onClick={() => setShowStudioModal(false)}
+                                          >
+                                            View Profile →
+                                          </Link>
+                                        ) : (
+                                          <span className={themeClasses.textMuted}>—</span>
+                                        )}
                                       </td>
                                     </tr>
                                   ))
