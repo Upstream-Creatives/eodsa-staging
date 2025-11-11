@@ -49,7 +49,7 @@ export async function GET(
     }
 
     // Events + performances + results (published only for scores/medals)
-    const performances = await sql`
+    const performancesResult = await sql`
       SELECT 
         p.id as performance_id,
         p.title,
@@ -88,6 +88,14 @@ export async function GET(
       ORDER BY e.event_date DESC NULLS LAST, p.item_number ASC NULLS LAST
     `;
 
+    // Handle Vercel Postgres query result (may have .rows property) or direct array
+    let performancesArray: any[] = [];
+    if (Array.isArray(performancesResult)) {
+      performancesArray = performancesResult;
+    } else if (performancesResult && typeof performancesResult === 'object' && 'rows' in performancesResult) {
+      performancesArray = (performancesResult as { rows: any[] }).rows || [];
+    }
+
     // Shape response
     const profile = {
       dancer: {
@@ -115,7 +123,7 @@ export async function GET(
             registrationNumber: bio.studio_registration_number
           }
         : null,
-      performances: (performances.rows || []).map((row: any) => {
+      performances: performancesArray.map((row: any) => {
         const maxPossible = Math.max(1, Number(row.judge_count)) * 100;
         const percentage =
           maxPossible > 0 ? Math.round((Number(row.average_total) / maxPossible) * 1000) / 10 : 0;
