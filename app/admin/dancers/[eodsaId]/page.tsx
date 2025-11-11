@@ -62,11 +62,11 @@ interface ProfileResponse {
 export default function AdminDancerProfilePage({
   params,
 }: {
-  params: Promise<{ eodsaId: string }> | { eodsaId: string };
+  params: Promise<{ eodsaId: string }>;
 }) {
   const router = useRouter();
   // Use React's use() hook to handle Promise params in Next.js 15
-  const resolvedParams = params instanceof Promise ? use(params) : params;
+  const resolvedParams = use(params);
   const eodsaId = resolvedParams.eodsaId;
   
   const [loading, setLoading] = useState(true);
