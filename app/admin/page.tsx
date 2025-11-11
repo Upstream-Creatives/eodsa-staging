@@ -242,6 +242,9 @@ function AdminDashboard() {
   const [loadingFinances, setLoadingFinances] = useState(false);
   const [showAssignJudgeModal, setShowAssignJudgeModal] = useState(false);
   const [showEmailTestModal, setShowEmailTestModal] = useState(false);
+  const [showStudioModal, setShowStudioModal] = useState(false);
+  const [selectedStudioProfile, setSelectedStudioProfile] = useState<any>(null);
+  const [loadingStudioProfile, setLoadingStudioProfile] = useState(false);
 
   // Edit event state
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
@@ -1315,6 +1318,54 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Error rejecting studio:', err);
       error('Unable to reject studio. Please check your connection and try again.', 8000);
+    }
+  };
+
+  const handleViewStudio = async (studioId: string) => {
+    setShowStudioModal(true);
+    setLoadingStudioProfile(true);
+    setSelectedStudioProfile(null);
+    
+    try {
+      const baseUrl = window.location.origin;
+      const response = await fetch(`${baseUrl}/api/admin/studios/${encodeURIComponent(studioId)}/profile`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const errorJson = JSON.parse(text);
+          errorMessage = errorJson.error || errorMessage;
+        } catch {
+          errorMessage = text || errorMessage;
+        }
+        showAlert(errorMessage, 'error');
+        setShowStudioModal(false);
+        return;
+      }
+
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        showAlert('Empty response from server', 'error');
+        setShowStudioModal(false);
+        return;
+      }
+
+      const json = JSON.parse(text);
+      if (!json.success || !json.profile) {
+        showAlert(json.error || 'Failed to load studio profile', 'error');
+        setShowStudioModal(false);
+      } else {
+        setSelectedStudioProfile(json.profile);
+      }
+    } catch (e: any) {
+      console.error('Fetch error:', e);
+      showAlert(e?.message || 'Failed to load studio profile', 'error');
+      setShowStudioModal(false);
+    } finally {
+      setLoadingStudioProfile(false);
     }
   };
 
@@ -2402,24 +2453,30 @@ function AdminDashboard() {
                               )}
                             </td>
                             <td className="px-6 py-4">
-                              {!studio.approved && !studio.rejectionReason ? (
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={() => handleApproveStudio(studio.id)}
-                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                                  >
-                                    ✅ Approve
-                                  </button>
-                                  <button
-                                    onClick={() => handleRejectStudio(studio.id)}
-                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                                  >
-                                    <span className="text-white">✖️</span> Reject
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className={`text-xs ${themeClasses.textMuted}`}>No actions</span>
-                              )}
+                              <div className="flex flex-col space-y-2">
+                                <button
+                                  onClick={() => handleViewStudio(studio.id)}
+                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                                >
+                                  👁️ View Studio
+                                </button>
+                                {!studio.approved && !studio.rejectionReason && (
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => handleApproveStudio(studio.id)}
+                                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                    >
+                                      ✅ Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectStudio(studio.id)}
+                                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                                    >
+                                      <span className="text-white">✖️</span> Reject
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -4309,6 +4366,226 @@ function AdminDashboard() {
                     </div>
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Studio View Modal */}
+      {showStudioModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className={`${themeClasses.cardBg} rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto border ${themeClasses.cardBorder}`}>
+            <div className={`p-6 border-b ${themeClasses.cardBorder}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl flex items-center justify-center">
+                    <span className="text-white text-lg">🏢</span>
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Studio Dashboard</h2>
+                    {selectedStudioProfile && (
+                      <p className={`text-sm ${themeClasses.textMuted}`}>{selectedStudioProfile.studio.name}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowStudioModal(false)}
+                  className={`${themeClasses.textMuted} p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-white/10 hover:text-gray-200' : 'hover:bg-gray-100/50 hover:text-gray-700'} transition-colors`}
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {loadingStudioProfile ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                  <p className={themeClasses.textSecondary}>Loading studio information...</p>
+                </div>
+              ) : selectedStudioProfile ? (
+                <>
+                  {(() => {
+                    const { studio, dancers, financial, performance } = selectedStudioProfile;
+                    
+                    return (
+                      <>
+                        {/* Studio Overview Card */}
+                        <div className={`rounded-2xl border ${themeClasses.cardBorder} p-6 ${themeClasses.cardBg}`}>
+                          <div className="flex items-start justify-between gap-6">
+                            <div className="flex-1">
+                              <h1 className={`text-3xl font-bold mb-2 ${themeClasses.textPrimary}`}>🏢 {studio.name}</h1>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <div>
+                                  <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Registration Number</div>
+                                  <div className={`${themeClasses.textPrimary} font-medium`}>{studio.registrationNumber}</div>
+                                </div>
+                                <div>
+                                  <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Contact Person</div>
+                                  <div className={`${themeClasses.textPrimary} font-medium`}>{studio.contactPerson}</div>
+                                </div>
+                                <div>
+                                  <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Email</div>
+                                  <div className={themeClasses.textPrimary}>{studio.email}</div>
+                                </div>
+                                <div>
+                                  <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Phone</div>
+                                  <div className={themeClasses.textPrimary}>{studio.phone || '—'}</div>
+                                </div>
+                                {studio.address && (
+                                  <div className="md:col-span-2">
+                                    <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Address</div>
+                                    <div className={themeClasses.textPrimary}>{studio.address}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div
+                                className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
+                                  studio.approved
+                                    ? 'bg-emerald-900/60 text-emerald-200'
+                                    : studio.rejectionReason
+                                    ? 'bg-red-900/60 text-red-200'
+                                    : 'bg-yellow-900/60 text-yellow-200'
+                                }`}
+                              >
+                                {studio.approved ? '✅ Approved' : studio.rejectionReason ? '❌ Rejected' : '⏳ Pending'}
+                              </div>
+                              {studio.approvedAt && (
+                                <div className={`text-xs mt-2 ${themeClasses.textMuted}`}>
+                                  Approved: {new Date(studio.approvedAt).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Key Metrics Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Entries</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{financial.totalEntries}</div>
+                          </div>
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Fees Invoiced</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>R{financial.totalFeesInvoiced.toLocaleString()}</div>
+                          </div>
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Paid</div>
+                            <div className={`text-2xl font-bold text-green-400`}>R{financial.totalPaid.toLocaleString()}</div>
+                          </div>
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Outstanding</div>
+                            <div className={`text-2xl font-bold text-yellow-400`}>R{financial.totalOutstanding.toLocaleString()}</div>
+                          </div>
+                        </div>
+
+                        {/* Performance Analytics */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Total Solos</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.totalSolos}</div>
+                          </div>
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Group Entries</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.totalGroupEntries}</div>
+                          </div>
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Average Score</div>
+                            <div className={`text-2xl font-bold ${themeClasses.textPrimary}`}>{performance.averageScore}%</div>
+                          </div>
+                          <div className={`rounded-xl border ${themeClasses.cardBorder} p-4 ${themeClasses.cardBg}`}>
+                            <div className={`text-sm mb-1 ${themeClasses.textMuted}`}>Medals</div>
+                            <div className="flex gap-2 mt-2">
+                              <span className="text-yellow-400">🥇 {performance.medalBreakdown.gold}</span>
+                              <span className={themeClasses.textPrimary}>🥈 {performance.medalBreakdown.silver}</span>
+                              <span className="text-amber-600">🥉 {performance.medalBreakdown.bronze}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Registered Dancers */}
+                        <div className={`rounded-2xl border ${themeClasses.cardBorder} overflow-hidden`}>
+                          <div className={`px-6 py-4 ${themeClasses.cardBg} border-b ${themeClasses.cardBorder}`}>
+                            <h2 className={`text-lg font-semibold ${themeClasses.textPrimary}`}>Registered Dancers ({dancers.length})</h2>
+                            <div className={`text-sm ${themeClasses.textMuted}`}>All children/dancers affiliated with this studio</div>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-800">
+                              <thead className={`${themeClasses.cardBg}`}>
+                                <tr>
+                                  <th className={`px-6 py-3 text-left text-xs font-semibold ${themeClasses.textMuted} uppercase tracking-wider`}>
+                                    Name
+                                  </th>
+                                  <th className={`px-6 py-3 text-left text-xs font-semibold ${themeClasses.textMuted} uppercase tracking-wider`}>
+                                    EODSA ID
+                                  </th>
+                                  <th className={`px-6 py-3 text-left text-xs font-semibold ${themeClasses.textMuted} uppercase tracking-wider`}>
+                                    Age
+                                  </th>
+                                  <th className={`px-6 py-3 text-left text-xs font-semibold ${themeClasses.textMuted} uppercase tracking-wider`}>
+                                    Mastery Level
+                                  </th>
+                                  <th className={`px-6 py-3 text-left text-xs font-semibold ${themeClasses.textMuted} uppercase tracking-wider`}>
+                                    Actions
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-800">
+                                {dancers.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={5} className={`px-6 py-6 text-center ${themeClasses.textMuted} text-sm`}>
+                                      No registered dancers found.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  dancers.map((dancer: any) => (
+                                    <tr key={dancer.id} className="hover:bg-gray-900/40">
+                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary} font-medium`}>{dancer.name}</td>
+                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary} font-mono`}>{dancer.eodsaId}</td>
+                                      <td className={`px-6 py-3 text-sm ${themeClasses.textPrimary}`}>{dancer.age ?? '—'}</td>
+                                      <td className="px-6 py-3 text-sm">
+                                        {dancer.masteryLevel ? (
+                                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            dancer.masteryLevel.toLowerCase().includes('water')
+                                              ? 'bg-blue-900/60 text-blue-200'
+                                              : dancer.masteryLevel.toLowerCase().includes('fire')
+                                              ? 'bg-orange-900/60 text-orange-200'
+                                              : 'bg-gray-700 text-gray-300'
+                                          }`}>
+                                            {dancer.masteryLevel}
+                                          </span>
+                                        ) : (
+                                          <span className={themeClasses.textMuted}>—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-3 text-sm">
+                                        <Link
+                                          href={`/admin/dancers/${dancer.eodsaId}`}
+                                          className="text-blue-400 hover:text-blue-300 underline text-xs"
+                                          onClick={() => setShowStudioModal(false)}
+                                        >
+                                          View Profile →
+                                        </Link>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <p className={themeClasses.textMuted}>Failed to load studio information.</p>
+                </div>
               )}
             </div>
           </div>
