@@ -4280,10 +4280,21 @@ function EventsTabContent({ events, setShowCreateEventModal, handleEditEvent, ha
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
                       <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border ${
-                        event.status === 'upcoming' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                        event.status === 'registration_open' ? 'bg-green-50 text-green-700 border-green-200' :
-                        event.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                         `bg-gray-50 ${themeClasses.textSecondary} border-gray-200`
+                        event.status === 'upcoming' 
+                          ? theme === 'dark' 
+                            ? 'bg-blue-900/60 text-blue-200 border-blue-700/50' 
+                            : 'bg-blue-50 text-blue-700 border-blue-200' :
+                        event.status === 'registration_open' 
+                          ? theme === 'dark' 
+                            ? 'bg-green-900/60 text-green-200 border-green-700/50' 
+                            : 'bg-green-50 text-green-700 border-green-200' :
+                        event.status === 'in_progress' 
+                          ? theme === 'dark' 
+                            ? 'bg-yellow-900/60 text-yellow-200 border-yellow-700/50' 
+                            : 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                         theme === 'dark'
+                           ? `bg-gray-700/60 ${themeClasses.textSecondary} border-gray-600/50`
+                           : `bg-gray-50 ${themeClasses.textSecondary} border-gray-200`
                       }`}>
                         <span className="hidden sm:inline">{event.status.replace('_', ' ').toUpperCase()}</span>
                         <span className="sm:hidden">
