@@ -120,8 +120,19 @@ export async function GET(
 
   } catch (error) {
     console.error('Error generating certificate image:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error('Certificate generation error details:', {
+      performanceId,
+      error: errorMessage,
+      stack: errorStack
+    });
     return NextResponse.json(
-      { error: 'Failed to generate certificate image' },
+      { 
+        error: 'Failed to generate certificate image',
+        details: errorMessage,
+        performanceId 
+      },
       { status: 500 }
     );
   }

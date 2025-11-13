@@ -187,6 +187,12 @@ export async function generateCertificateImage(data: CertificateImageData): Prom
     return certificateBuffer;
   } catch (error) {
     console.error('Error generating certificate image:', error);
+    const errorDetails = error instanceof Error ? {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    } : { error };
+    console.error('Certificate generation error details:', errorDetails);
     throw new Error(`Failed to generate certificate image: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

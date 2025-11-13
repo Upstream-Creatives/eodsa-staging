@@ -24,14 +24,19 @@ export async function GET(request: NextRequest) {
     // If specific event IDs are requested, pass them to the calculation
     const selectedEventIds = eventIds ? eventIds.split(',') : undefined;
     
+    console.log('📊 Rankings API called with params:', { region, ageCategory, performanceType, eventIds: selectedEventIds });
+    
     // Use regional rankings (now renamed to nationals)
     const rankings = await db.calculateRankings(region, ageCategory, performanceType, selectedEventIds);
     
+    console.log('📊 Rankings API returning:', rankings.length, 'rankings');
+    
     return NextResponse.json(rankings);
-  } catch (error) {
-    console.error('Error fetching rankings:', error);
+  } catch (error: any) {
+    console.error('❌ Error fetching rankings:', error);
+    console.error('❌ Error stack:', error.stack);
     return NextResponse.json(
-      { error: 'Failed to fetch rankings' },
+      { error: 'Failed to fetch rankings', details: error.message },
       { status: 500 }
     );
   }

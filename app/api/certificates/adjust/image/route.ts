@@ -21,17 +21,18 @@ export async function GET(request: NextRequest) {
     const percentageLeft = parseFloat(searchParams.get('percentageLeft') || '14');
     const percentageFontSize = parseInt(searchParams.get('percentageFontSize') || '47');
 
+    // Use standardized font size (26px) for style, title, and medallion to ensure text always fits
     const styleTop = parseFloat(searchParams.get('styleTop') || '67.5');
     const styleLeft = parseFloat(searchParams.get('styleLeft') || '61');
-    const styleFontSize = parseInt(searchParams.get('styleFontSize') || '20');
+    const styleFontSize = parseInt(searchParams.get('styleFontSize') || '26'); // Standardized to 26px
 
     const titleTop = parseFloat(searchParams.get('titleTop') || '73.5');
     const titleLeft = parseFloat(searchParams.get('titleLeft') || '57.5');
-    const titleFontSize = parseInt(searchParams.get('titleFontSize') || '21');
+    const titleFontSize = parseInt(searchParams.get('titleFontSize') || '26'); // Standardized to 26px
 
     const medallionTop = parseFloat(searchParams.get('medallionTop') || '79.5');
     const medallionLeft = parseFloat(searchParams.get('medallionLeft') || '65');
-    const medallionFontSize = parseInt(searchParams.get('medallionFontSize') || '32');
+    const medallionFontSize = parseInt(searchParams.get('medallionFontSize') || '26'); // Standardized to 26px
 
     const dateTop = parseFloat(searchParams.get('dateTop') || '89.5');
     const dateLeft = parseFloat(searchParams.get('dateLeft') || '67.5');

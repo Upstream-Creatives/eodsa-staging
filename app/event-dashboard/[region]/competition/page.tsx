@@ -198,6 +198,8 @@ export default function CompetitionEntryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<{entries: number, totalFee: number} | null>(null);
+  const [videoUrlError, setVideoUrlError] = useState<string>('');
+  const [isValidatingVideoUrl, setIsValidatingVideoUrl] = useState(false);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'payfast' | 'eft' | null>(null);
   const [showEftModal, setShowEftModal] = useState(false);
@@ -844,6 +846,103 @@ export default function CompetitionEntryPage() {
     }
   };
 
+  // Convert Google Drive URL from /view to /preview format
+  const convertGoogleDriveUrl = (url: string): string => {
+    if (!url || !url.includes('drive.google.com')) return url;
+    
+    // Pattern 1: https://drive.google.com/file/d/FILE_ID/view
+    // Pattern 2: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+    const fileIdPattern = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(fileIdPattern);
+    
+    if (match && match[1]) {
+      const fileId = match[1];
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    
+    // Pattern 3: https://drive.google.com/open?id=FILE_ID
+    const openPattern = /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/;
+    const openMatch = url.match(openPattern);
+    
+    if (openMatch && openMatch[1]) {
+      const fileId = openMatch[1];
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    
+    // Already in preview format or unrecognized format
+    return url;
+  };
+
+  // Validate Google Drive URL is publicly accessible
+  const validateGoogleDriveUrl = async (url: string): Promise<{ isValid: boolean; error?: string; previewUrl?: string }> => {
+    if (!url || !url.includes('drive.google.com')) {
+      return { isValid: true }; // Not a Google Drive URL, skip validation
+    }
+
+    try {
+      const previewUrl = convertGoogleDriveUrl(url);
+      
+      // Use API endpoint to validate server-side (more reliable)
+      const response = await fetch('/api/validate/google-drive-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        if (data.isValid) {
+          return { isValid: true, previewUrl: data.previewUrl };
+        } else {
+          return { 
+            isValid: false, 
+            error: data.error || 'This Drive link is private. Please set it to "Anyone with the link" before saving.',
+            previewUrl: data.previewUrl
+          };
+        }
+      } else {
+        // API error - allow but show warning
+        return { 
+          isValid: true, 
+          previewUrl,
+          error: data.message || 'Could not verify access. Please ensure the file is shared with "Anyone with the link".'
+        };
+      }
+    } catch (error) {
+      console.error('Error validating Google Drive URL:', error);
+      return { 
+        isValid: true, 
+        previewUrl: convertGoogleDriveUrl(url),
+        error: 'Could not verify access. Please ensure the file is shared with "Anyone with the link".'
+      };
+    }
+  };
+
+  const handleVideoUrlChange = async (url: string) => {
+    setVideoUrlError('');
+    
+    // Auto-convert Google Drive URLs immediately
+    let processedUrl = url;
+    if (url.includes('drive.google.com')) {
+      processedUrl = convertGoogleDriveUrl(url);
+      // Always update with converted URL (even if same, ensures it's in preview format)
+      setCurrentForm({ ...currentForm, videoExternalUrl: processedUrl });
+      
+      // Show conversion message if URL was changed
+      if (processedUrl !== url && url.includes('/view')) {
+        // URL was converted - validation will happen on blur
+      }
+    } else {
+      setCurrentForm({ ...currentForm, videoExternalUrl: url });
+    }
+    
+    // Don't validate on every keystroke - only validate on blur or when saving
+    // Validation happens on blur and before save
+  };
+
   const handleSaveEntry = async () => {
     if (!showAddForm || currentForm.participantIds.length === 0 || !currentForm.itemName) {
       return;
@@ -858,6 +957,18 @@ export default function CompetitionEntryPage() {
         performanceType: showAddForm
       });
       return;
+    }
+
+    // Validate Google Drive URL if present
+    if (currentForm.videoExternalUrl && currentForm.videoExternalUrl.includes('drive.google.com')) {
+      setIsValidatingVideoUrl(true);
+      const validation = await validateGoogleDriveUrl(currentForm.videoExternalUrl);
+      setIsValidatingVideoUrl(false);
+      
+      if (!validation.isValid && validation.error) {
+        setVideoUrlError(validation.error);
+        return; // Don't save if validation fails
+      }
     }
 
     // Note: Media uploads are optional during initial entry creation
@@ -887,6 +998,7 @@ export default function CompetitionEntryPage() {
     });
     
     setShowAddForm(null);
+    setVideoUrlError(''); // Clear error when entry is saved
   };
 
   const handleRemoveEntry = (entryId: string) => {
@@ -1759,29 +1871,89 @@ export default function CompetitionEntryPage() {
                           <span className="text-xs text-slate-400 block mt-1 font-normal">
                             You can upload your video later through your dashboard
                           </span>
+                          {(currentForm.videoExternalUrl.includes('drive.google.com') || currentForm.videoExternalType === 'other') && (
+                            <div className="mt-2 flex items-start gap-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                              <span className="text-xs text-blue-400 mt-0.5">💡</span>
+                              <div className="flex-1">
+                                <p className="text-xs text-blue-400 mb-1">
+                                  <strong>Google Drive Tip:</strong> Make sure your file is shared with "Anyone with the link" permission.
+                                </p>
+                                <details className="text-xs text-blue-300">
+                                  <summary className="cursor-pointer hover:text-blue-200 font-medium">How to change permissions</summary>
+                                  <div className="mt-2 pl-4 space-y-1 text-blue-400">
+                                    <p>1. Open your file in Google Drive</p>
+                                    <p>2. Click "Share" button (top right)</p>
+                                    <p>3. Click "Change" next to "Restricted"</p>
+                                    <p>4. Select "Anyone with the link"</p>
+                                    <p>5. Set permission to "Viewer"</p>
+                                    <p>6. Click "Done" and copy the link</p>
+                                  </div>
+                                </details>
+                              </div>
+                            </div>
+                          )}
                         </label>
                         <input
                           type="url"
                           value={currentForm.videoExternalUrl}
-                          onChange={(e) => setCurrentForm({...currentForm, videoExternalUrl: e.target.value})}
+                          onChange={(e) => handleVideoUrlChange(e.target.value)}
+                          onBlur={async () => {
+                            if (currentForm.videoExternalUrl && currentForm.videoExternalUrl.includes('drive.google.com')) {
+                              setIsValidatingVideoUrl(true);
+                              const validation = await validateGoogleDriveUrl(currentForm.videoExternalUrl);
+                              setIsValidatingVideoUrl(false);
+                              if (!validation.isValid && validation.error) {
+                                setVideoUrlError(validation.error);
+                              }
+                            }
+                          }}
                           placeholder={
                             currentForm.videoExternalType === 'youtube' 
                               ? 'https://www.youtube.com/watch?v=...' 
                               : currentForm.videoExternalType === 'vimeo'
                               ? 'https://vimeo.com/...'
-                              : 'https://...'
+                              : 'https://drive.google.com/file/d/... or https://...'
                           }
-                          className="w-full p-4 bg-slate-700/50 border-2 border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base"
+                          className={`w-full p-4 bg-slate-700/50 border-2 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 transition-all duration-200 text-base ${
+                            videoUrlError 
+                              ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                              : 'border-slate-600 focus:ring-purple-500 focus:border-purple-500'
+                          }`}
                         />
-                        {currentForm.videoExternalUrl && (
+                        {isValidatingVideoUrl && (
+                          <div className="mt-2 text-sm text-blue-400 flex items-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                            <span>Checking Google Drive access...</span>
+                          </div>
+                        )}
+                        {videoUrlError && (
+                          <div className="mt-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
+                            <div className="text-red-300 text-sm flex items-start space-x-2">
+                              <span className="text-lg">⚠️</span>
+                              <div className="flex-1">
+                                <p className="font-medium mb-1">{videoUrlError}</p>
+                                <p className="text-xs text-red-400">
+                                  Please update the sharing settings in Google Drive and try again.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {currentForm.videoExternalUrl && !videoUrlError && !isValidatingVideoUrl && (
                           <div className="mt-3 p-3 bg-green-900/20 border border-green-500/30 rounded-lg">
                             <div className="text-green-300 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
                               <div className="flex items-center space-x-2">
                                 <span>✅</span>
-                                <span className="font-medium">Video URL provided</span>
+                                <span className="font-medium">
+                                  {currentForm.videoExternalUrl.includes('drive.google.com') 
+                                    ? 'Google Drive URL converted to preview format' 
+                                    : 'Video URL provided'}
+                                </span>
                               </div>
                               <a 
-                                href={currentForm.videoExternalUrl} 
+                                href={currentForm.videoExternalUrl.includes('drive.google.com') 
+                                  ? convertGoogleDriveUrl(currentForm.videoExternalUrl)
+                                  : currentForm.videoExternalUrl} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center px-3 py-1 bg-green-500/20 text-green-400 hover:text-green-300 hover:bg-green-500/30 rounded-lg transition-all duration-200 text-sm font-medium border border-green-500/30"

@@ -63,6 +63,7 @@ interface PerformanceWithScore extends Performance {
   isFullyScored?: boolean;
   scoringStatus?: any;
   withdrawnFromJudging?: boolean;
+  eventName?: string; // Event name for display
 }
 
 export default function JudgeDashboard() {
@@ -337,7 +338,7 @@ export default function JudgeDashboard() {
 
   useEffect(() => {
     filterAndLoadPerformances();
-  }, [performances, filterStatus, entryTypeFilter, searchTerm, itemNumberSearch]);
+  }, [performances, filterStatus, entryTypeFilter, searchTerm, itemNumberSearch, selectedEventId]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -386,6 +387,12 @@ export default function JudgeDashboard() {
           });
         });
         
+        // Create a map of eventId to event name for quick lookup
+        const eventNameMap = new Map<string, string>();
+        (assignmentsData.assignments || []).forEach((assignment: any) => {
+          eventNameMap.set(assignment.eventId, assignment.event.name);
+        });
+        
         // Load ALL performances for all assigned events (batched and parallelized)
         const allPerformances: PerformanceWithScore[] = [];
         await Promise.all((assignmentsData.assignments || []).map(async (assignment: any) => {
@@ -406,6 +413,7 @@ export default function JudgeDashboard() {
               
               allPerformances.push({
                 ...performance,
+                eventName: eventNameMap.get(performance.eventId) || 'Unknown Event',
                 hasScore: scoreData.success && scoreData.score,
                 judgeScore: scoreData.score,
                 isFullyScored: scoringStatusData.success ? scoringStatusData.scoringStatus?.isFullyScored : false,
@@ -416,6 +424,7 @@ export default function JudgeDashboard() {
               // Add performance without score data
               allPerformances.push({
                 ...performance,
+                eventName: eventNameMap.get(performance.eventId) || 'Unknown Event',
                 hasScore: false,
                 judgeScore: null,
                 isFullyScored: false,
@@ -459,6 +468,11 @@ export default function JudgeDashboard() {
     
     // IMPORTANT: Always exclude withdrawn performances from judge view
     filtered = filtered.filter(p => !p.withdrawnFromJudging);
+    
+    // Filter by event if selected
+    if (selectedEventId) {
+      filtered = filtered.filter(p => p.eventId === selectedEventId);
+    }
     
     // NEW: Filter by entry type (Live/Virtual)
     if (entryTypeFilter === 'live') {
@@ -841,6 +855,15 @@ export default function JudgeDashboard() {
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    {selectedPerformance.eventName && (
+                      <div className="md:col-span-2">
+                        <p className="text-gray-600">Event</p>
+                        <p className="font-semibold text-gray-900 flex items-center">
+                          <span className="mr-2">🎭</span>
+                          {selectedPerformance.eventName}
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-gray-600">Contestant</p>
                       <p className="font-semibold text-gray-900">{selectedPerformance.contestantName}</p>
@@ -1168,6 +1191,22 @@ export default function JudgeDashboard() {
                 </div>
 
                 <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-3">
+                  <label className="text-xs md:text-sm font-medium text-black">Event:</label>
+                  <select
+                    value={selectedEventId}
+                    onChange={(e) => setSelectedEventId(e.target.value)}
+                    className="px-2 py-1 md:px-3 md:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs md:text-sm"
+                  >
+                    <option value="">All Events</option>
+                    {assignments.map((assignment) => (
+                      <option key={assignment.eventId} value={assignment.eventId}>
+                        {assignment.event.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-3">
                   <label className="text-xs md:text-sm font-medium text-black">Type:</label>
                   <select
                     value={entryTypeFilter}
@@ -1220,6 +1259,11 @@ export default function JudgeDashboard() {
                                   #{performance.itemNumber || '?'} — {performance.title}
                                 </h3>
                                 <p className="text-black mobile-performance-details truncate text-xs sm:text-sm hidden sm:block">{performance.participantNames.join(', ')}</p>
+                                {performance.eventName && (
+                                  <p className="text-xs text-gray-600 mt-1 font-medium">
+                                    🎭 {performance.eventName}
+                                  </p>
+                                )}
                                 <div className="flex items-center gap-2 mt-1">
                                   {performance.mastery && (
                                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
