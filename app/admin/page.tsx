@@ -1652,841 +1652,70 @@ function AdminDashboard() {
 
         {/* Events Tab - Enhanced */}
         {activeTab === 'events' && (
-          <div className="space-y-6 sm:space-y-8 animate-fadeIn">
-            {/* Enhanced Events List - Mobile Optimized */}
-            <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
-              <div className={`px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border-b ${themeClasses.cardBorder}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-xs sm:text-sm">🏆</span>
-                  </div>
-                    <h2 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>Events</h2>
-                    <div className={`px-2 sm:px-3 py-1 ${theme === 'dark' ? 'bg-indigo-900/80 text-indigo-200' : 'bg-indigo-100 text-indigo-800'} rounded-full text-xs sm:text-sm font-medium`}>
-                      {events.length} events
-                  </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setShowCreateEventModal(true)}
-                    className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base font-medium"
-                  >
-                    <span>➕</span>
-                    <span className="hidden sm:inline">Create Event</span>
-                    <span className="sm:hidden">Create</span>
-                  </button>
-                  </div>
-                </div>
-              </div>
-
-              {events.length === 0 ? (
-                <div className={`text-center py-8 sm:py-12 ${themeClasses.textMuted}`}>
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                    <span className="text-lg sm:text-2xl">🏆</span>
-                  </div>
-                  <h3 className="text-base sm:text-lg font-medium mb-2">No events yet</h3>
-                  <p className="text-sm mb-4">Create your first event to get started!</p>
-                  <button
-                    onClick={() => setShowCreateEventModal(true)}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
-                  >
-                    <span>➕</span>
-                    <span>Create First Event</span>
-                  </button>
-                  </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className={themeClasses.tableHeader}>
-                      <tr>
-                        <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Event</th>
-                        <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Region</th>
-                        <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden md:table-cell`}>Type</th>
-                        <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Date</th>
-                        <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Status</th>
-                        <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
-                      {events.map((event) => (
-                        <tr key={event.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4">
-                            <div>
-                              <div className={`text-xs sm:text-sm font-bold ${themeClasses.textPrimary} leading-tight`}>{event.name}</div>
-                              <div className={`text-xs sm:text-sm ${themeClasses.textSecondary} font-medium mt-1`}>{event.venue}</div>
-                                                            <div className={`text-xs ${themeClasses.textMuted} sm:hidden mt-1`}>
-                                {event.region} • {event.performanceType === 'All' ? 'All Performance Types' : event.performanceType} • {event.ageCategory}
-                              </div>
-              </div>
-                          </td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium hidden sm:table-cell">{event.region}</td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
-                            <div className="space-y-1">
-                              {event.performanceType === 'All' ? (
-                                <span className="inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-purple-50 to-blue-50 text-purple-700 border-purple-200">
-                                  🎭 All Types
-                                </span>
-                              ) : (
-                                <span className="inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-green-50 to-teal-50 text-green-700 border-green-200">
-                                  {event.performanceType === 'Solo' ? '🕺' : 
-                                   event.performanceType === 'Duet' ? '👯' : 
-                                   event.performanceType === 'Trio' ? '👨‍👩‍👧' : 
-                                   event.performanceType === 'Group' ? '👥' : '🎭'} {event.performanceType}
-                                </span>
-                              )}
-                             <div className={`text-xs sm:text-sm ${themeClasses.textSecondary}`}>{event.ageCategory}</div>
-                            </div>
-                          </td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium">
-                            <div className="hidden sm:block">
-                              {new Date(event.eventDate).toLocaleDateString()}
-                            </div>
-                            <div className="sm:hidden">
-                              {new Date(event.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </div>
-                          </td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4">
-                            <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border ${
-                              event.status === 'upcoming' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                              event.status === 'registration_open' ? 'bg-green-50 text-green-700 border-green-200' :
-                              event.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                               `bg-gray-50 ${themeClasses.textSecondary} border-gray-200`
-                            }`}>
-                              <span className="hidden sm:inline">{event.status.replace('_', ' ').toUpperCase()}</span>
-                              <span className="sm:hidden">
-                                {event.status === 'upcoming' ? 'UPCOMING' : 
-                                 event.status === 'registration_open' ? 'OPEN' :
-                                 event.status === 'in_progress' ? 'ACTIVE' : 'CLOSED'}
-                              </span>
-                            </span>
-                          </td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4">
-                            <div className="flex items-center space-x-2">
-                               <Link
-                                 href={`/admin/events/${event.id}`}
-                                 className={`${theme === 'dark' ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-500 hover:text-indigo-700'} text-xs sm:text-sm font-medium`}
-                               >
-                                 <span className="hidden sm:inline">👥 View</span>
-                                 <span className="sm:hidden">👥</span>
-                               </Link>
-                               <button
-                                 onClick={() => handleEditEvent(event)}
-                                 className={`${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-500 hover:text-blue-700'} text-xs sm:text-sm font-medium transition-colors`}
-                                 title="Edit Event"
-                               >
-                                 <span className="hidden sm:inline">✏️ Edit</span>
-                                 <span className="sm:hidden">✏️</span>
-                               </button>
-                               <button
-                                 onClick={() => handleDeleteEvent(event)}
-                                 className={`${theme === 'dark' ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-xs sm:text-sm font-medium transition-colors`}
-                                 title="Delete Event"
-                               >
-                                <span className="hidden sm:inline">🗑️ Delete</span>
-                                <span className="sm:hidden">🗑️</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  </div>
-              )}
-                </div>
-              </div>
+          <EventsTabContent
+            events={events}
+            setShowCreateEventModal={setShowCreateEventModal}
+            handleEditEvent={handleEditEvent}
+            handleDeleteEvent={handleDeleteEvent}
+            theme={theme}
+            themeClasses={themeClasses}
+          />
         )}
 
         {/* Staff Tab - Enhanced */}
         {activeTab === 'staff' && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Enhanced Staff List */}
-            <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
-              <div className={`px-6 py-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-b ${themeClasses.cardBorder}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                      <span className="text-white text-sm">👥</span>
-                  </div>
-                    <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Staff Management</h2>
-                    <div className={`px-3 py-1 ${theme === 'dark' ? 'bg-purple-900/80 text-purple-200' : 'bg-purple-100 text-purple-800'} rounded-full text-sm font-medium`}>
-                      {judges.length} staff members
-                  </div>
-                </div>
-                  <button
-                    onClick={() => setShowCreateJudgeModal(true)}
-                    className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
-                  >
-                    <span>➕</span>
-                    <span className="hidden sm:inline">Add Staff</span>
-                    <span className="sm:hidden">Add</span>
-                  </button>
-              </div>
-            </div>
-              
-              {judges.length === 0 ? (
-                <div className="text-center py-12 ${themeClasses.textMuted}">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                    <span className="text-2xl">👥</span>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">No staff members yet</h3>
-                  <p className="text-sm mb-4">Add your first staff member to get started!</p>
-                  <button
-                    onClick={() => setShowCreateJudgeModal(true)}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-                  >
-                    <span>➕</span>
-                    <span>Add First Staff Member</span>
-                  </button>
-                </div>
-              ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className={themeClasses.tableHeader}>
-                      <tr>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Name</th>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Email</th>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Role</th>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden md:table-cell`}>Created</th>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
-                    </tr>
-                  </thead>
-                    <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
-                      {judges.map((judge) => (
-                        <tr key={judge.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
-                          <td className="px-6 py-4">
-                            <div>
-                              <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>{judge.name}</div>
-                              <div className={`text-sm ${themeClasses.textSecondary} font-medium sm:hidden`}>{judge.email}</div>
-                          </div>
-                        </td>
-                          <td className={`px-6 py-4 text-sm font-medium ${themeClasses.textPrimary} hidden sm:table-cell`}>{judge.email}</td>
-                          <td className="px-6 py-4">
-                            {judge.isAdmin ? (
-                              <span className="inline-flex px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300">
-                                👑 Admin
-                              </span>
-                            ) : (
-                              <div className="flex flex-wrap gap-1">
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                                  👨‍⚖️ Judge
-                                </span>
-                                {/* Additional role badges can be added here based on staff roles */}
-                              </div>
-                            )}
-                        </td>
-                          <td className={`px-6 py-4 text-sm font-medium ${themeClasses.textSecondary} hidden md:table-cell`}>
-                            {new Date(judge.createdAt).toLocaleDateString()}
-                        </td>
-                          <td className="px-6 py-4">
-                            <div className="flex space-x-2">
-                              {!judge.isAdmin && (
-                                <>
-                                  <button
-                                    onClick={() => {/* TODO: Implement edit roles functionality */}}
-                                    className="inline-flex items-center px-3 py-1 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors"
-                                  >
-                                    ⚙️ Roles
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteJudge(judge.id, judge.name)}
-                                    className="inline-flex items-center px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors"
-                                  >
-                                    🗑️ Delete
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </div>
-              )}
-              </div>
-            </div>
-          )}
+          <StaffTabContent
+            judges={judges}
+            setShowCreateJudgeModal={setShowCreateJudgeModal}
+            handleDeleteJudge={handleDeleteJudge}
+            theme={theme}
+            themeClasses={themeClasses}
+          />
+        )}
 
         {/* Assignments Tab - Enhanced */}
         {activeTab === 'assignments' && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Enhanced Assignments List */}
-            <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
-              <div className={`px-6 py-4 bg-gradient-to-r from-pink-500/20 to-rose-500/20 border-b ${themeClasses.cardBorder}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center">
-                      <span className="text-white text-sm">🔗</span>
-                    </div>
-                    <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Staff Assignments</h2>
-                    <div className={`px-3 py-1 ${theme === 'dark' ? 'bg-pink-900/80 text-pink-200' : 'bg-pink-100 text-pink-800'} rounded-full text-sm font-medium`}>
-                      {assignments.length} assignments
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowAssignJudgeModal(true)}
-                    className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl hover:from-pink-600 hover:to-rose-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
-                  >
-                    <span>➕</span>
-                    <span className="hidden sm:inline">Assign Judge</span>
-                    <span className="sm:hidden">Assign</span>
-                  </button>
-                </div>
-              </div>
-
-              {assignments.length === 0 ? (
-                <div className="text-center py-12 ${themeClasses.textMuted}">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                    <span className="text-2xl">🔗</span>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">No assignments yet</h3>
-                  <p className="text-sm mb-4">Assign judges to events to get started!</p>
-                  <button
-                    onClick={() => setShowAssignJudgeModal(true)}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors"
-                  >
-                    <span>➕</span>
-                    <span>Create First Assignment</span>
-                  </button>
-                </div>
-              ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className={themeClasses.tableHeader}>
-                      <tr>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Judge</th>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Event</th>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Email</th>
-                        <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
-                    </tr>
-                  </thead>
-                    <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
-                      {assignments.map((assignment) => (
-                        <tr key={assignment.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
-                          <td className="px-6 py-4">
-                            <div>
-                              <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>{assignment.judgeName}</div>
-                              <div className={`text-sm ${themeClasses.textSecondary} font-medium sm:hidden`}>{assignment.judgeEmail}</div>
-                            </div>
-                        </td>
-                          <td className="px-6 py-4 text-sm font-medium">
-                            {assignment.eventName}
-                            <div className={`text-xs ${themeClasses.textMuted} mt-1`}>{assignment.eventDate ? new Date(assignment.eventDate).toLocaleDateString() : 'No date'}</div>
-                          </td>
-                          <td className="px-6 py-4 text-sm font-medium ${themeClasses.textSecondary} hidden sm:table-cell">{assignment.judgeEmail}</td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => handleUnassignJudge(assignment)}
-                              disabled={unassigningJudges.has(assignment.id)}
-                              className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-xs font-medium rounded-lg hover:from-red-600 hover:to-rose-700 transition-all duration-200 transform hover:scale-105 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Remove this judge from the event"
-                            >
-                              <span className="mr-1">{unassigningJudges.has(assignment.id) ? '⏳' : '🗑️'}</span>
-                              <span className="hidden sm:inline">{unassigningJudges.has(assignment.id) ? 'Removing...' : 'Unassign'}</span>
-                            </button>
-                          </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </div>
-              )}
-              </div>
-            </div>
-          )}
+          <AssignmentsTabContent
+            assignments={assignments}
+            setShowAssignJudgeModal={setShowAssignJudgeModal}
+            handleUnassignJudge={handleUnassignJudge}
+            unassigningJudges={unassigningJudges}
+            theme={theme}
+            themeClasses={themeClasses}
+          />
+        )}
 
         {/* Dancers Tab - Enhanced */}
         {activeTab === 'dancers' && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Enhanced Dancers List */}
-            <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
-              <div className={`px-6 py-4 bg-gradient-to-r from-rose-500/20 to-pink-500/20 border-b ${themeClasses.cardBorder}`}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-rose-500 to-pink-600 rounded-lg flex items-center justify-center">
-                      <span className="text-white text-sm">💃</span>
-                    </div>
-                    <h2 className="text-xl font-bold ${themeClasses.textPrimary}">Individual Dancer Registrations</h2>
-                    <div className="px-3 py-1 bg-rose-100 text-rose-800 rounded-full text-sm font-medium">
-                      {dancers.filter(d => {
-                        const matchesSearch = !dancerSearchTerm || 
-                          d.name.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
-                          d.nationalId.includes(dancerSearchTerm) ||
-                          d.eodsaId.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
-                          (d.email && d.email.toLowerCase().includes(dancerSearchTerm.toLowerCase()));
-                        const matchesFilter = dancerStatusFilter === 'all' ||
-                          (dancerStatusFilter === 'pending' && !d.approved && !d.rejectionReason) ||
-                          (dancerStatusFilter === 'approved' && d.approved) ||
-                          (dancerStatusFilter === 'rejected' && d.rejectionReason);
-                        return matchesSearch && matchesFilter;
-                      }).length} of {dancers.length} dancers
-                    </div>
-                  </div>
-                  
-                  {/* Search and Filter Controls */}
-                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search dancers..."
-                        value={dancerSearchTerm}
-                        onChange={(e) => setDancerSearchTerm(e.target.value)}
-                        className={`w-full sm:w-64 px-4 py-2 pr-10 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted}`}
-                      />
-                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                         <span className={`${themeClasses.textMuted}`}>🔍</span>
-                       </div>
-                     </div>
-                     
-                     <select
-                       value={dancerStatusFilter}
-                      onChange={(e) => setDancerStatusFilter(e.target.value as any)}
-                       className={`px-3 py-2 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm ${themeClasses.textPrimary}`}
-                       style={{
-                         backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
-                         color: theme === 'dark' ? '#f9fafb' : '#111827',
-                         borderColor: theme === 'dark' ? '#4b5563' : '#d1d5db'
-                       }}
-                    >
-                      <option value="all" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>All Status</option>
-                      <option value="pending" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>⏳ Pending</option>
-                      <option value="approved" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>✅ Approved</option>
-                      <option value="rejected" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>❌ Rejected</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {(() => {
-                // Filter and sort dancers
-                const filteredDancers = dancers
-                  .filter(d => {
-                    const matchesSearch = !dancerSearchTerm || 
-                      d.name.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
-                      d.nationalId.includes(dancerSearchTerm) ||
-                      d.eodsaId.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
-                      (d.email && d.email.toLowerCase().includes(dancerSearchTerm.toLowerCase()));
-                    const matchesFilter = dancerStatusFilter === 'all' ||
-                      (dancerStatusFilter === 'pending' && !d.approved && !d.rejectionReason) ||
-                      (dancerStatusFilter === 'approved' && d.approved) ||
-                      (dancerStatusFilter === 'rejected' && d.rejectionReason);
-                    return matchesSearch && matchesFilter;
-                  })
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Sort by newest first
-
-                return filteredDancers.length === 0 ? (
-                  <div className="text-center py-12 ${themeClasses.textMuted}">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                      <span className="text-2xl">💃</span>
-                    </div>
-                    <h3 className="text-lg font-medium mb-2">
-                      {dancers.length === 0 ? 'No dancer registrations yet' : 'No dancers match your filters'}
-                    </h3>
-                    <p className="text-sm mb-4">
-                      {dancers.length === 0 
-                        ? 'Individual dancers will appear here after they register'
-                        : 'Try adjusting your search or filter criteria'
-                      }
-                    </p>
-                    {dancers.length > 0 && (
-                      <button
-                        onClick={() => {
-                          setDancerSearchTerm('');
-                          setDancerStatusFilter('all');
-                        }}
-                        className="inline-flex items-center space-x-2 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors"
-                      >
-                        <span>🔄</span>
-                        <span>Clear Filters</span>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className={themeClasses.tableHeader}>
-                        <tr>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Name</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Age</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Mastery</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Contact</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Studio</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Guardian</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Status</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
-                        {filteredDancers.map((dancer) => (
-                          <tr key={dancer.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
-                            <td className="px-6 py-4">
-                              <div>
-                                <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>
-                                  <a
-                                    href={`/admin/dancers/${dancer.eodsaId}`}
-                                    className={`${theme === 'dark' ? 'text-blue-300 hover:text-blue-200' : 'text-blue-700 hover:text-blue-900'} underline decoration-dotted underline-offset-2`}
-                                  >
-                                    {dancer.name}
-                                  </a>
-                                </div>
-                                <div className={`text-xs ${themeClasses.textMuted}`}>ID: {dancer.nationalId}</div>
-                                <div className={`text-xs ${themeClasses.textMuted}`}>EODSA: {dancer.eodsaId}</div>
-                                <div className={`text-xs ${themeClasses.textMuted}`}>Registered: {new Date(dancer.createdAt).toLocaleDateString()}</div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-medium">{dancer.age}</div>
-                              <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.dateOfBirth}</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {(() => {
-                                const mastery = (dancer as any).registrationFeeMasteryLevel;
-                                if (!mastery) {
-                                  return <span className="text-sm text-gray-400">—</span>;
-                                }
-                                const isWater = mastery.toLowerCase().includes('water');
-                                const isFire = mastery.toLowerCase().includes('fire');
-                                return (
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    isWater 
-                                      ? theme === 'dark' ? 'bg-blue-900/80 text-blue-200' : 'bg-blue-100 text-blue-800'
-                                      : isFire
-                                      ? theme === 'dark' ? 'bg-orange-900/80 text-orange-200' : 'bg-orange-100 text-orange-800'
-                                      : theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {mastery}
-                                  </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-medium">{dancer.email || 'N/A'}</div>
-                              <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.phone || 'N/A'}</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {dancer.studioName ? (
-                                <div>
-                                  <div className={`text-sm font-medium ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>🏢 {dancer.studioName}</div>
-                                  <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.studioEmail}</div>
-                                  <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-blue-900/80 text-blue-200' : 'bg-blue-100 text-blue-800'} mt-1`}>
-                                    Studio Dancer
-                                  </div>
-                                </div>
-                              ) : (
-                                <div>
-                                  <div className={`text-sm font-medium ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>🕺 Independent</div>
-                                  <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-purple-900/80 text-purple-200' : 'bg-purple-100 text-purple-800'} mt-1`}>
-                                    Individual
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              {dancer.guardianName ? (
-                                <div>
-                                  <div className="text-sm font-medium">{dancer.guardianName}</div>
-                                  <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.guardianEmail}</div>
-                                  <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.guardianPhone}</div>
-                                </div>
-                              ) : (
-                                <span className="text-sm text-gray-400">Adult</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              {dancer.approved ? (
-                                <div>
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-green-900/80 text-green-200' : 'bg-green-100 text-green-800'}`}>
-                                    ✅ Approved
-                                  </span>
-                                  {dancer.approvedAt && (
-                                    <div className={`text-xs ${themeClasses.textMuted} mt-1`}>
-                                      {new Date(dancer.approvedAt).toLocaleDateString()}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : dancer.rejectionReason ? (
-                                <div>
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-red-900/80 text-red-200' : 'bg-red-100 text-red-800'}`}>
-                                    ❌ Rejected
-                                  </span>
-                                  <div className={`text-xs ${themeClasses.textMuted} mt-1`} title={dancer.rejectionReason}>
-                                    {dancer.rejectionReason.length > 30 
-                                      ? dancer.rejectionReason.substring(0, 30) + '...' 
-                                      : dancer.rejectionReason}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-yellow-900/80 text-yellow-200' : 'bg-yellow-100 text-yellow-800'}`}>
-                                  ⏳ Pending
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="space-y-2">
-                                {!dancer.approved && !dancer.rejectionReason ? (
-                                  <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => handleApproveDancer(dancer.id)}
-                                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                                    >
-                                      ✅ Approve
-                                    </button>
-                                    <button
-                                      onClick={() => handleRejectDancer(dancer.id)}
-                                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                                    >
-                                      <span className="text-white">✖️</span> Reject
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    {/* Registration Fee Quick Status */}
-                                     <div className="text-xs">
-                                       <span className={`font-medium ${themeClasses.textSecondary}`}>Reg Fee: </span>
-                                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                         dancer.registrationFeePaid 
-                                           ? theme === 'dark' ? 'bg-green-900/80 text-green-200 border border-green-700' : 'bg-green-100 text-green-800 border border-green-200'
-                                           : theme === 'dark' ? 'bg-red-900/80 text-red-200 border border-red-700' : 'bg-red-100 text-red-800 border border-red-200'
-                                       }`}>
-                                        {dancer.registrationFeePaid ? '✅ Paid' : '❌ Not Paid'}
-                                      </span>
-                                    </div>
-                                    
-                                    {/* Action Buttons */}
-                                    <div className="flex flex-col space-y-1">
-                                       <button
-                                         onClick={() => handleViewFinances(dancer)}
-                                         className={`w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border ${theme === 'dark' ? 'bg-blue-900/80 text-blue-200 hover:bg-blue-800 border-blue-700' : 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200'}`}
-                                       >
-                                        💰 View Finances
-                                      </button>
-                                      
-                                      {dancer.approved && (
-                                        <button
-                                          onClick={() => handleRegistrationFeeUpdate(dancer.id, !dancer.registrationFeePaid)}
-                                           className={`w-full px-3 py-1 text-xs font-medium rounded-lg transition-colors border ${
-                                             dancer.registrationFeePaid
-                                               ? theme === 'dark' ? 'bg-orange-900/80 text-orange-200 hover:bg-orange-800 border-orange-700' : 'bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-200'
-                                               : theme === 'dark' ? 'bg-green-900/80 text-green-200 hover:bg-green-800 border-green-700' : 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200'
-                                           }`}
-                                        >
-                                          {dancer.registrationFeePaid ? 'Mark Reg Unpaid' : 'Mark Reg Paid'}
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
+          <DancersTabContent
+            dancers={dancers}
+            dancerSearchTerm={dancerSearchTerm}
+            setDancerSearchTerm={setDancerSearchTerm}
+            dancerStatusFilter={dancerStatusFilter}
+            setDancerStatusFilter={setDancerStatusFilter}
+            handleApproveDancer={handleApproveDancer}
+            handleRejectDancer={handleRejectDancer}
+            handleViewFinances={handleViewFinances}
+            handleRegistrationFeeUpdate={handleRegistrationFeeUpdate}
+            theme={theme}
+            themeClasses={themeClasses}
+          />
         )}
 
         {/* Studios Tab - New */}
         {activeTab === 'studios' && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Enhanced Studios List */}
-            <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
-              <div className={`px-6 py-4 bg-gradient-to-r from-orange-500/20 to-red-500/20 border-b ${themeClasses.cardBorder}`}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
-                      <span className="text-white text-sm">🏢</span>
-                    </div>
-                    <h2 className="text-xl font-bold ${themeClasses.textPrimary}">Studio Registrations</h2>
-                    <div className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
-                      {studios.filter(s => {
-                        const matchesSearch = !studioSearchTerm || 
-                          s.name.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
-                          s.email.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
-                          s.registrationNumber.toLowerCase().includes(studioSearchTerm.toLowerCase());
-                        const matchesFilter = studioStatusFilter === 'all' ||
-                          (studioStatusFilter === 'pending' && !s.approved && !s.rejectionReason) ||
-                          (studioStatusFilter === 'approved' && s.approved) ||
-                          (studioStatusFilter === 'rejected' && s.rejectionReason);
-                        return matchesSearch && matchesFilter;
-                      }).length} of {studios.length} studios
-                    </div>
-                  </div>
-                  
-                  {/* Search and Filter Controls */}
-                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search studios..."
-                        value={studioSearchTerm}
-                        onChange={(e) => setStudioSearchTerm(e.target.value)}
-                        className={`w-full sm:w-64 px-4 py-2 pr-10 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted}`}
-                      />
-                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                         <span className={`${themeClasses.textMuted}`}>🔍</span>
-                       </div>
-                     </div>
-                     
-                     <select
-                       value={studioStatusFilter}
-                      onChange={(e) => setStudioStatusFilter(e.target.value as any)}
-                       className={`px-3 py-2 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm ${themeClasses.textPrimary}`}
-                       style={{
-                         backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
-                         color: theme === 'dark' ? '#f9fafb' : '#111827',
-                         borderColor: theme === 'dark' ? '#4b5563' : '#d1d5db'
-                       }}
-                    >
-                      <option value="all" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>All Status</option>
-                      <option value="pending" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>⏳ Pending</option>
-                      <option value="approved" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>✅ Approved</option>
-                      <option value="rejected" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>❌ Rejected</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {(() => {
-                // Filter and sort studios
-                const filteredStudios = studios
-                  .filter(s => {
-                    const matchesSearch = !studioSearchTerm || 
-                      s.name.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
-                      s.email.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
-                      s.registrationNumber.toLowerCase().includes(studioSearchTerm.toLowerCase());
-                    const matchesFilter = studioStatusFilter === 'all' ||
-                      (studioStatusFilter === 'pending' && !s.approved && !s.rejectionReason) ||
-                      (studioStatusFilter === 'approved' && s.approved) ||
-                      (studioStatusFilter === 'rejected' && s.rejectionReason);
-                    return matchesSearch && matchesFilter;
-                  })
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Sort by newest first
-
-                return filteredStudios.length === 0 ? (
-                  <div className="text-center py-12 ${themeClasses.textMuted}">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                      <span className="text-2xl">🏢</span>
-                    </div>
-                    <h3 className="text-lg font-medium mb-2">
-                      {studios.length === 0 ? 'No studio registrations yet' : 'No studios match your filters'}
-                    </h3>
-                    <p className="text-sm mb-4">
-                      {studios.length === 0 
-                        ? 'Dance studios will appear here after they register'
-                        : 'Try adjusting your search or filter criteria'
-                      }
-                    </p>
-                    {studios.length > 0 && (
-                      <button
-                        onClick={() => {
-                          setStudioSearchTerm('');
-                          setStudioStatusFilter('all');
-                        }}
-                        className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-                      >
-                        <span>🔄</span>
-                        <span>Clear Filters</span>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className={themeClasses.tableHeader}>
-                        <tr>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Studio</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Contact</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Registration</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Status</th>
-                          <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
-                        {filteredStudios.map((studio) => (
-                          <tr key={studio.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
-                            <td className="px-6 py-4">
-                              <div>
-                                <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>{studio.name}</div>
-                                <div className={`text-xs ${themeClasses.textMuted}`}>Reg: {studio.registrationNumber}</div>
-                                <div className={`text-xs ${themeClasses.textMuted}`}>Registered: {new Date(studio.createdAt).toLocaleDateString()}</div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-medium">{studio.email}</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-medium">{studio.registrationNumber}</div>
-                              <div className={`text-xs ${themeClasses.textMuted}`}>{new Date(studio.createdAt).toLocaleDateString()}</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {studio.approved ? (
-                                <div>
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-green-900/80 text-green-200' : 'bg-green-100 text-green-800'}`}>
-                                    ✅ Approved
-                                  </span>
-                                  {studio.approvedAt && (
-                                    <div className={`text-xs ${themeClasses.textMuted} mt-1`}>
-                                      {new Date(studio.approvedAt).toLocaleDateString()}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : studio.rejectionReason ? (
-                                <div>
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-red-900/80 text-red-200' : 'bg-red-100 text-red-800'}`}>
-                                    ❌ Rejected
-                                  </span>
-                                  <div className={`text-xs ${themeClasses.textMuted} mt-1`} title={studio.rejectionReason}>
-                                    {studio.rejectionReason.length > 30 
-                                      ? studio.rejectionReason.substring(0, 30) + '...' 
-                                      : studio.rejectionReason}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-yellow-900/80 text-yellow-200' : 'bg-yellow-100 text-yellow-800'}`}>
-                                  ⏳ Pending
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex flex-col space-y-2">
-                                <button
-                                  onClick={() => handleViewStudio(studio.id)}
-                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                                >
-                                  👁️ View Studio
-                                </button>
-                                {!studio.approved && !studio.rejectionReason && (
-                                  <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => handleApproveStudio(studio.id)}
-                                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                                    >
-                                      ✅ Approve
-                                    </button>
-                                    <button
-                                      onClick={() => handleRejectStudio(studio.id)}
-                                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                                    >
-                                      <span className="text-white">✖️</span> Reject
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
+          <StudiosTabContent
+            studios={studios}
+            studioSearchTerm={studioSearchTerm}
+            setStudioSearchTerm={setStudioSearchTerm}
+            studioStatusFilter={studioStatusFilter}
+            setStudioStatusFilter={setStudioStatusFilter}
+            handleViewStudio={handleViewStudio}
+            handleApproveStudio={handleApproveStudio}
+            handleRejectStudio={handleRejectStudio}
+            theme={theme}
+            themeClasses={themeClasses}
+          />
         )}
 
 
@@ -4963,6 +4192,869 @@ function AdminDashboard() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Tab Content Components
+interface EventsTabContentProps {
+  events: Event[];
+  setShowCreateEventModal: (show: boolean) => void;
+  handleEditEvent: (event: Event) => void;
+  handleDeleteEvent: (event: Event) => void;
+  theme: string;
+  themeClasses: any;
+}
+
+function EventsTabContent({ events, setShowCreateEventModal, handleEditEvent, handleDeleteEvent, theme, themeClasses }: EventsTabContentProps) {
+  return (
+    <div className="space-y-6 sm:space-y-8 animate-fadeIn">
+      <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
+        <div className={`px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border-b ${themeClasses.cardBorder}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-xs sm:text-sm">🏆</span>
+              </div>
+              <h2 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>Events</h2>
+              <div className={`px-2 sm:px-3 py-1 ${theme === 'dark' ? 'bg-indigo-900/80 text-indigo-200' : 'bg-indigo-100 text-indigo-800'} rounded-full text-xs sm:text-sm font-medium`}>
+                {events.length} events
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowCreateEventModal(true)}
+                className="inline-flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg text-sm sm:text-base font-medium"
+              >
+                <span>➕</span>
+                <span className="hidden sm:inline">Create Event</span>
+                <span className="sm:hidden">Create</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {events.length === 0 ? (
+          <div className={`text-center py-8 sm:py-12 ${themeClasses.textMuted}`}>
+            <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              <span className="text-lg sm:text-2xl">🏆</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-medium mb-2">No events yet</h3>
+            <p className="text-sm mb-4">Create your first event to get started!</p>
+            <button
+              onClick={() => setShowCreateEventModal(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+            >
+              <span>➕</span>
+              <span>Create First Event</span>
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className={themeClasses.tableHeader}>
+                <tr>
+                  <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Event</th>
+                  <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Region</th>
+                  <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden md:table-cell`}>Type</th>
+                  <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Date</th>
+                  <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Status</th>
+                  <th className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
+                {events.map((event) => (
+                  <tr key={event.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                      <div>
+                        <div className={`text-xs sm:text-sm font-bold ${themeClasses.textPrimary} leading-tight`}>{event.name}</div>
+                        <div className={`text-xs sm:text-sm ${themeClasses.textSecondary} font-medium mt-1`}>{event.venue}</div>
+                        <div className={`text-xs ${themeClasses.textMuted} sm:hidden mt-1`}>
+                          {event.region} • {event.performanceType === 'All' ? 'All Performance Types' : event.performanceType} • {event.ageCategory}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium hidden sm:table-cell">{event.region}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
+                      <div className="space-y-1">
+                        {event.performanceType === 'All' ? (
+                          <span className="inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-purple-50 to-blue-50 text-purple-700 border-purple-200">
+                            🎭 All Types
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-green-50 to-teal-50 text-green-700 border-green-200">
+                            {event.performanceType === 'Solo' ? '🕺' : 
+                             event.performanceType === 'Duet' ? '👯' : 
+                             event.performanceType === 'Trio' ? '👨‍👩‍👧' : 
+                             event.performanceType === 'Group' ? '👥' : '🎭'} {event.performanceType}
+                          </span>
+                        )}
+                        <div className={`text-xs sm:text-sm ${themeClasses.textSecondary}`}>{event.ageCategory}</div>
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium">
+                      <div className="hidden sm:block">
+                        {new Date(event.eventDate).toLocaleDateString()}
+                      </div>
+                      <div className="sm:hidden">
+                        {new Date(event.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                      <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border ${
+                        event.status === 'upcoming' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        event.status === 'registration_open' ? 'bg-green-50 text-green-700 border-green-200' :
+                        event.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                         `bg-gray-50 ${themeClasses.textSecondary} border-gray-200`
+                      }`}>
+                        <span className="hidden sm:inline">{event.status.replace('_', ' ').toUpperCase()}</span>
+                        <span className="sm:hidden">
+                          {event.status === 'upcoming' ? 'UPCOMING' : 
+                           event.status === 'registration_open' ? 'OPEN' :
+                           event.status === 'in_progress' ? 'ACTIVE' : 'CLOSED'}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          href={`/admin/events/${event.id}`}
+                          className={`${theme === 'dark' ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-500 hover:text-indigo-700'} text-xs sm:text-sm font-medium`}
+                        >
+                          <span className="hidden sm:inline">👥 View</span>
+                          <span className="sm:hidden">👥</span>
+                        </Link>
+                        <button
+                          onClick={() => handleEditEvent(event)}
+                          className={`${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-500 hover:text-blue-700'} text-xs sm:text-sm font-medium transition-colors`}
+                          title="Edit Event"
+                        >
+                          <span className="hidden sm:inline">✏️ Edit</span>
+                          <span className="sm:hidden">✏️</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEvent(event)}
+                          className={`${theme === 'dark' ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-xs sm:text-sm font-medium transition-colors`}
+                          title="Delete Event"
+                        >
+                          <span className="hidden sm:inline">🗑️ Delete</span>
+                          <span className="sm:hidden">🗑️</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface StaffTabContentProps {
+  judges: Judge[];
+  setShowCreateJudgeModal: (show: boolean) => void;
+  handleDeleteJudge: (judgeId: string, judgeName: string) => void;
+  theme: string;
+  themeClasses: any;
+}
+
+function StaffTabContent({ judges, setShowCreateJudgeModal, handleDeleteJudge, theme, themeClasses }: StaffTabContentProps) {
+  return (
+    <div className="space-y-8 animate-fadeIn">
+      <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
+        <div className={`px-6 py-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-b ${themeClasses.cardBorder}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-sm">👥</span>
+              </div>
+              <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Staff Management</h2>
+              <div className={`px-3 py-1 ${theme === 'dark' ? 'bg-purple-900/80 text-purple-200' : 'bg-purple-100 text-purple-800'} rounded-full text-sm font-medium`}>
+                {judges.length} staff members
+              </div>
+            </div>
+            <button
+              onClick={() => setShowCreateJudgeModal(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
+            >
+              <span>➕</span>
+              <span className="hidden sm:inline">Add Staff</span>
+              <span className="sm:hidden">Add</span>
+            </button>
+          </div>
+        </div>
+              
+        {judges.length === 0 ? (
+          <div className={`text-center py-12 ${themeClasses.textMuted}`}>
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              <span className="text-2xl">👥</span>
+            </div>
+            <h3 className="text-lg font-medium mb-2">No staff members yet</h3>
+            <p className="text-sm mb-4">Add your first staff member to get started!</p>
+            <button
+              onClick={() => setShowCreateJudgeModal(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+            >
+              <span>➕</span>
+              <span>Add First Staff Member</span>
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className={themeClasses.tableHeader}>
+                <tr>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Name</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Email</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Role</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden md:table-cell`}>Created</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
+                {judges.map((judge) => (
+                  <tr key={judge.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>{judge.name}</div>
+                        <div className={`text-sm ${themeClasses.textSecondary} font-medium sm:hidden`}>{judge.email}</div>
+                      </div>
+                    </td>
+                    <td className={`px-6 py-4 text-sm font-medium ${themeClasses.textPrimary} hidden sm:table-cell`}>{judge.email}</td>
+                    <td className="px-6 py-4">
+                      {judge.isAdmin ? (
+                        <span className="inline-flex px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300">
+                          👑 Admin
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                            👨‍⚖️ Judge
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                    <td className={`px-6 py-4 text-sm font-medium ${themeClasses.textSecondary} hidden md:table-cell`}>
+                      {new Date(judge.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex space-x-2">
+                        {!judge.isAdmin && (
+                          <>
+                            <button
+                              onClick={() => {/* TODO: Implement edit roles functionality */}}
+                              className="inline-flex items-center px-3 py-1 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors"
+                            >
+                              ⚙️ Roles
+                            </button>
+                            <button
+                              onClick={() => handleDeleteJudge(judge.id, judge.name)}
+                              className="inline-flex items-center px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface AssignmentsTabContentProps {
+  assignments: JudgeAssignment[];
+  setShowAssignJudgeModal: (show: boolean) => void;
+  handleUnassignJudge: (assignment: JudgeAssignment) => void;
+  unassigningJudges: Set<string>;
+  theme: string;
+  themeClasses: any;
+}
+
+function AssignmentsTabContent({ assignments, setShowAssignJudgeModal, handleUnassignJudge, unassigningJudges, theme, themeClasses }: AssignmentsTabContentProps) {
+  return (
+    <div className="space-y-8 animate-fadeIn">
+      <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
+        <div className={`px-6 py-4 bg-gradient-to-r from-pink-500/20 to-rose-500/20 border-b ${themeClasses.cardBorder}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-sm">🔗</span>
+              </div>
+              <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Staff Assignments</h2>
+              <div className={`px-3 py-1 ${theme === 'dark' ? 'bg-pink-900/80 text-pink-200' : 'bg-pink-100 text-pink-800'} rounded-full text-sm font-medium`}>
+                {assignments.length} assignments
+              </div>
+            </div>
+            <button
+              onClick={() => setShowAssignJudgeModal(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl hover:from-pink-600 hover:to-rose-700 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
+            >
+              <span>➕</span>
+              <span className="hidden sm:inline">Assign Judge</span>
+              <span className="sm:hidden">Assign</span>
+            </button>
+          </div>
+        </div>
+
+        {assignments.length === 0 ? (
+          <div className={`text-center py-12 ${themeClasses.textMuted}`}>
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              <span className="text-2xl">🔗</span>
+            </div>
+            <h3 className="text-lg font-medium mb-2">No assignments yet</h3>
+            <p className="text-sm mb-4">Assign judges to events to get started!</p>
+            <button
+              onClick={() => setShowAssignJudgeModal(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors"
+            >
+              <span>➕</span>
+              <span>Create First Assignment</span>
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className={themeClasses.tableHeader}>
+                <tr>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Judge</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Event</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Email</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
+                {assignments.map((assignment) => (
+                  <tr key={assignment.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>{assignment.judgeName}</div>
+                        <div className={`text-sm ${themeClasses.textSecondary} font-medium sm:hidden`}>{assignment.judgeEmail}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium">
+                      {assignment.eventName}
+                      <div className={`text-xs ${themeClasses.textMuted} mt-1`}>{assignment.eventDate ? new Date(assignment.eventDate).toLocaleDateString() : 'No date'}</div>
+                    </td>
+                    <td className={`px-6 py-4 text-sm font-medium ${themeClasses.textSecondary} hidden sm:table-cell`}>{assignment.judgeEmail}</td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => handleUnassignJudge(assignment)}
+                        disabled={unassigningJudges.has(assignment.id)}
+                        className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-xs font-medium rounded-lg hover:from-red-600 hover:to-rose-700 transition-all duration-200 transform hover:scale-105 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Remove this judge from the event"
+                      >
+                        <span className="mr-1">{unassigningJudges.has(assignment.id) ? '⏳' : '🗑️'}</span>
+                        <span className="hidden sm:inline">{unassigningJudges.has(assignment.id) ? 'Removing...' : 'Unassign'}</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface DancersTabContentProps {
+  dancers: Dancer[];
+  dancerSearchTerm: string;
+  setDancerSearchTerm: (term: string) => void;
+  dancerStatusFilter: 'all' | 'pending' | 'approved' | 'rejected';
+  setDancerStatusFilter: (filter: 'all' | 'pending' | 'approved' | 'rejected') => void;
+  handleApproveDancer: (dancerId: string) => void;
+  handleRejectDancer: (dancerId: string) => void;
+  handleViewFinances: (dancer: any) => void;
+  handleRegistrationFeeUpdate: (dancerId: string, markAsPaid: boolean) => void;
+  theme: string;
+  themeClasses: any;
+}
+
+function DancersTabContent({ dancers, dancerSearchTerm, setDancerSearchTerm, dancerStatusFilter, setDancerStatusFilter, handleApproveDancer, handleRejectDancer, handleViewFinances, handleRegistrationFeeUpdate, theme, themeClasses }: DancersTabContentProps) {
+  const filteredDancers = dancers
+    .filter(d => {
+      const matchesSearch = !dancerSearchTerm || 
+        d.name.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
+        d.nationalId.includes(dancerSearchTerm) ||
+        d.eodsaId.toLowerCase().includes(dancerSearchTerm.toLowerCase()) ||
+        (d.email && d.email.toLowerCase().includes(dancerSearchTerm.toLowerCase()));
+      const matchesFilter = dancerStatusFilter === 'all' ||
+        (dancerStatusFilter === 'pending' && !d.approved && !d.rejectionReason) ||
+        (dancerStatusFilter === 'approved' && d.approved) ||
+        (dancerStatusFilter === 'rejected' && d.rejectionReason);
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return (
+    <div className="space-y-8 animate-fadeIn">
+      <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
+        <div className={`px-6 py-4 bg-gradient-to-r from-rose-500/20 to-pink-500/20 border-b ${themeClasses.cardBorder}`}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-rose-500 to-pink-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-sm">💃</span>
+              </div>
+              <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Individual Dancer Registrations</h2>
+              <div className={`px-3 py-1 ${theme === 'dark' ? 'bg-rose-900/80 text-rose-200' : 'bg-rose-100 text-rose-800'} rounded-full text-sm font-medium`}>
+                {filteredDancers.length} of {dancers.length} dancers
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search dancers..."
+                  value={dancerSearchTerm}
+                  onChange={(e) => setDancerSearchTerm(e.target.value)}
+                  className={`w-full sm:w-64 px-4 py-2 pr-10 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm ${themeClasses.textPrimary}`}
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <span className={themeClasses.textMuted}>🔍</span>
+                </div>
+              </div>
+              
+              <select
+                value={dancerStatusFilter}
+                onChange={(e) => setDancerStatusFilter(e.target.value as any)}
+                className={`px-3 py-2 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm ${themeClasses.textPrimary}`}
+                style={{
+                  backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
+                  color: theme === 'dark' ? '#f9fafb' : '#111827',
+                  borderColor: theme === 'dark' ? '#4b5563' : '#d1d5db'
+                }}
+              >
+                <option value="all" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>All Status</option>
+                <option value="pending" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>⏳ Pending</option>
+                <option value="approved" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>✅ Approved</option>
+                <option value="rejected" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>❌ Rejected</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {filteredDancers.length === 0 ? (
+          <div className={`text-center py-12 ${themeClasses.textMuted}`}>
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              <span className="text-2xl">💃</span>
+            </div>
+            <h3 className="text-lg font-medium mb-2">
+              {dancers.length === 0 ? 'No dancer registrations yet' : 'No dancers match your filters'}
+            </h3>
+            <p className="text-sm mb-4">
+              {dancers.length === 0 
+                ? 'Individual dancers will appear here after they register'
+                : 'Try adjusting your search or filter criteria'
+              }
+            </p>
+            {dancers.length > 0 && (
+              <button
+                onClick={() => {
+                  setDancerSearchTerm('');
+                  setDancerStatusFilter('all');
+                }}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors"
+              >
+                <span>🔄</span>
+                <span>Clear Filters</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className={themeClasses.tableHeader}>
+                <tr>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Name</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Age</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Mastery</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Contact</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Studio</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Guardian</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Status</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
+                {filteredDancers.map((dancer) => (
+                  <tr key={dancer.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>
+                          <a
+                            href={`/admin/dancers/${dancer.eodsaId}`}
+                            className={`${theme === 'dark' ? 'text-blue-300 hover:text-blue-200' : 'text-blue-700 hover:text-blue-900'} underline decoration-dotted underline-offset-2`}
+                          >
+                            {dancer.name}
+                          </a>
+                        </div>
+                        <div className={`text-xs ${themeClasses.textMuted}`}>ID: {dancer.nationalId}</div>
+                        <div className={`text-xs ${themeClasses.textMuted}`}>EODSA: {dancer.eodsaId}</div>
+                        <div className={`text-xs ${themeClasses.textMuted} sm:hidden`}>{dancer.email || 'N/A'}</div>
+                        <div className={`text-xs ${themeClasses.textMuted}`}>Registered: {new Date(dancer.createdAt).toLocaleDateString()}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium">{dancer.age}</div>
+                      <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.dateOfBirth}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {(() => {
+                        const mastery = (dancer as any).registrationFeeMasteryLevel;
+                        if (!mastery) {
+                          return <span className="text-sm text-gray-400">—</span>;
+                        }
+                        const isWater = mastery.toLowerCase().includes('water');
+                        const isFire = mastery.toLowerCase().includes('fire');
+                        return (
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            isWater 
+                              ? theme === 'dark' ? 'bg-blue-900/80 text-blue-200' : 'bg-blue-100 text-blue-800'
+                              : isFire
+                              ? theme === 'dark' ? 'bg-orange-900/80 text-orange-200' : 'bg-orange-100 text-orange-800'
+                              : theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {mastery}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
+                      <div className="text-sm font-medium">{dancer.email || 'N/A'}</div>
+                      <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.phone || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {dancer.studioName ? (
+                        <div>
+                          <div className={`text-sm font-medium ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>🏢 {dancer.studioName}</div>
+                          <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.studioEmail}</div>
+                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-blue-900/80 text-blue-200' : 'bg-blue-100 text-blue-800'} mt-1`}>
+                            Studio Dancer
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className={`text-sm font-medium ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>🕺 Independent</div>
+                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-purple-900/80 text-purple-200' : 'bg-purple-100 text-purple-800'} mt-1`}>
+                            Individual
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
+                      {dancer.guardianName ? (
+                        <div>
+                          <div className="text-sm font-medium">{dancer.guardianName}</div>
+                          <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.guardianEmail}</div>
+                          <div className={`text-xs ${themeClasses.textMuted}`}>{dancer.guardianPhone}</div>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">Adult</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {dancer.approved ? (
+                        <div>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-green-900/80 text-green-200' : 'bg-green-100 text-green-800'}`}>
+                            ✅ Approved
+                          </span>
+                          {dancer.approvedAt && (
+                            <div className={`text-xs ${themeClasses.textMuted} mt-1`}>
+                              {new Date(dancer.approvedAt).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      ) : dancer.rejectionReason ? (
+                        <div>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-red-900/80 text-red-200' : 'bg-red-100 text-red-800'}`}>
+                            ❌ Rejected
+                          </span>
+                          <div className={`text-xs ${themeClasses.textMuted} mt-1`} title={dancer.rejectionReason}>
+                            {dancer.rejectionReason.length > 30 
+                              ? dancer.rejectionReason.substring(0, 30) + '...' 
+                              : dancer.rejectionReason}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-yellow-900/80 text-yellow-200' : 'bg-yellow-100 text-yellow-800'}`}>
+                          ⏳ Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-2">
+                        {!dancer.approved && !dancer.rejectionReason ? (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleApproveDancer(dancer.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                            >
+                              ✅ Approve
+                            </button>
+                            <button
+                              onClick={() => handleRejectDancer(dancer.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                            >
+                              <span className="text-white">✖️</span> Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="text-xs">
+                              <span className={`font-medium ${themeClasses.textSecondary}`}>Reg Fee: </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                dancer.registrationFeePaid 
+                                  ? theme === 'dark' ? 'bg-green-900/80 text-green-200 border border-green-700' : 'bg-green-100 text-green-800 border border-green-200'
+                                  : theme === 'dark' ? 'bg-red-900/80 text-red-200 border border-red-700' : 'bg-red-100 text-red-800 border border-red-200'
+                              }`}>
+                                {dancer.registrationFeePaid ? '✅ Paid' : '❌ Not Paid'}
+                              </span>
+                            </div>
+                            
+                            <div className="flex flex-col space-y-1">
+                              <button
+                                onClick={() => handleViewFinances(dancer)}
+                                className={`w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border ${theme === 'dark' ? 'bg-blue-900/80 text-blue-200 hover:bg-blue-800 border-blue-700' : 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200'}`}
+                              >
+                                💰 View Finances
+                              </button>
+                              
+                              {dancer.approved && (
+                                <button
+                                  onClick={() => handleRegistrationFeeUpdate(dancer.id, !dancer.registrationFeePaid)}
+                                  className={`w-full px-3 py-1 text-xs font-medium rounded-lg transition-colors border ${
+                                    dancer.registrationFeePaid
+                                      ? theme === 'dark' ? 'bg-orange-900/80 text-orange-200 hover:bg-orange-800 border-orange-700' : 'bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-200'
+                                      : theme === 'dark' ? 'bg-green-900/80 text-green-200 hover:bg-green-800 border-green-700' : 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200'
+                                  }`}
+                                >
+                                  {dancer.registrationFeePaid ? 'Mark Reg Unpaid' : 'Mark Reg Paid'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface StudiosTabContentProps {
+  studios: Studio[];
+  studioSearchTerm: string;
+  setStudioSearchTerm: (term: string) => void;
+  studioStatusFilter: 'all' | 'pending' | 'approved' | 'rejected';
+  setStudioStatusFilter: (filter: 'all' | 'pending' | 'approved' | 'rejected') => void;
+  handleViewStudio: (studioId: string) => void;
+  handleApproveStudio: (studioId: string) => void;
+  handleRejectStudio: (studioId: string) => void;
+  theme: string;
+  themeClasses: any;
+}
+
+function StudiosTabContent({ studios, studioSearchTerm, setStudioSearchTerm, studioStatusFilter, setStudioStatusFilter, handleViewStudio, handleApproveStudio, handleRejectStudio, theme, themeClasses }: StudiosTabContentProps) {
+  const filteredStudios = studios
+    .filter(s => {
+      const matchesSearch = !studioSearchTerm || 
+        s.name.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
+        s.email.toLowerCase().includes(studioSearchTerm.toLowerCase()) ||
+        s.registrationNumber.toLowerCase().includes(studioSearchTerm.toLowerCase());
+      const matchesFilter = studioStatusFilter === 'all' ||
+        (studioStatusFilter === 'pending' && !s.approved && !s.rejectionReason) ||
+        (studioStatusFilter === 'approved' && s.approved) ||
+        (studioStatusFilter === 'rejected' && s.rejectionReason);
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return (
+    <div className="space-y-8 animate-fadeIn">
+      <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
+        <div className={`px-6 py-4 bg-gradient-to-r from-orange-500/20 to-red-500/20 border-b ${themeClasses.cardBorder}`}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-sm">🏢</span>
+              </div>
+              <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Studio Registrations</h2>
+              <div className={`px-3 py-1 ${theme === 'dark' ? 'bg-orange-900/80 text-orange-200' : 'bg-orange-100 text-orange-800'} rounded-full text-sm font-medium`}>
+                {filteredStudios.length} of {studios.length} studios
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search studios..."
+                  value={studioSearchTerm}
+                  onChange={(e) => setStudioSearchTerm(e.target.value)}
+                  className={`w-full sm:w-64 px-4 py-2 pr-10 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm ${themeClasses.textPrimary}`}
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <span className={themeClasses.textMuted}>🔍</span>
+                </div>
+              </div>
+              
+              <select
+                value={studioStatusFilter}
+                onChange={(e) => setStudioStatusFilter(e.target.value as any)}
+                className={`px-3 py-2 border ${themeClasses.cardBorder} ${themeClasses.cardBg} rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm ${themeClasses.textPrimary}`}
+                style={{
+                  backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
+                  color: theme === 'dark' ? '#f9fafb' : '#111827',
+                  borderColor: theme === 'dark' ? '#4b5563' : '#d1d5db'
+                }}
+              >
+                <option value="all" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>All Status</option>
+                <option value="pending" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>⏳ Pending</option>
+                <option value="approved" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>✅ Approved</option>
+                <option value="rejected" style={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', color: theme === 'dark' ? '#f9fafb' : '#111827' }}>❌ Rejected</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {filteredStudios.length === 0 ? (
+          <div className={`text-center py-12 ${themeClasses.textMuted}`}>
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              <span className="text-2xl">🏢</span>
+            </div>
+            <h3 className="text-lg font-medium mb-2">
+              {studios.length === 0 ? 'No studio registrations yet' : 'No studios match your filters'}
+            </h3>
+            <p className="text-sm mb-4">
+              {studios.length === 0 
+                ? 'Dance studios will appear here after they register'
+                : 'Try adjusting your search or filter criteria'
+              }
+            </p>
+            {studios.length > 0 && (
+              <button
+                onClick={() => {
+                  setStudioSearchTerm('');
+                  setStudioStatusFilter('all');
+                }}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                <span>🔄</span>
+                <span>Clear Filters</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className={themeClasses.tableHeader}>
+                <tr>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Studio</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider hidden sm:table-cell`}>Contact</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Registration</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Status</th>
+                  <th className={`px-6 py-4 text-left text-xs font-bold ${themeClasses.tableHeaderText} uppercase tracking-wider`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className={`${themeClasses.tableRow} divide-y ${themeClasses.tableBorder}`}>
+                {filteredStudios.map((studio) => (
+                  <tr key={studio.id} className={`${themeClasses.tableRowHover} transition-colors duration-200`}>
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className={`text-sm font-bold ${themeClasses.textPrimary}`}>{studio.name}</div>
+                        <div className={`text-xs ${themeClasses.textMuted} sm:hidden`}>{studio.email}</div>
+                        <div className={`text-xs ${themeClasses.textMuted}`}>Reg: {studio.registrationNumber}</div>
+                        <div className={`text-xs ${themeClasses.textMuted}`}>Registered: {new Date(studio.createdAt).toLocaleDateString()}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
+                      <div className="text-sm font-medium">{studio.email}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium">{studio.registrationNumber}</div>
+                      <div className={`text-xs ${themeClasses.textMuted}`}>{new Date(studio.createdAt).toLocaleDateString()}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {studio.approved ? (
+                        <div>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-green-900/80 text-green-200' : 'bg-green-100 text-green-800'}`}>
+                            ✅ Approved
+                          </span>
+                          {studio.approvedAt && (
+                            <div className={`text-xs ${themeClasses.textMuted} mt-1`}>
+                              {new Date(studio.approvedAt).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      ) : studio.rejectionReason ? (
+                        <div>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-red-900/80 text-red-200' : 'bg-red-100 text-red-800'}`}>
+                            ❌ Rejected
+                          </span>
+                          <div className={`text-xs ${themeClasses.textMuted} mt-1`} title={studio.rejectionReason}>
+                            {studio.rejectionReason.length > 30 
+                              ? studio.rejectionReason.substring(0, 30) + '...' 
+                              : studio.rejectionReason}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme === 'dark' ? 'bg-yellow-900/80 text-yellow-200' : 'bg-yellow-100 text-yellow-800'}`}>
+                          ⏳ Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col space-y-2">
+                        <button
+                          onClick={() => handleViewStudio(studio.id)}
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                        >
+                          👁️ View Studio
+                        </button>
+                        {!studio.approved && !studio.rejectionReason && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleApproveStudio(studio.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                            >
+                              ✅ Approve
+                            </button>
+                            <button
+                              onClick={() => handleRejectStudio(studio.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                            >
+                              <span className="text-white">✖️</span> Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

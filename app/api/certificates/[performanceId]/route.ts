@@ -98,6 +98,17 @@ export async function GET(
       ? studioName 
       : performance.participantNames.join(', ');
 
+    // Check if certificate exists in database
+    const certificateResult = await sqlClient`
+      SELECT certificate_url, id, created_at
+      FROM certificates
+      WHERE performance_id = ${performanceId}
+      ORDER BY created_at DESC
+      LIMIT 1
+    ` as any[];
+
+    const certificateUrl = certificateResult.length > 0 ? certificateResult[0].certificate_url : null;
+
     // Return certificate data
     return NextResponse.json({
       dancerName: displayName,
@@ -105,7 +116,8 @@ export async function GET(
       style: performance.itemStyle,
       title: performance.title,
       medallion: medallion,
-      date: formatCertificateDate(event.eventDate)
+      date: formatCertificateDate(event.eventDate),
+      certificateUrl: certificateUrl
     });
 
   } catch (error) {

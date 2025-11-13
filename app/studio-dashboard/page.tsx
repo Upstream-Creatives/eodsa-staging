@@ -7,6 +7,7 @@ import { RecaptchaV2 } from '@/components/RecaptchaV2';
 import { MASTERY_LEVELS, ITEM_STYLES } from '@/lib/types';
 import MusicUpload from '@/components/MusicUpload';
 import VideoUpload from '@/components/VideoUpload';
+import VideoLinkInput from '@/components/VideoLinkInput';
 
 // Studio session interface
 interface StudioSession {
@@ -68,6 +69,10 @@ interface CompetitionEntry {
   entryType?: 'live' | 'virtual';
   musicFileUrl?: string;
   musicFileName?: string;
+  hasCertificate?: boolean;
+  hasPerformance?: boolean;
+  performanceId?: string | null;
+  scoresPublished?: boolean;
 }
 
 // Music entry interface for studio music uploads
@@ -91,6 +96,7 @@ interface MusicEntry {
   performanceType: string;
   isGroupEntry: boolean;
   submittedAt: string;
+  videoExternalUrl?: string;
 }
 
 export default function StudioDashboardPage() {
@@ -100,7 +106,8 @@ export default function StudioDashboardPage() {
   const [musicEntries, setMusicEntries] = useState<MusicEntry[]>([]);
   const [videoEntries, setVideoEntries] = useState<MusicEntry[]>([]);
   const [scores, setScores] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'dancers' | 'entries' | 'music' | 'video' | 'scores'>('dancers');
+  const [certificates, setCertificates] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'dancers' | 'entries' | 'uploads' | 'scores' | 'certificates'>('dancers');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [events, setEvents] = useState<Array<{id: string; name: string}>>([]);
@@ -150,6 +157,16 @@ export default function StudioDashboardPage() {
     estimatedDuration: 1 // Default to 1 minute minimum
   });
   const [isEditingEntry, setIsEditingEntry] = useState(false);
+  
+  // Results/Certificate view state
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [selectedEntryForResults, setSelectedEntryForResults] = useState<CompetitionEntry | null>(null);
+  const [entryResults, setEntryResults] = useState<any>(null);
+  const [loadingResults, setLoadingResults] = useState(false);
+  
+  // Certificate view state
+  const [certificatePreviewUrl, setCertificatePreviewUrl] = useState<string | null>(null);
+  const [certificateData, setCertificateData] = useState<any>(null);
   
   // Dancer list view state
   const [selectedDancerForActions, setSelectedDancerForActions] = useState<AcceptedDancer | null>(null);
@@ -223,13 +240,14 @@ export default function StudioDashboardPage() {
     try {
       setIsLoading(true);
       
-      // Load accepted dancers, competition entries, music entries, video entries, and scores
-      const [dancersResponse, entriesResponse, musicEntriesResponse, videoEntriesResponse, scoresResponse] = await Promise.all([
+      // Load accepted dancers, competition entries, music entries, video entries, scores, and certificates
+      const [dancersResponse, entriesResponse, musicEntriesResponse, videoEntriesResponse, scoresResponse, certificatesResponse] = await Promise.all([
         fetch(`/api/studios/dancers-new?studioId=${studioId}`),
         fetch(`/api/studios/entries?studioId=${studioId}`),
         fetch(`/api/studios/music-entries?studioId=${studioId}`),
         fetch(`/api/studios/video-entries?studioId=${studioId}`),
-        fetch(`/api/studios/scores?studioId=${studioId}`)
+        fetch(`/api/studios/scores?studioId=${studioId}`),
+        fetch(`/api/studios/certificates?studioId=${studioId}`)
       ]);
 
       const dancersData = await dancersResponse.json();
@@ -245,7 +263,34 @@ export default function StudioDashboardPage() {
       }
 
       if (entriesData.success) {
-        setCompetitionEntries(entriesData.entries);
+        const entries = entriesData.entries;
+        setCompetitionEntries(entries);
+        
+        // Fetch certificate status for entries
+        if (entries.length > 0) {
+          try {
+            const entryIds = entries.map((e: CompetitionEntry) => e.id).join(',');
+            const certStatusResponse = await fetch(`/api/studios/entries/certificates?entryIds=${entryIds}`);
+            if (certStatusResponse.ok) {
+              const certStatuses = await certStatusResponse.json();
+              // Map certificate statuses to entries
+              const entriesWithCertStatus = entries.map((entry: CompetitionEntry) => {
+                const certStatus = certStatuses.find((cs: any) => cs.entryId === entry.id);
+                return {
+                  ...entry,
+                  hasCertificate: certStatus?.hasCertificate || false,
+                  hasPerformance: certStatus?.hasPerformance || false,
+                  performanceId: certStatus?.performanceId || null,
+                  scoresPublished: certStatus?.scoresPublished || false
+                };
+              });
+              setCompetitionEntries(entriesWithCertStatus);
+            }
+          } catch (error) {
+            console.error('Error fetching certificate status:', error);
+            // Continue without certificate status
+          }
+        }
       } else {
         console.error('Failed to load entries:', entriesData.error);
         setCompetitionEntries([]);
@@ -270,6 +315,14 @@ export default function StudioDashboardPage() {
       } else {
         console.error('Failed to load scores:', scoresData.error);
         setScores([]);
+      }
+
+      if (certificatesResponse.ok) {
+        const certificatesData = await certificatesResponse.json();
+        setCertificates(Array.isArray(certificatesData) ? certificatesData : []);
+      } else {
+        console.error('Failed to load certificates');
+        setCertificates([]);
       }
     } catch (error) {
       console.error('Load data error:', error);
@@ -546,6 +599,144 @@ export default function StudioDashboardPage() {
     setShowEditEntryModal(true);
   };
 
+  const handleViewCertificate = async (entry: CompetitionEntry) => {
+    if (!entry.performanceId) {
+      setError('Performance not found for this entry');
+      return;
+    }
+
+    try {
+      setError('');
+      
+      // Try to get certificate URL from database via API
+      const certResponse = await fetch(`/api/certificates/${entry.performanceId}`);
+      if (certResponse.ok) {
+        const certData = await certResponse.json();
+        if (certData.certificateUrl) {
+          setCertificateData(certData);
+          setCertificatePreviewUrl(certData.certificateUrl);
+          return;
+        }
+      }
+
+      // Check if certificate exists via dedicated check endpoint
+      const certCheckResponse = await fetch(
+        `/api/certificates/check?performanceId=${entry.performanceId}&entryId=${entry.id}`
+      );
+      if (certCheckResponse.ok) {
+        const checkData = await certCheckResponse.json();
+        if (checkData.exists && checkData.certificateUrl) {
+          setCertificatePreviewUrl(checkData.certificateUrl);
+          return;
+        }
+      }
+
+      // Fallback: Try to generate certificate image on the fly
+      try {
+        const certImageResponse = await fetch(`/api/certificates/${entry.performanceId}/image`);
+        if (certImageResponse.ok) {
+          const blob = await certImageResponse.blob();
+          const imageUrl = URL.createObjectURL(blob);
+          setCertificatePreviewUrl(imageUrl);
+          return;
+        } else {
+          const errorText = await certImageResponse.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { error: errorText || 'Unknown error' };
+          }
+          console.error('Certificate generation failed:', errorData);
+          throw new Error(errorData.error || errorData.details || 'Certificate generation failed');
+        }
+      } catch (genError) {
+        console.error('Certificate image generation error:', genError);
+        throw new Error('Certificate not available. Please ensure scores have been published for this performance.');
+      }
+    } catch (error) {
+      console.error('Error loading certificate:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Certificate unavailable: ${errorMessage}. Please use the Certificates tab to view available certificates.`);
+    }
+  };
+
+  const handleDownloadCertificate = (certificateUrl: string) => {
+    window.open(certificateUrl, '_blank');
+  };
+
+  const handleViewResults = async (entry: CompetitionEntry) => {
+    if (!entry.performanceId) {
+      setError('Performance not found for this entry');
+      return;
+    }
+
+    try {
+      setLoadingResults(true);
+      setSelectedEntryForResults(entry);
+      
+      // Fetch certificate data and scores
+      const [certResponse, scoresResponse] = await Promise.all([
+        fetch(`/api/certificates/${entry.performanceId}`),
+        fetch(`/api/scores/performance/${entry.performanceId}`)
+      ]);
+
+      const certData = certResponse.ok ? await certResponse.json() : null;
+      const scoresData = scoresResponse.ok ? await scoresResponse.json() : null;
+
+      // Calculate average score from scores
+      let averageScore = 0;
+      let scores: any[] = [];
+      
+      if (scoresData?.success && scoresData?.scoringStatus?.scores) {
+        scores = scoresData.scoringStatus.scores;
+        // Get full score details from studio scores endpoint
+        try {
+          const fullScoresResponse = await fetch(`/api/studios/scores?studioId=${studioSession?.id}`);
+          if (fullScoresResponse.ok) {
+            const fullScoresData = await fullScoresResponse.json();
+            if (fullScoresData.success) {
+              // Filter scores for this performance
+              const performanceScores = fullScoresData.scores.filter((s: any) => s.performanceId === entry.performanceId);
+              scores = performanceScores;
+              
+              // Calculate average
+              if (performanceScores.length > 0) {
+                const total = performanceScores.reduce((sum: number, score: any) => {
+                  return sum + (score.technicalScore || 0) + (score.musicalScore || 0) + 
+                         (score.performanceScore || 0) + (score.stylingScore || 0) + 
+                         (score.overallImpressionScore || 0);
+                }, 0);
+                averageScore = total / performanceScores.length;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching full scores:', error);
+          // Fall back to basic scores
+          if (scores.length > 0) {
+            const total = scores.reduce((sum: number, score: any) => sum + (score.totalScore || 0), 0);
+            averageScore = total / scores.length;
+          }
+        }
+      }
+
+      setEntryResults({
+        certificate: certData,
+        scores: scores,
+        averageScore: averageScore,
+        medallion: certData?.medallion || 'N/A'
+      });
+      
+      setShowResultsModal(true);
+    } catch (error) {
+      console.error('Error loading results:', error);
+      setError('Failed to load results');
+    } finally {
+      setLoadingResults(false);
+    }
+  };
+
   const handleSaveEntryEdit = async () => {
     if (!studioSession || !editingEntry) return;
 
@@ -687,6 +878,48 @@ export default function StudioDashboardPage() {
     }
   };
 
+  const handleVideoLinkSubmit = async (entryId: string, videoUrl: string, videoType: 'youtube' | 'vimeo' | 'other') => {
+    if (!studioSession) return;
+
+    try {
+      setUploadingVideoForEntry(entryId);
+      setError('');
+      
+      const entryName = videoEntries.find(e => e.id === entryId)?.itemName || 'this entry';
+      
+      const response = await fetch('/api/studios/upload-video-link', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          studioId: studioSession.id,
+          entryId: entryId,
+          videoExternalUrl: videoUrl,
+          videoExternalType: videoType
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccessMessage(`📹 Video link saved successfully for "${entryName}"!`);
+        
+        // Reload data to reflect changes
+        await loadData(studioSession.id);
+        
+        setTimeout(() => setSuccessMessage(''), 5000);
+      } else {
+        setError(data.error || 'Failed to save video link');
+      }
+    } catch (error) {
+      console.error('Video link submit error:', error);
+      setError('Failed to save video link');
+    } finally {
+      setUploadingVideoForEntry(null);
+    }
+  };
+
   // National ID validation handler
   const handleNationalIdChange = (value: string, setData: (prev: any) => void) => {
     // Remove any non-numeric characters
@@ -814,6 +1047,12 @@ export default function StudioDashboardPage() {
     return competitionEntries.filter(entry => entry.eventId === selectedEventId);
   };
 
+  const getFilteredUploads = () => {
+    const allUploads = [...musicEntries, ...videoEntries];
+    if (selectedEventId === 'all') return allUploads;
+    return allUploads.filter(entry => entry.eventId === selectedEventId);
+  };
+
   const getFilteredMusicEntries = () => {
     if (selectedEventId === 'all') return musicEntries;
     return musicEntries.filter(entry => entry.eventId === selectedEventId);
@@ -827,6 +1066,11 @@ export default function StudioDashboardPage() {
   const getFilteredScores = () => {
     if (selectedEventId === 'all') return scores;
     return scores.filter(score => score.eventId === selectedEventId);
+  };
+
+  const getFilteredCertificates = () => {
+    if (selectedEventId === 'all') return certificates;
+    return certificates.filter((cert: any) => cert.eventId === selectedEventId);
   };
 
   // Reset pagination when search/filters change
@@ -1092,24 +1336,14 @@ export default function StudioDashboardPage() {
               My Entries ({getFilteredEntries().length}{selectedEventId !== 'all' ? `/${competitionEntries.length}` : ''})
             </button>
             <button
-              onClick={() => setActiveTab('music')}
+              onClick={() => setActiveTab('uploads')}
               className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'music'
+                activeTab === 'uploads'
                   ? 'bg-purple-600 text-white'
                   : 'text-gray-300 hover:text-white hover:bg-gray-700'
               }`}
             >
-              🎵 Music Uploads ({getFilteredMusicEntries().length}{selectedEventId !== 'all' ? `/${musicEntries.length}` : ''})
-            </button>
-            <button
-              onClick={() => setActiveTab('video')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'video'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
-              }`}
-            >
-              📹 Video Uploads ({getFilteredVideoEntries().length}{selectedEventId !== 'all' ? `/${videoEntries.length}` : ''})
+              📁 Uploads ({getFilteredUploads().length}{selectedEventId !== 'all' ? `/${musicEntries.length + videoEntries.length}` : ''})
             </button>
             <button
               onClick={() => setActiveTab('scores')}
@@ -1120,6 +1354,16 @@ export default function StudioDashboardPage() {
               }`}
             >
               🏅 Scores ({getFilteredScores().length}{selectedEventId !== 'all' ? `/${scores.length}` : ''})
+            </button>
+            <button
+              onClick={() => setActiveTab('certificates')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'certificates'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              🎖️ Certificates ({getFilteredCertificates().length}{selectedEventId !== 'all' ? `/${certificates.length}` : ''})
             </button>
           </div>
         </div>
@@ -1535,6 +1779,19 @@ export default function StudioDashboardPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end space-y-2 ml-4">
+                        {/* View Results for Groups/Trios/Duos */}
+                        {(entry.performanceType === 'Duet' || entry.performanceType === 'Trio' || entry.performanceType === 'Group') && entry.hasPerformance && (
+                          <button
+                            onClick={() => handleViewResults(entry)}
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center space-x-2"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            <span>View Results</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEditEntry(entry)}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -1553,273 +1810,90 @@ export default function StudioDashboardPage() {
           </div>
         )}
 
-        {/* Music Uploads Tab */}
-        {activeTab === 'music' && (
-          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
-            <div className="p-6 border-b border-gray-700">
-              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-white">🎵 Music Uploads</h3>
-                  <p className="text-gray-400 text-sm mt-1">Upload music files for your dancers' live performance entries</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedEventId}
-                    onChange={(e) => setSelectedEventId(e.target.value)}
-                    className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  >
-                    <option value="all">All Events</option>
-                    {events.map(event => (
-                      <option key={event.id} value={event.id}>{event.name}</option>
-                    ))}
-                  </select>
-                  <span className="inline-flex items-center px-2 py-1 bg-blue-900/30 text-blue-300 rounded-full text-xs">
-                    💡 Studio managers can upload music on behalf of dancers
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {getFilteredMusicEntries().length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                  </svg>
-                </div>
-                <p className="text-gray-400 mb-2">
-                  {musicEntries.length === 0 
-                    ? 'All entries have music uploaded' 
-                    : 'No music uploads required for selected event'}
-                </p>
-                <p className="text-gray-500 text-sm">
-                  {musicEntries.length === 0 
-                    ? 'Live performance entries that need music files will appear here'
-                    : 'All entries for this event have music uploaded, or change the event filter to see other events.'}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-700">
-                {getFilteredMusicEntries().map((entry) => (
-                  <div key={entry.id} className="p-4 sm:p-6 hover:bg-gray-700/30 transition-colors">
-                    <div className="flex flex-col gap-6">
-                      <div className="flex-1">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-                          <h4 className="text-lg font-semibold text-white">{entry.itemName}</h4>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium w-fit ${
-                            entry.isGroupEntry 
-                              ? 'bg-purple-900/30 text-purple-300' 
-                              : 'bg-blue-900/30 text-blue-300'
-                          }`}>
-                            {entry.isGroupEntry ? `👥 ${entry.performanceType}` : '🕺 Solo'}
-                          </span>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm mb-4">
-                          <div className="bg-gray-800/40 p-3 rounded-lg">
-                            <span className="text-gray-400 block">Event:</span>
-                            <span className="text-white font-medium">{entry.eventName}</span>
-                          </div>
-                          <div className="bg-gray-800/40 p-3 rounded-lg">
-                            <span className="text-gray-400 block">Contestant:</span>
-                            <span className="text-white">{entry.contestantName}</span>
-                          </div>
-                          <div className="bg-gray-800/40 p-3 rounded-lg">
-                            <span className="text-gray-400 block">Style:</span>
-                            <span className="text-white">{entry.itemStyle}</span>
-                          </div>
-                          <div className="bg-gray-800/40 p-3 rounded-lg">
-                            <span className="text-gray-400 block">Choreographer:</span>
-                            <span className="text-white">{entry.choreographer}</span>
-                          </div>
-                          <div className="bg-gray-800/40 p-3 rounded-lg">
-                            <span className="text-gray-400 block">Mastery:</span>
-                            <span className="text-white">{entry.mastery}</span>
-                          </div>
-                          {/* Duration hidden by request */}
-                        </div>
-
-                        {/* Group Information */}
-                        {entry.isGroupEntry && (
-                          <div className="mb-4 p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
-                            <p className="text-purple-300 text-sm font-medium mb-2">
-                              🎭 Group Performance ({entry.participantIds.length} dancers)
-                            </p>
-                            <p className="text-purple-200 text-xs">
-                              As the studio manager, you can upload music for this group entry on behalf of all participants.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="w-full">
-                        <div className="bg-slate-800/60 rounded-xl p-4 border border-gray-600">
-                          <h5 className="text-white font-medium mb-4 flex items-center text-lg">
-                            🎵 Upload Music File
-                          </h5>
-                          <MusicUpload
-                            onUploadSuccess={(fileData) => handleMusicUpload(entry.id, fileData)}
-                            onUploadError={(error) => setError(error)}
-                            disabled={uploadingMusicForEntry === entry.id}
-                          />
-                          {uploadingMusicForEntry === entry.id && (
-                            <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                              <div className="flex items-center text-blue-400">
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400 mr-3"></div>
-                                <span className="font-medium">Uploading music for "{entry.itemName}"...</span>
-                              </div>
-                              <p className="text-blue-300 text-sm mt-2">
-                                📱 Please wait while we save the music file to this entry. The page will refresh automatically when complete.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+        {/* Uploads Tab (Music & Video Combined) */}
+        {activeTab === 'uploads' && (
+          <div className="space-y-6">
+            {/* Music Uploads Section */}
+            {getFilteredMusicEntries().length > 0 && (
+              <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+                <div className="p-6 border-b border-gray-700 bg-gradient-to-r from-blue-900/30 to-purple-900/30">
+                  <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <span>🎵</span>
+                        <span>Music Uploads (Live Performances)</span>
+                      </h3>
+                      <p className="text-gray-400 text-sm mt-1">Upload music files for live performance entries</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedEventId}
+                        onChange={(e) => setSelectedEventId(e.target.value)}
+                        className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      >
+                        <option value="all">All Events</option>
+                        {events.map(event => (
+                          <option key={event.id} value={event.id}>{event.name}</option>
+                        ))}
+                      </select>
+                      <span className="px-3 py-1 bg-blue-900/50 text-blue-200 rounded-full text-xs font-medium border border-blue-700/50">
+                        {getFilteredMusicEntries().length} {getFilteredMusicEntries().length === 1 ? 'entry' : 'entries'} need music
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                </div>
 
-        {/* Video Uploads Tab */}
-        {activeTab === 'video' && (
-          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
-            <div className="p-6 border-b border-gray-700">
-              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-white">📹 Video Uploads</h3>
-                  <p className="text-gray-400 text-sm mt-1">Upload video files for your dancers' virtual performance entries</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedEventId}
-                    onChange={(e) => setSelectedEventId(e.target.value)}
-                    className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  >
-                    <option value="all">All Events</option>
-                    {events.map(event => (
-                      <option key={event.id} value={event.id}>{event.name}</option>
-                    ))}
-                  </select>
-                  <span className="inline-flex items-center px-2 py-1 bg-indigo-900/30 text-indigo-300 rounded-full text-xs">
-                    💡 Studio managers can upload videos on behalf of dancers
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {getFilteredVideoEntries().length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="w-20 h-20 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <span className="text-3xl">📹</span>
-                </div>
-                <h4 className="text-xl font-semibold text-white mb-2">
-                  {videoEntries.length === 0 
-                    ? 'No Video Uploads Required' 
-                    : 'No Video Uploads Required for Selected Event'}
-                </h4>
-                <p className="text-gray-400 max-w-md mx-auto leading-relaxed">
-                  {videoEntries.length === 0 
-                    ? 'All virtual entries already have videos uploaded, or there are no virtual entries yet. Virtual entries that still need videos will appear here.'
-                    : 'All entries for this event have videos uploaded, or change the event filter to see other events.'}
-                </p>
-              </div>
-            ) : (
-              <div className="p-6">
-                <div className="grid gap-6">
-                  {getFilteredVideoEntries().map((entry) => (
-                    <div key={entry.id} className="bg-gray-700/50 rounded-xl p-6 border border-gray-600 hover:border-indigo-500 transition-colors">
-                      <div className="flex flex-col lg:flex-row lg:items-start space-y-6 lg:space-y-0 lg:space-x-8">
-                        
-                        {/* Entry Information */}
+                <div className="divide-y divide-gray-700">
+                  {getFilteredMusicEntries().map((entry) => (
+                    <div key={entry.id} className="p-4 sm:p-6 hover:bg-gray-700/30 transition-colors">
+                      <div className="flex flex-col gap-6">
                         <div className="flex-1">
-                          <div className="mb-4">
-                            <h5 className="text-lg font-bold text-white mb-2">{entry.itemName}</h5>
-                            
-                            <div className="flex flex-wrap gap-2 mb-3">
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                entry.isGroupEntry 
-                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
-                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                              }`}>
-                                {entry.isGroupEntry ? `👥 ${entry.performanceType}` : '🕺 Solo'}
-                              </span>
-                              
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                📹 Virtual
-                              </span>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                            <h4 className="text-lg font-semibold text-white">{entry.itemName}</h4>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium w-fit ${
+                              entry.isGroupEntry 
+                                ? 'bg-purple-900/30 text-purple-300' 
+                                : 'bg-blue-900/30 text-blue-300'
+                            }`}>
+                              {entry.isGroupEntry ? `👥 ${entry.performanceType}` : '🕺 Solo'}
+                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                              🎤 Live
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm mb-4">
+                            <div className="bg-gray-800/40 p-3 rounded-lg">
+                              <span className="text-gray-400 block">Event:</span>
+                              <span className="text-white font-medium">{entry.eventName}</span>
                             </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <span className="text-gray-400">Event:</span>
-                                <span className="text-white ml-2">{entry.eventName}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Style:</span>
-                                <span className="text-white ml-2">{entry.itemStyle}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Mastery:</span>
-                                <span className="text-white ml-2">{entry.mastery}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Duration:</span>
-                                <span className="text-white ml-2">{entry.estimatedDuration} min</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Contestant:</span>
-                                <span className="text-white ml-2">{entry.contestantName}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Submitted:</span>
-                                <span className="text-white ml-2">{new Date(entry.submittedAt).toLocaleDateString()}</span>
-                              </div>
+                            <div className="bg-gray-800/40 p-3 rounded-lg">
+                              <span className="text-gray-400 block">Contestant:</span>
+                              <span className="text-white">{entry.contestantName}</span>
                             </div>
-                            
-                            {/* Participants for group entries */}
-                            {entry.isGroupEntry && entry.participantNames && (
-                              <div className="mt-4 p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
-                                <p className="text-purple-300 text-sm font-medium mb-2">
-                                  🎭 Group Performance ({entry.participantIds.length} dancers)
-                                </p>
-                                <p className="text-purple-200 text-xs mb-2">
-                                  Participants: {entry.participantNames.join(', ')}
-                                </p>
-                                <p className="text-purple-200 text-xs">
-                                  As the studio manager, you can upload video for this group entry on behalf of all participants.
-                                </p>
-                              </div>
-                            )}
+                            <div className="bg-gray-800/40 p-3 rounded-lg">
+                              <span className="text-gray-400 block">Style:</span>
+                              <span className="text-white">{entry.itemStyle}</span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="w-full lg:w-96">
+                        <div className="w-full">
                           <div className="bg-slate-800/60 rounded-xl p-4 border border-gray-600">
                             <h5 className="text-white font-medium mb-4 flex items-center text-lg">
-                              📹 Upload Video File
+                              🎵 Upload Music File
                             </h5>
-                            <VideoUpload
-                              onUploadSuccess={(fileData) => handleVideoUpload(entry.id, fileData)}
+                            <MusicUpload
+                              onUploadSuccess={(fileData) => handleMusicUpload(entry.id, fileData)}
                               onUploadError={(error) => setError(error)}
-                              disabled={uploadingVideoForEntry === entry.id}
+                              disabled={uploadingMusicForEntry === entry.id}
                             />
-                            {uploadingVideoForEntry === entry.id && (
+                            {uploadingMusicForEntry === entry.id && (
                               <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                                <div className="flex items-center">
-                                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent mr-3"></div>
-                                  <div>
-                                    <p className="text-blue-300 font-medium">Uploading Video...</p>
-                                    <p className="text-blue-300 text-sm mt-1">
-                                      ⚡ {entry.itemName} - {entry.contestantName}
-                                    </p>
-                                  </div>
+                                <div className="flex items-center text-blue-400">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400 mr-3"></div>
+                                  <span className="font-medium">Uploading music for "{entry.itemName}"...</span>
                                 </div>
-                                <p className="text-blue-300 text-sm mt-2">
-                                  📱 Please wait while we save the video file to this entry. The page will refresh automatically when complete.
-                                </p>
                               </div>
                             )}
                           </div>
@@ -1828,6 +1902,243 @@ export default function StudioDashboardPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Video Uploads/Links Section */}
+            {getFilteredVideoEntries().length > 0 && (
+              <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+                <div className="p-6 border-b border-gray-700 bg-gradient-to-r from-indigo-900/30 to-purple-900/30">
+                  <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <span>📹</span>
+                        <span>Video Links (Virtual Performances)</span>
+                      </h3>
+                      <p className="text-gray-400 text-sm mt-1">Enter YouTube or Vimeo links for virtual performance entries</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedEventId}
+                        onChange={(e) => setSelectedEventId(e.target.value)}
+                        className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      >
+                        <option value="all">All Events</option>
+                        {events.map(event => (
+                          <option key={event.id} value={event.id}>{event.name}</option>
+                        ))}
+                      </select>
+                      <span className="px-3 py-1 bg-indigo-900/50 text-indigo-200 rounded-full text-xs font-medium border border-indigo-700/50">
+                        {getFilteredVideoEntries().length} {getFilteredVideoEntries().length === 1 ? 'entry' : 'entries'} need video
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-gray-700">
+                  {getFilteredVideoEntries().map((entry) => (
+                    <div key={entry.id} className="p-4 sm:p-6 hover:bg-gray-700/30 transition-colors">
+                      <div className="flex flex-col gap-6">
+                        <div className="flex-1">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                            <h4 className="text-lg font-semibold text-white">{entry.itemName}</h4>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium w-fit ${
+                              entry.isGroupEntry 
+                                ? 'bg-purple-900/30 text-purple-300' 
+                                : 'bg-blue-900/30 text-blue-300'
+                            }`}>
+                              {entry.isGroupEntry ? `👥 ${entry.performanceType}` : '🕺 Solo'}
+                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              📹 Virtual
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm mb-4">
+                            <div className="bg-gray-800/40 p-3 rounded-lg">
+                              <span className="text-gray-400 block">Event:</span>
+                              <span className="text-white font-medium">{entry.eventName}</span>
+                            </div>
+                            <div className="bg-gray-800/40 p-3 rounded-lg">
+                              <span className="text-gray-400 block">Contestant:</span>
+                              <span className="text-white">{entry.contestantName}</span>
+                            </div>
+                            <div className="bg-gray-800/40 p-3 rounded-lg">
+                              <span className="text-gray-400 block">Style:</span>
+                              <span className="text-white">{entry.itemStyle}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="w-full">
+                          <div className="bg-slate-800/60 rounded-xl p-4 border border-gray-600">
+                            <h5 className="text-white font-medium mb-4 flex items-center text-lg">
+                              📹 Enter Video Link
+                            </h5>
+                            <VideoLinkInput
+                              entryId={entry.id}
+                              currentLink={entry.videoExternalUrl || ''}
+                              onLinkSubmit={handleVideoLinkSubmit}
+                              disabled={uploadingVideoForEntry === entry.id}
+                            />
+                            {uploadingVideoForEntry === entry.id && (
+                              <div className="mt-4 p-4 bg-indigo-900/20 border border-indigo-500/30 rounded-lg">
+                                <div className="flex items-center text-indigo-400">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-400 mr-3"></div>
+                                  <span className="font-medium">Saving video link for "{entry.itemName}"...</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {getFilteredUploads().length === 0 && (
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <p className="text-gray-400 mb-2">
+                  {musicEntries.length === 0 && videoEntries.length === 0
+                    ? 'All entries have files uploaded' 
+                    : 'No uploads required for selected event'}
+                </p>
+                <p className="text-gray-500 text-sm">
+                  {musicEntries.length === 0 && videoEntries.length === 0
+                    ? 'Entries that need music or video files will appear here'
+                    : 'All entries for this event have files uploaded, or change the event filter to see other events.'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Certificates Tab */}
+        {activeTab === 'certificates' && (
+          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/20 overflow-hidden">
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white">🎖️ Certificates</h3>
+                  <p className="text-gray-400 text-sm mt-1">View and download certificates for your dancers</p>
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedEventId}
+                    onChange={(e) => setSelectedEventId(e.target.value)}
+                    className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="all">All Events</option>
+                    {events.map(event => (
+                      <option key={event.id} value={event.id}>{event.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-4 bg-red-900/20 border-b border-red-700/30">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+
+            {getFilteredCertificates().length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📜</span>
+                </div>
+                <p className="text-gray-400 mb-2">
+                  {certificates.length === 0 
+                    ? 'No certificates yet' 
+                    : 'No certificates found for selected event'}
+                </p>
+                <p className="text-gray-500 text-sm">
+                  {certificates.length === 0 
+                    ? 'Certificates will appear here once they\'ve been generated for your dancers\' performances.'
+                    : 'Change the event filter to see certificates from other events.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6">
+                {getFilteredCertificates().map((cert: any) => (
+                  <div key={cert.id} className="bg-gray-900/50 rounded-xl border border-gray-700 overflow-hidden hover:border-purple-500/50 transition-all">
+                    <div
+                      className="relative h-48 cursor-pointer"
+                      onClick={() => {
+                        if (cert.certificateUrl) {
+                          setCertificatePreviewUrl(cert.certificateUrl);
+                        }
+                      }}
+                    >
+                      {cert.certificateUrl ? (
+                        <>
+                          <img
+                            src={cert.certificateUrl}
+                            alt={`Certificate for ${cert.title}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-opacity flex items-center justify-center">
+                            <span className="text-white text-4xl opacity-0 hover:opacity-100 transition-opacity">🔍</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                          <span className="text-gray-500">No preview available</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h4 className="font-semibold text-white mb-2">{cert.title || 'Certificate'}</h4>
+                      <div className="space-y-1 text-sm">
+                        <p className="text-gray-400">
+                          <span className="text-gray-500">Style:</span> {cert.style || 'N/A'}
+                        </p>
+                        <p className="text-gray-400">
+                          <span className="text-gray-500">Score:</span> {cert.percentage}%
+                        </p>
+                        <p className="text-gray-400">
+                          <span className="text-gray-500">Medal:</span> {cert.medallion || 'N/A'}
+                        </p>
+                        {cert.eventDate && (
+                          <p className="text-gray-400">
+                            <span className="text-gray-500">Date:</span> {cert.eventDate}
+                          </p>
+                        )}
+                        {cert.eventName && (
+                          <p className="text-gray-400">
+                            <span className="text-gray-500">Event:</span> {cert.eventName}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        {cert.certificateUrl && (
+                          <>
+                            <button
+                              onClick={() => handleDownloadCertificate(cert.certificateUrl)}
+                              className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold"
+                            >
+                              📥 Download
+                            </button>
+                            <button
+                              onClick={() => setCertificatePreviewUrl(cert.certificateUrl)}
+                              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                            >
+                              👁️
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -2501,6 +2812,204 @@ export default function StudioDashboardPage() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Certificate Preview Modal */}
+      {certificatePreviewUrl && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setCertificatePreviewUrl(null);
+            setCertificateData(null);
+          }}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => {
+                setCertificatePreviewUrl(null);
+                setCertificateData(null);
+              }}
+              className="absolute -top-12 right-0 text-white text-xl hover:text-gray-300 bg-gray-800/50 px-4 py-2 rounded-lg"
+            >
+              ✕ Close
+            </button>
+            {certificatePreviewUrl && (
+              <>
+                <img
+                  src={certificatePreviewUrl}
+                  alt="Certificate Preview"
+                  className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
+                />
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4">
+                  <button
+                    onClick={() => handleDownloadCertificate(certificatePreviewUrl)}
+                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold flex items-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                    <span>Download Certificate</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Results/Certificate Modal */}
+      {showResultsModal && selectedEntryForResults && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-gray-800 rounded-xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-bold text-white">
+                Results & Certificate - {selectedEntryForResults?.itemName || 'Entry'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowResultsModal(false);
+                  setSelectedEntryForResults(null);
+                  setEntryResults(null);
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {loadingResults ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+              </div>
+            ) : entryResults ? (
+              <div className="space-y-6">
+                {/* Scores Section */}
+                {entryResults.scores && entryResults.scores.length > 0 && (
+                  <div className="bg-gray-700/50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-white mb-4">Scores</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gray-800/50 rounded-lg p-4">
+                        <div className="text-sm text-gray-400 mb-1">Average Score</div>
+                        <div className="text-3xl font-bold text-purple-400">
+                          {entryResults.averageScore.toFixed(1)}
+                          <span className="text-lg text-gray-400">/100</span>
+                        </div>
+                      </div>
+                      <div className="bg-gray-800/50 rounded-lg p-4">
+                        <div className="text-sm text-gray-400 mb-1">Medallion</div>
+                        <div className="text-2xl font-bold text-yellow-400">
+                          {entryResults.medallion}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <div className="text-sm text-gray-400 font-medium">Individual Judge Scores:</div>
+                      {entryResults.scores.map((score: any, index: number) => {
+                        const totalScore = (score.technicalScore || 0) + (score.musicalScore || 0) + 
+                                         (score.performanceScore || 0) + (score.stylingScore || 0) + 
+                                         (score.overallImpressionScore || 0);
+                        return (
+                          <div key={index} className="bg-gray-800/50 rounded p-3 text-sm">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-white font-medium">
+                                {score.judgeName || `Judge ${index + 1}`}
+                              </span>
+                              <span className="text-purple-400 font-bold">{totalScore}/100</span>
+                            </div>
+                            <div className="grid grid-cols-5 gap-2 text-xs">
+                              <div>
+                                <div className="text-gray-400">Technical</div>
+                                <div className="text-white">{score.technicalScore || 0}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Musical</div>
+                                <div className="text-white">{score.musicalScore || 0}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Performance</div>
+                                <div className="text-white">{score.performanceScore || 0}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Styling</div>
+                                <div className="text-white">{score.stylingScore || 0}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Overall</div>
+                                <div className="text-white">{score.overallImpressionScore || 0}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Certificate Section */}
+                {entryResults.certificate && (
+                  <div className="bg-gray-700/50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-white mb-4">Certificate</h4>
+                    {entryResults.certificate.certificateUrl ? (
+                      <div className="space-y-4">
+                        <div className="flex justify-center">
+                          <img
+                            src={entryResults.certificate.certificateUrl}
+                            alt="Certificate"
+                            className="max-w-full h-auto rounded-lg border border-gray-600"
+                          />
+                        </div>
+                        <div className="flex justify-center gap-4">
+                          <a
+                            href={entryResults.certificate.certificateUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            Download Certificate
+                          </a>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-400">Percentage:</span>
+                            <span className="text-white ml-2">{entryResults.certificate.percentage}%</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Medallion:</span>
+                            <span className="text-white ml-2">{entryResults.certificate.medallion}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Style:</span>
+                            <span className="text-white ml-2">{entryResults.certificate.style}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Date:</span>
+                            <span className="text-white ml-2">{entryResults.certificate.date}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-400">
+                        Certificate not yet generated
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!entryResults.certificate && !entryResults.scores.length && (
+                  <div className="text-center py-8 text-gray-400">
+                    No results or certificate available yet
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                No results available
+              </div>
+            )}
           </div>
         </div>
       )}
