@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPaymentData, createPayFastForm, calculateEntryFees, generatePaymentReference } from '@/lib/payfast';
 import { neon } from '@neondatabase/serverless';
+import { validateBatchEntryFees, createBatchTransactionRecords } from '@/lib/payment-validation';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -92,10 +93,62 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Calculate payment amount
+    // SAFETY CHECK: Validate fees for batch payments
+    let computedTotal = amount || 0;
+    let validationResult = null;
+    
+    if (isBatchPayment && pendingEntries && pendingEntries.length > 0) {
+      // Validate each entry's fee against computed incremental fee
+      validationResult = await validateBatchEntryFees(
+        pendingEntries,
+        eventId,
+        amount || 0
+      );
+
+      computedTotal = validationResult.totalComputedFee;
+
+      // REFUSE PAYMENT if mismatch detected
+      if (validationResult.mismatchDetected) {
+        console.error('⚠️ PAYMENT REFUSED - Fee mismatch detected:', {
+          clientSentTotal: amount,
+          computedTotal: validationResult.totalComputedFee,
+          mismatchReason: validationResult.mismatchReason,
+          validations: validationResult.validations.map(v => ({
+            entryIndex: v.entryIndex,
+            itemName: v.entry.itemName,
+            clientSent: v.clientSentFee,
+            computed: v.computedFee,
+            mismatch: v.mismatchDetected
+          }))
+        });
+
+        return NextResponse.json({
+          success: false,
+          error: 'Payment amount mismatch detected',
+          details: {
+            clientSentTotal: amount,
+            computedTotal: validationResult.totalComputedFee,
+            mismatchReason: validationResult.mismatchReason,
+            validations: validationResult.validations.map(v => ({
+              entryIndex: v.entryIndex,
+              itemName: v.entry.itemName,
+              clientSentFee: v.clientSentFee,
+              computedFee: v.computedFee,
+              mismatchDetected: v.mismatchDetected,
+              mismatchReason: v.mismatchReason
+            }))
+          }
+        }, { status: 400 });
+      }
+
+      // Use computed total instead of client-sent amount
+      computedTotal = validationResult.totalComputedFee;
+    }
+
+    // Calculate payment amount with PayFast processing fees
     // NOTE: amount should be calculated by the frontend using event-specific fee configuration
     // The event.entry_fee field is deprecated and should not be used
-    const baseAmount = amount || 25.00; // Fallback only for legacy compatibility
+    const baseAmount = computedTotal || amount || 25.00; // Use computed total if available
     const fees = calculateEntryFees(baseAmount);
 
     // Get currency from event configuration, default to ZAR if not set
@@ -114,6 +167,24 @@ export async function POST(request: NextRequest) {
       itemDescription: itemDescription || `Competition entry for ${event.name} - ${entry.item_name}`,
     });
     const paymentId = paymentData.m_payment_id; // This is what PayFast will post back as m_payment_id
+
+    // Create transaction records for batch payments BEFORE creating payment record
+    let transactionIds: string[] = [];
+    if (isBatchPayment && pendingEntries && pendingEntries.length > 0) {
+      try {
+        transactionIds = await createBatchTransactionRecords(
+          pendingEntries,
+          eventId,
+          paymentId,
+          'payfast',
+          amount || 0,
+          computedTotal
+        );
+        console.log(`✅ Created ${transactionIds.length} transaction records for batch payment ${paymentId}`);
+      } catch (error) {
+        console.error('⚠️ Failed to create transaction records, but continuing with payment:', error);
+      }
+    }
 
     // Create payment record - exclude entry_id for batch payments to avoid foreign key constraint
     if (isBatchPayment) {
@@ -160,7 +231,15 @@ export async function POST(request: NextRequest) {
           eventId,
           userId,
           amount: fees.total,
-          fees
+          computedTotal,
+          clientSentTotal: amount,
+          fees,
+          transactionIds: transactionIds.length > 0 ? transactionIds : undefined,
+          validationResult: validationResult ? {
+            totalComputedFee: validationResult.totalComputedFee,
+            totalClientSentFee: validationResult.totalClientSentFee,
+            allValid: validationResult.allValid
+          } : undefined
         })},
         ${request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'},
         ${request.headers.get('user-agent') || 'unknown'}

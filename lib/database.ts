@@ -100,9 +100,56 @@ export const initializeDatabase = async () => {
         status TEXT DEFAULT 'pending_verification',
         verified_by TEXT,
         verified_at TEXT,
-        notes TEXT
+        notes TEXT,
+        registration_paid BOOLEAN DEFAULT FALSE
       )
     `;
+
+    // Create registration_charged_flags table to track if registration was CHARGED (not necessarily paid)
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS registration_charged_flags (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        event_id TEXT NOT NULL,
+        dancer_id TEXT,
+        eodsa_id TEXT NOT NULL,
+        charged_at TEXT NOT NULL,
+        UNIQUE(event_id, eodsa_id)
+      )
+    `;
+
+    // Create transaction_records table for payment tracking
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS transaction_records (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        entry_id TEXT REFERENCES event_entries(id) ON DELETE SET NULL,
+        event_id TEXT NOT NULL,
+        dancer_id TEXT,
+        eodsa_id TEXT NOT NULL,
+        expected_amount DECIMAL(10,2) NOT NULL,
+        amount_paid DECIMAL(10,2) DEFAULT 0,
+        registration_paid_flag BOOLEAN DEFAULT FALSE,
+        registration_charged_flag BOOLEAN DEFAULT FALSE,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled', 'refunded')),
+        payment_method TEXT CHECK (payment_method IN ('payfast', 'eft', 'credit_card', 'bank_transfer', 'invoice')),
+        payment_reference TEXT,
+        client_sent_total DECIMAL(10,2),
+        computed_total DECIMAL(10,2),
+        mismatch_detected BOOLEAN DEFAULT FALSE,
+        mismatch_reason TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    // Create indexes for transaction_records
+    await sqlClient`CREATE INDEX IF NOT EXISTS idx_transaction_records_entry_id ON transaction_records(entry_id)`;
+    await sqlClient`CREATE INDEX IF NOT EXISTS idx_transaction_records_event_id ON transaction_records(event_id)`;
+    await sqlClient`CREATE INDEX IF NOT EXISTS idx_transaction_records_eodsa_id ON transaction_records(eodsa_id)`;
+    await sqlClient`CREATE INDEX IF NOT EXISTS idx_transaction_records_status ON transaction_records(status)`;
+    await sqlClient`CREATE INDEX IF NOT EXISTS idx_transaction_records_mismatch ON transaction_records(mismatch_detected) WHERE mismatch_detected = true`;
+
+    // Create indexes for registration_charged_flags
+    await sqlClient`CREATE INDEX IF NOT EXISTS idx_registration_charged_event_eodsa ON registration_charged_flags(event_id, eodsa_id)`;
     
     // Fix performance type constraint to allow 'All' - FORCE UPDATE
     try {

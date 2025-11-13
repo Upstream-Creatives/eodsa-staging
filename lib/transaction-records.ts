@@ -1,0 +1,176 @@
+/**
+ * Transaction Records Management
+ * 
+ * This module handles creation and management of transaction records
+ * that track payment details including expected amounts, paid amounts,
+ * registration flags, and mismatch detection.
+ */
+
+import { getSql } from './database';
+
+export interface CreateTransactionRecordOptions {
+  entryId?: string;
+  eventId: string;
+  dancerId?: string;
+  eodsaId: string;
+  expectedAmount: number;
+  amountPaid?: number;
+  registrationPaidFlag?: boolean;
+  registrationChargedFlag: boolean;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
+  paymentMethod: 'payfast' | 'eft' | 'credit_card' | 'bank_transfer' | 'invoice';
+  paymentReference?: string;
+  clientSentTotal?: number;
+  computedTotal: number;
+  mismatchDetected?: boolean;
+  mismatchReason?: string;
+}
+
+/**
+ * Create a transaction record
+ */
+export async function createTransactionRecord(
+  options: CreateTransactionRecordOptions
+): Promise<string> {
+  const sql = getSql();
+  const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  const now = new Date().toISOString();
+
+  // Check for mismatch
+  let mismatchDetected = options.mismatchDetected || false;
+  let mismatchReason = options.mismatchReason;
+
+  if (options.clientSentTotal !== undefined && options.computedTotal !== undefined) {
+    const difference = Math.abs(options.clientSentTotal - options.computedTotal);
+    if (difference > 0.01) { // Allow for small floating point differences
+      mismatchDetected = true;
+      mismatchReason = `Client sent ${options.clientSentTotal}, computed ${options.computedTotal}, difference: ${difference}`;
+    }
+  }
+
+  await sql`
+    INSERT INTO transaction_records (
+      id, entry_id, event_id, dancer_id, eodsa_id,
+      expected_amount, amount_paid, registration_paid_flag, registration_charged_flag,
+      status, payment_method, payment_reference,
+      client_sent_total, computed_total, mismatch_detected, mismatch_reason,
+      created_at, updated_at
+    )
+    VALUES (
+      ${id}, ${options.entryId || null}, ${options.eventId}, 
+      ${options.dancerId || null}, ${options.eodsaId},
+      ${options.expectedAmount}, ${options.amountPaid || 0}, 
+      ${options.registrationPaidFlag || false}, ${options.registrationChargedFlag},
+      ${options.status}, ${options.paymentMethod}, ${options.paymentReference || null},
+      ${options.clientSentTotal || null}, ${options.computedTotal},
+      ${mismatchDetected}, ${mismatchReason || null},
+      ${now}, ${now}
+    )
+  `;
+
+  // Log mismatch for admin review
+  if (mismatchDetected) {
+    console.error(`⚠️ PAYMENT MISMATCH DETECTED:`, {
+      transactionId: id,
+      eventId: options.eventId,
+      eodsaId: options.eodsaId,
+      clientSentTotal: options.clientSentTotal,
+      computedTotal: options.computedTotal,
+      reason: mismatchReason
+    });
+  }
+
+  return id;
+}
+
+/**
+ * Update transaction record status
+ */
+export async function updateTransactionRecord(
+  transactionId: string,
+  updates: {
+    status?: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
+    amountPaid?: number;
+    registrationPaidFlag?: boolean;
+    paymentReference?: string;
+  }
+): Promise<void> {
+  const sql = getSql();
+  const now = new Date().toISOString();
+
+  const updateFields: string[] = [];
+  const values: any[] = [];
+
+  if (updates.status !== undefined) {
+    updateFields.push('status');
+    values.push(updates.status);
+  }
+  if (updates.amountPaid !== undefined) {
+    updateFields.push('amount_paid');
+    values.push(updates.amountPaid);
+  }
+  if (updates.registrationPaidFlag !== undefined) {
+    updateFields.push('registration_paid_flag');
+    values.push(updates.registrationPaidFlag);
+  }
+  if (updates.paymentReference !== undefined) {
+    updateFields.push('payment_reference');
+    values.push(updates.paymentReference);
+  }
+
+  if (updateFields.length === 0) {
+    return;
+  }
+
+  updateFields.push('updated_at');
+  values.push(now);
+  values.push(transactionId);
+
+  const setClause = updateFields.map((field, index) => 
+    `${field} = $${index + 1}`
+  ).join(', ');
+
+  await sql.unsafe(`
+    UPDATE transaction_records 
+    SET ${setClause}
+    WHERE id = $${values.length}
+  `, values);
+}
+
+/**
+ * Get transaction records with mismatches (for admin alerts)
+ */
+export async function getMismatchTransactions(): Promise<any[]> {
+  const sql = getSql();
+
+  const results = await sql`
+    SELECT 
+      id, entry_id, event_id, eodsa_id,
+      expected_amount, amount_paid, client_sent_total, computed_total,
+      mismatch_reason, status, payment_method, created_at
+    FROM transaction_records
+    WHERE mismatch_detected = true
+    ORDER BY created_at DESC
+    LIMIT 100
+  ` as any[];
+
+  return results;
+}
+
+/**
+ * Get transaction record by entry ID
+ */
+export async function getTransactionByEntryId(entryId: string): Promise<any | null> {
+  const sql = getSql();
+
+  const results = await sql`
+    SELECT *
+    FROM transaction_records
+    WHERE entry_id = ${entryId}
+    ORDER BY created_at DESC
+    LIMIT 1
+  ` as any[];
+
+  return results && results.length > 0 ? results[0] : null;
+}
+
