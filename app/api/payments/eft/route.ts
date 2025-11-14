@@ -43,9 +43,9 @@ export async function POST(request: NextRequest) {
 
       computedTotal = validationResult.totalComputedFee;
 
-      // REFUSE PAYMENT if mismatch detected
+      // Check for mismatch - log warning but use backend's computed total (source of truth)
       if (validationResult.mismatchDetected) {
-        console.error('⚠️ EFT PAYMENT REFUSED - Fee mismatch detected:', {
+        console.warn('⚠️ Fee mismatch detected - using backend computed total:', {
           clientSentTotal: amount,
           computedTotal: validationResult.totalComputedFee,
           mismatchReason: validationResult.mismatchReason,
@@ -54,31 +54,19 @@ export async function POST(request: NextRequest) {
             itemName: v.entry.itemName,
             clientSent: v.clientSentFee,
             computed: v.computedFee,
+            registrationFee: v.registrationFee,
+            entryFee: v.entryFee,
             mismatch: v.mismatchDetected
           }))
         });
-
-        return NextResponse.json({
-          success: false,
-          error: 'Payment amount mismatch detected',
-          details: {
-            clientSentTotal: amount,
-            computedTotal: validationResult.totalComputedFee,
-            mismatchReason: validationResult.mismatchReason,
-            validations: validationResult.validations.map(v => ({
-              entryIndex: v.entryIndex,
-              itemName: v.entry.itemName,
-              clientSentFee: v.clientSentFee,
-              computedFee: v.computedFee,
-              mismatchDetected: v.mismatchDetected,
-              mismatchReason: v.mismatchReason
-            }))
-          }
-        }, { status: 400 });
+        
+        // Use backend's computed total (source of truth)
+        // This handles cases where registration was already charged or entry fees differ
+        computedTotal = validationResult.totalComputedFee;
+      } else {
+        // Use computed total instead of client-sent amount
+        computedTotal = validationResult.totalComputedFee;
       }
-
-      // Use computed total instead of client-sent amount
-      computedTotal = validationResult.totalComputedFee;
     }
 
     // Create transaction records BEFORE creating entries
@@ -176,7 +164,9 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'EFT payment submitted successfully. Entries are now pending payment verification.',
       paymentId: paymentLogId,
-      entriesSubmitted: entries?.length || 0
+      entriesSubmitted: entries?.length || 0,
+      computedTotal: computedTotal, // Return computed total for frontend display
+      clientSentTotal: amount // Return original client-sent total for reference
     });
 
   } catch (error: any) {

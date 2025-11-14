@@ -16,6 +16,7 @@ interface CertificateData {
   email?: string;
   performanceId?: string;
   eventEntryId?: string;
+  eventId?: string;
   performanceType?: string;
   studioName?: string;
   percentage: number;
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       email,
       performanceId,
       eventEntryId,
+      eventId,
       performanceType,
       studioName,
       percentage,
@@ -90,8 +92,105 @@ export async function POST(request: NextRequest) {
       ? studioName.toUpperCase() 
       : dancerName.toUpperCase();
 
+    // Get event to check for custom certificate template
+    let templatePublicId = 'Template_syz7di'; // Default template
+    console.log('🔍 Certificate Generation - Checking for custom template...');
+    console.log('   eventId from request:', eventId);
+    console.log('   performanceId from request:', performanceId);
+    
+    // If eventId not provided, try to get it from performanceId
+    let finalEventId = eventId;
+    if (!finalEventId && performanceId) {
+      try {
+        const { db } = await import('@/lib/database');
+        const performance = await db.getPerformanceById(performanceId);
+        if (performance?.eventId) {
+          finalEventId = performance.eventId;
+          console.log('   ℹ️ Got eventId from performance:', finalEventId);
+        }
+      } catch (err) {
+        console.warn('   ⚠️ Could not fetch performance to get eventId:', err);
+      }
+    }
+    
+    if (finalEventId) {
+      try {
+        const { db } = await import('@/lib/database');
+        const event = await db.getEventById(finalEventId);
+        console.log('   Event fetched:', event ? `Found event: ${event.name}` : 'Event not found');
+        console.log('   certificateTemplateUrl:', event?.certificateTemplateUrl || 'NULL');
+        
+        // Type guard: ensure event is not null
+        if (!event) {
+          console.log('   ℹ️ Event not found, using default template');
+        } else if (event.certificateTemplateUrl) {
+          // Extract public_id from Cloudinary URL
+          // Format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/public_id.ext
+          // Or: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/subfolder/public_id.ext
+          try {
+            const url = new URL(event.certificateTemplateUrl);
+            console.log('   Parsing Cloudinary URL:', event.certificateTemplateUrl);
+            
+            const pathParts = url.pathname.split('/').filter(part => part.length > 0);
+            const uploadIndex = pathParts.findIndex(part => part === 'upload');
+            
+            if (uploadIndex !== -1 && uploadIndex < pathParts.length - 1) {
+              // Get everything after 'upload', skip version (v1234567890), keep folder and public_id
+              const afterUpload = pathParts.slice(uploadIndex + 1);
+              console.log('   Path parts after upload:', afterUpload);
+              
+              // Remove version and extension
+              const filtered = afterUpload.filter((part, idx) => {
+                // Skip version (v followed by numbers)
+                if (idx === 0 && /^v\d+$/.test(part)) {
+                  console.log('   Skipping version:', part);
+                  return false;
+                }
+                return part.length > 0;
+              });
+              
+              // Remove file extension from last part
+              if (filtered.length > 0) {
+                const lastPart = filtered[filtered.length - 1];
+                filtered[filtered.length - 1] = lastPart.replace(/\.(pdf|png|jpg|jpeg)$/i, '');
+                console.log('   Removed extension from:', lastPart, '→', filtered[filtered.length - 1]);
+              }
+              
+              templatePublicId = filtered.join('/');
+              console.log('✅ Using custom template with public_id:', templatePublicId);
+            } else {
+              console.warn('   ⚠️ Could not find "upload" in path, using default template');
+              console.warn('   Path parts:', pathParts);
+            }
+          } catch (urlError) {
+            console.error('   ❌ Could not parse certificate template URL, using default:', urlError);
+            console.error('   URL was:', event?.certificateTemplateUrl || 'N/A');
+          }
+        } else {
+          // event is guaranteed to be non-null here due to the type guard above
+          console.log('   ℹ️ No custom template URL found, using default template');
+          const eventInfo = {
+            id: event.id,
+            name: event.name,
+            hasTemplateUrl: !!(event as any).certificateTemplateUrl
+          };
+          console.log('   Event object:', JSON.stringify(eventInfo));
+        }
+      } catch (err) {
+        console.error('   ❌ Could not fetch event for custom template, using default:', err);
+        console.error('   EventId used:', finalEventId);
+      }
+    } else {
+      console.log('   ℹ️ No eventId provided, using default template');
+      console.log('   eventId was:', eventId);
+      console.log('   performanceId was:', performanceId);
+    }
+    
+    console.log('   📋 Final template public_id:', templatePublicId);
+    console.log('   📋 Will generate certificate with this template');
+
     // Generate certificate using Cloudinary with custom or default positioning
-    const certificateUrl = cloudinary.url('Template_syz7di', {
+    const certificateUrl = cloudinary.url(templatePublicId, {
       transformation: [
         {
           overlay: {

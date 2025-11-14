@@ -29,25 +29,60 @@ const DEFAULT_FEES: Required<EventFeeConfig> = {
 };
 
 /**
- * Calculate the correct fee for a solo entry based on how many solo entries 
- * the dancer already has for the specific event
+ * Calculate the correct fee for a solo entry based on its solo number
  * 
- * @param currentSoloCount - The total number of solo entries (including this new one)
+ * IMPORTANT: solo1Fee, solo2Fee, solo3Fee are INDIVIDUAL fees, NOT cumulative totals
+ * - solo1Fee = fee for 1st solo (e.g., 300)
+ * - solo2Fee = fee for 2nd solo (e.g., 200)
+ * - solo3Fee = fee for 3rd solo (e.g., 100)
+ * 
+ * @param soloNumber - The solo number (1, 2, 3, or 4+)
  * @param eventConfig - Optional event-specific fee configuration
  * @returns The fee that should be charged for this specific solo entry
  */
-export function calculateSoloEntryFee(currentSoloCount: number, eventConfig?: EventFeeConfig): number {
+export function calculateSoloEntryFee(soloNumber: number, eventConfig?: EventFeeConfig): number {
   const fees = { ...DEFAULT_FEES, ...eventConfig };
   
-  // Get cumulative fees
-  const currentTotal = calculateCumulativeSoloFee(currentSoloCount, eventConfig);
-  const previousTotal = currentSoloCount > 1 ? calculateCumulativeSoloFee(currentSoloCount - 1, eventConfig) : 0;
+  if (soloNumber === 1) {
+    return fees.solo1Fee;
+  } else if (soloNumber === 2) {
+    return fees.solo2Fee;
+  } else if (soloNumber === 3) {
+    return fees.solo3Fee;
+  } else {
+    // 4th+ solos use additional fee
+    return fees.soloAdditionalFee;
+  }
+}
+
+/**
+ * Calculate total fee for multiple solo entries being added at once
+ * 
+ * @param existingSoloCount - Number of solos the dancer already has
+ * @param newSoloCount - Number of new solos being added
+ * @param eventConfig - Optional event-specific fee configuration
+ * @returns Total fee for all new solos
+ */
+export function calculateMultipleSoloFees(
+  existingSoloCount: number,
+  newSoloCount: number,
+  eventConfig?: EventFeeConfig
+): number {
+  let total = 0;
   
-  return currentTotal - previousTotal;
+  for (let i = 1; i <= newSoloCount; i++) {
+    const soloNumber = existingSoloCount + i;
+    total += calculateSoloEntryFee(soloNumber, eventConfig);
+  }
+  
+  return total;
 }
 
 /**
  * Calculate the total cumulative fee for multiple solo entries
+ * 
+ * NOTE: This calculates the total fee for ALL solos (1 through totalSoloCount)
+ * Each solo has its own fee: solo1Fee, solo2Fee, solo3Fee, etc.
  * 
  * @param totalSoloCount - Total number of solo entries
  * @param eventConfig - Optional event-specific fee configuration
@@ -56,14 +91,12 @@ export function calculateSoloEntryFee(currentSoloCount: number, eventConfig?: Ev
 export function calculateCumulativeSoloFee(totalSoloCount: number, eventConfig?: EventFeeConfig): number {
   if (totalSoloCount <= 0) return 0;
   
-  const fees = { ...DEFAULT_FEES, ...eventConfig };
+  let total = 0;
+  for (let i = 1; i <= totalSoloCount; i++) {
+    total += calculateSoloEntryFee(i, eventConfig);
+  }
   
-  if (totalSoloCount === 1) return fees.solo1Fee;
-  if (totalSoloCount === 2) return fees.solo2Fee;
-  if (totalSoloCount === 3) return fees.solo3Fee;
-  
-  // More than 3: use 3-solo package + additional solos
-  return fees.solo3Fee + ((totalSoloCount - 3) * fees.soloAdditionalFee);
+  return total;
 }
 
 /**
@@ -215,13 +248,19 @@ export function validateAndCorrectEntryFee(
  * Get a human-readable explanation for solo pricing
  */
 function getSoloFeeExplanation(soloCount: number, eventConfig?: EventFeeConfig): string {
-  const fees = { ...DEFAULT_FEES, ...eventConfig };
+  const fees: Required<EventFeeConfig> = { ...DEFAULT_FEES, ...eventConfig };
   const currencySymbol = fees.currency === 'USD' ? '$' : fees.currency === 'EUR' ? '€' : fees.currency === 'GBP' ? '£' : 'R';
   
-  if (soloCount === 1) return `${currencySymbol}${fees.solo1Fee} (first solo)`;
-  if (soloCount === 2) return `${currencySymbol}${fees.solo2Fee - fees.solo1Fee} (package total ${currencySymbol}${fees.solo2Fee})`;
-  if (soloCount === 3) return `${currencySymbol}${fees.solo3Fee - fees.solo2Fee} (package total ${currencySymbol}${fees.solo3Fee})`;
-  return `${currencySymbol}${fees.soloAdditionalFee} (additional solo)`;
+  // All fees are guaranteed to be defined due to DEFAULT_FEES spread
+  const solo1Fee = fees.solo1Fee;
+  const solo2Fee = fees.solo2Fee;
+  const solo3Fee = fees.solo3Fee;
+  const soloAdditionalFee = fees.soloAdditionalFee;
+  
+  if (soloCount === 1) return `${currencySymbol}${solo1Fee} (first solo)`;
+  if (soloCount === 2) return `${currencySymbol}${solo2Fee - solo1Fee} (package total ${currencySymbol}${solo2Fee})`;
+  if (soloCount === 3) return `${currencySymbol}${solo3Fee - solo2Fee} (package total ${currencySymbol}${solo3Fee})`;
+  return `${currencySymbol}${soloAdditionalFee} (additional solo)`;
 }
 
 /**

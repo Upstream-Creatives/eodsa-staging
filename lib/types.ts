@@ -90,6 +90,8 @@ export interface Event {
   currency?: string;
   // NEW: Participation mode - determines what types of entries are allowed
   participationMode?: 'live' | 'virtual' | 'hybrid'; // live = only live entries, virtual = only virtual entries, hybrid = both allowed
+  // NEW: Custom certificate template URL for this event
+  certificateTemplateUrl?: string;
 }
 
 export interface EventEntry {

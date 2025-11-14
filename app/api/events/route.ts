@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import { db as database, initializeDatabase } from '@/lib/database';
 
+// Initialize database on first request
+let dbInitialized = false;
+
+async function ensureDbInitialized() {
+  if (!dbInitialized) {
+    await initializeDatabase();
+    dbInitialized = true;
+  }
+}
+
 export async function GET() {
   try {
     // Update event statuses based on current date/time before fetching
@@ -22,6 +32,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Ensure database is initialized with latest schema
+    await ensureDbInitialized();
+    
     const body = await request.json();
     
     // Validate required fields
@@ -83,7 +96,9 @@ export async function POST(request: Request) {
       duoTrioFeePerDancer: body.duoTrioFeePerDancer,
       groupFeePerDancer: body.groupFeePerDancer,
       largeGroupFeePerDancer: body.largeGroupFeePerDancer,
-      currency: body.currency
+      currency: body.currency || 'ZAR',
+      participationMode: body.participationMode || 'hybrid',
+      certificateTemplateUrl: body.certificateTemplateUrl || undefined
     });
 
     // 🚀 AUTO-ASSIGN: Automatically assign judges who are already assigned to this region

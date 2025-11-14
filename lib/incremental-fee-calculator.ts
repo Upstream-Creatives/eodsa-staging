@@ -153,9 +153,10 @@ export async function computeIncrementalFee(
   let breakdown = '';
 
   if (performanceType === 'Solo') {
-    const nextSoloCount = entryCount + 1;
-    entryFee = calculateSoloEntryFee(nextSoloCount, eventConfig);
-    breakdown = `Solo entry #${nextSoloCount}: ${getSoloFeeBreakdown(nextSoloCount, eventConfig)}`;
+    // For solo entries, the solo number is: existing count + 1
+    const soloNumber = entryCount + 1;
+    entryFee = calculateSoloEntryFee(soloNumber, eventConfig);
+    breakdown = `Solo entry #${soloNumber}: ${getSoloFeeBreakdown(soloNumber, eventConfig)}`;
   } else {
     // For duet/trio/group, fee is per participant
     entryFee = calculateNonSoloFee(performanceType, participantIds.length, eventConfig);
@@ -205,27 +206,25 @@ export async function computeIncrementalFee(
 /**
  * Get human-readable breakdown for solo pricing
  */
-function getSoloFeeBreakdown(soloCount: number, eventConfig: EventFeeConfig): string {
+function getSoloFeeBreakdown(soloNumber: number, eventConfig: EventFeeConfig): string {
   const currency = eventConfig.currency === 'USD' ? '$' : 
                    eventConfig.currency === 'EUR' ? '€' : 
                    eventConfig.currency === 'GBP' ? '£' : 'R';
   
-  // Use defaults from pricing-utils if values are undefined
+  // Ensure all fee values are defined with defaults
   const solo1Fee = eventConfig.solo1Fee ?? 400;
   const solo2Fee = eventConfig.solo2Fee ?? 750;
   const solo3Fee = eventConfig.solo3Fee ?? 1050;
   const soloAdditionalFee = eventConfig.soloAdditionalFee ?? 100;
   
-  if (soloCount === 1) {
-    return `${currency}${solo1Fee} (first solo)`;
-  } else if (soloCount === 2) {
-    const incremental = solo2Fee - solo1Fee;
-    return `${currency}${incremental} (package total: ${currency}${solo2Fee})`;
-  } else if (soloCount === 3) {
-    const incremental = solo3Fee - solo2Fee;
-    return `${currency}${incremental} (package total: ${currency}${solo3Fee})`;
+  if (soloNumber === 1) {
+    return `${currency}${solo1Fee} (1st solo)`;
+  } else if (soloNumber === 2) {
+    return `${currency}${solo2Fee} (2nd solo)`;
+  } else if (soloNumber === 3) {
+    return `${currency}${solo3Fee} (3rd solo)`;
   } else {
-    return `${currency}${soloAdditionalFee} (additional solo)`;
+    return `${currency}${soloAdditionalFee} (${soloNumber}th solo)`;
   }
 }
 

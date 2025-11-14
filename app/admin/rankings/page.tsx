@@ -938,8 +938,8 @@ function AdminRankingsPage() {
                             </div>
                           </td>
                           <td className="py-4 px-6">
-                            <div className="font-bold text-white">{ranking.totalScore.toFixed(1)}</div>
-                            <div className="text-sm text-gray-400">{percentage}% • {ranking.judgeCount} judges</div>
+                            <div className="font-bold text-white">{percentage}%</div>
+                            <div className="text-sm text-gray-400">{ranking.judgeCount} judges</div>
                           </td>
                           <td className="py-4 px-6">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${rankingColor}`}>
