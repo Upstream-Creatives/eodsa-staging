@@ -16,6 +16,7 @@ interface CertificateData {
   email?: string;
   performanceId?: string;
   eventEntryId?: string;
+  eventId?: string;
   performanceType?: string;
   studioName?: string;
   percentage: number;
@@ -90,8 +91,46 @@ export async function POST(request: NextRequest) {
       ? studioName.toUpperCase() 
       : dancerName.toUpperCase();
 
+    // Get event to check for custom certificate template
+    let templatePublicId = 'Template_syz7di'; // Default template
+    if (body.eventId) {
+      try {
+        const { db } = await import('@/lib/database');
+        const event = await db.getEventById(body.eventId);
+        if (event?.certificateTemplateUrl) {
+          // Extract public_id from Cloudinary URL
+          // Format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/public_id.ext
+          try {
+            const url = new URL(event.certificateTemplateUrl);
+            const pathParts = url.pathname.split('/');
+            const uploadIndex = pathParts.findIndex(part => part === 'upload');
+            if (uploadIndex !== -1 && uploadIndex < pathParts.length - 1) {
+              // Get everything after 'upload', skip version (v1234567890), keep folder and public_id
+              const afterUpload = pathParts.slice(uploadIndex + 1);
+              // Remove version and extension
+              const filtered = afterUpload.filter((part, idx) => {
+                // Skip version (v followed by numbers)
+                if (idx === 0 && /^v\d+$/.test(part)) return false;
+                return part.length > 0;
+              });
+              // Remove file extension from last part
+              if (filtered.length > 0) {
+                const lastPart = filtered[filtered.length - 1];
+                filtered[filtered.length - 1] = lastPart.replace(/\.(pdf|png|jpg|jpeg)$/i, '');
+              }
+              templatePublicId = filtered.join('/');
+            }
+          } catch (urlError) {
+            console.warn('Could not parse certificate template URL, using default:', urlError);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch event for custom template, using default:', err);
+      }
+    }
+
     // Generate certificate using Cloudinary with custom or default positioning
-    const certificateUrl = cloudinary.url('Template_syz7di', {
+    const certificateUrl = cloudinary.url(templatePublicId, {
       transformation: [
         {
           overlay: {

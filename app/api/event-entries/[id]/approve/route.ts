@@ -121,8 +121,13 @@ export async function PATCH(
         console.log(`ℹ️  Performance already exists for entry: ${entryId}`);
       }
     } catch (perfErr) {
-      console.error('⚠️  Failed to auto-create performance for entry', entryId);
+      console.error('⚠️  CRITICAL: Failed to auto-create performance for entry', entryId);
       console.error('Error details:', perfErr);
+      // Log the full error stack for debugging
+      if (perfErr instanceof Error) {
+        console.error('Error stack:', perfErr.stack);
+        console.error('Error message:', perfErr.message);
+      }
       // Don't fail the approval if performance creation fails
       // But log it prominently so we can investigate
     }

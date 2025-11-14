@@ -703,21 +703,34 @@ export default function CompetitionEntryPage() {
       let fee = 0;
       if (capitalizedPerformanceType === 'Solo') {
         // Use event-specific solo pricing
+        const solo1Fee = event?.solo1Fee || 400;
+        const solo2Fee = event?.solo2Fee || 750;
+        const solo3Fee = event?.solo3Fee || 1050;
+        const soloAdditionalFee = event?.soloAdditionalFee || 100;
+        
+        // Validate fee structure to prevent negative fees
+        const validatedSolo2Fee = solo2Fee >= solo1Fee ? solo2Fee : solo1Fee;
+        const validatedSolo3Fee = solo3Fee >= validatedSolo2Fee ? solo3Fee : validatedSolo2Fee;
+        
         if (soloCount === 1) {
-          fee = event?.solo1Fee || 400;
+          fee = solo1Fee;
         } else if (soloCount === 2) {
           // 2nd solo: Calculate incremental cost from package pricing
-          const total2 = event?.solo2Fee || 750;
-          const total1 = event?.solo1Fee || 400;
-          fee = total2 - total1;
+          fee = validatedSolo2Fee - solo1Fee;
+          if (fee < 0) {
+            console.warn(`⚠️ Negative fee detected for 2nd solo: ${fee}. Event config: solo1Fee=${solo1Fee}, solo2Fee=${solo2Fee}. Using 0.`);
+            fee = 0;
+          }
         } else if (soloCount === 3) {
           // 3rd solo: Calculate incremental cost from package pricing
-          const total3 = event?.solo3Fee || 1050;
-          const total2 = event?.solo2Fee || 750;
-          fee = total3 - total2;
+          fee = validatedSolo3Fee - validatedSolo2Fee;
+          if (fee < 0) {
+            console.warn(`⚠️ Negative fee detected for 3rd solo: ${fee}. Event config: solo2Fee=${solo2Fee}, solo3Fee=${solo3Fee}. Using 0.`);
+            fee = 0;
+          }
         } else {
           // 4th+ solos: Additional solo fee
-          fee = event?.soloAdditionalFee || 100;
+          fee = soloAdditionalFee;
         }
       } else if (capitalizedPerformanceType === 'Duet' || capitalizedPerformanceType === 'Trio') {
         fee = (event?.duoTrioFeePerDancer || 280) * participantIds.length;

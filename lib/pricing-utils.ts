@@ -39,11 +39,30 @@ const DEFAULT_FEES: Required<EventFeeConfig> = {
 export function calculateSoloEntryFee(currentSoloCount: number, eventConfig?: EventFeeConfig): number {
   const fees = { ...DEFAULT_FEES, ...eventConfig };
   
-  // Get cumulative fees
-  const currentTotal = calculateCumulativeSoloFee(currentSoloCount, eventConfig);
-  const previousTotal = currentSoloCount > 1 ? calculateCumulativeSoloFee(currentSoloCount - 1, eventConfig) : 0;
+  // Validate fee structure to prevent negative fees
+  // Ensure solo2Fee >= solo1Fee and solo3Fee >= solo2Fee
+  if (fees.solo2Fee < fees.solo1Fee) {
+    console.warn(`⚠️ Invalid fee configuration: solo2Fee (${fees.solo2Fee}) < solo1Fee (${fees.solo1Fee}). Using solo1Fee for 2nd solo.`);
+    fees.solo2Fee = fees.solo1Fee;
+  }
+  if (fees.solo3Fee < fees.solo2Fee) {
+    console.warn(`⚠️ Invalid fee configuration: solo3Fee (${fees.solo3Fee}) < solo2Fee (${fees.solo2Fee}). Using solo2Fee for 3rd solo.`);
+    fees.solo3Fee = fees.solo2Fee;
+  }
   
-  return currentTotal - previousTotal;
+  // Get cumulative fees
+  const currentTotal = calculateCumulativeSoloFee(currentSoloCount, fees);
+  const previousTotal = currentSoloCount > 1 ? calculateCumulativeSoloFee(currentSoloCount - 1, fees) : 0;
+  
+  const incrementalFee = currentTotal - previousTotal;
+  
+  // Ensure fee is never negative
+  if (incrementalFee < 0) {
+    console.error(`⚠️ Calculated negative solo fee: ${incrementalFee} for solo #${currentSoloCount}. Event config: solo1Fee=${fees.solo1Fee}, solo2Fee=${fees.solo2Fee}, solo3Fee=${fees.solo3Fee}. Returning 0.`);
+    return 0;
+  }
+  
+  return incrementalFee;
 }
 
 /**

@@ -76,6 +76,9 @@ export const initializeDatabase = async () => {
     
     // Add participation mode column to events table (live, virtual, or hybrid)
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS participation_mode TEXT DEFAULT 'hybrid' CHECK (participation_mode IN ('live', 'virtual', 'hybrid'))`;
+    
+    // Add certificate template URL column to events table
+    await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS certificate_template_url TEXT`;
 
     // Phase 2: Virtual entry support columns
     await sqlClient`ALTER TABLE performances ADD COLUMN IF NOT EXISTS entry_type TEXT DEFAULT 'live'`;
@@ -118,10 +121,11 @@ export const initializeDatabase = async () => {
     `;
 
     // Create transaction_records table for payment tracking
+    // First create the table without the foreign key constraint
     await sqlClient`
       CREATE TABLE IF NOT EXISTS transaction_records (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        entry_id TEXT REFERENCES event_entries(id) ON DELETE SET NULL,
+        entry_id TEXT,
         event_id TEXT NOT NULL,
         dancer_id TEXT,
         eodsa_id TEXT NOT NULL,
@@ -140,6 +144,54 @@ export const initializeDatabase = async () => {
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `;
+    
+    // Add foreign key constraint only if event_entries table exists and has id as PRIMARY KEY
+    try {
+      // First, try to drop any existing invalid foreign key constraint
+      try {
+        await sqlClient`
+          ALTER TABLE transaction_records
+          DROP CONSTRAINT IF EXISTS transaction_records_entry_id_fkey
+        `;
+      } catch (dropError) {
+        // Ignore if constraint doesn't exist
+      }
+      
+      const eventEntriesCheck = await sqlClient`
+        SELECT column_name, constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu 
+          ON tc.constraint_name = kcu.constraint_name
+        WHERE tc.table_name = 'event_entries' 
+          AND tc.constraint_type = 'PRIMARY KEY'
+          AND kcu.column_name = 'id'
+      ` as any[];
+      
+      if (eventEntriesCheck.length > 0) {
+        // Check if foreign key constraint already exists
+        const fkCheck = await sqlClient`
+          SELECT constraint_name
+          FROM information_schema.table_constraints
+          WHERE table_name = 'transaction_records'
+            AND constraint_type = 'FOREIGN KEY'
+            AND constraint_name LIKE '%entry_id%'
+        ` as any[];
+        
+        if (fkCheck.length === 0) {
+          await sqlClient`
+            ALTER TABLE transaction_records
+            ADD CONSTRAINT transaction_records_entry_id_fkey
+            FOREIGN KEY (entry_id) REFERENCES event_entries(id) ON DELETE SET NULL
+          `;
+          console.log('✅ Added foreign key constraint for transaction_records.entry_id');
+        }
+      } else {
+        console.warn('⚠️ event_entries table does not exist or id is not PRIMARY KEY - skipping foreign key constraint');
+      }
+    } catch (fkError) {
+      console.warn('⚠️ Could not add foreign key constraint for transaction_records.entry_id (non-critical):', fkError);
+      // Non-critical - table will work without the constraint
+    }
 
     // Create indexes for transaction_records
     await sqlClient`CREATE INDEX IF NOT EXISTS idx_transaction_records_entry_id ON transaction_records(entry_id)`;
@@ -909,13 +961,16 @@ export const db = {
     await sqlClient`
       INSERT INTO performances (
         id, event_id, event_entry_id, contestant_id, title, participant_names, duration,
-        choreographer, mastery, item_style, scheduled_time, status, item_number, music_cue, age_category
+        choreographer, mastery, item_style, scheduled_time, status, item_number, music_cue, age_category,
+        entry_type, video_external_url, video_external_type, music_file_url, music_file_name
       )
       VALUES (
         ${id}, ${performance.eventId}, ${performance.eventEntryId}, ${performance.contestantId}, ${performance.title},
         ${JSON.stringify(performance.participantNames)}, ${performance.duration}, ${performance.choreographer},
         ${performance.mastery}, ${performance.itemStyle}, ${performance.scheduledTime || null}, ${performance.status},
-        ${performance.itemNumber || null}, ${((performance as any).musicCue) || null}, ${performance.ageCategory || null}
+        ${performance.itemNumber || null}, ${((performance as any).musicCue) || null}, ${performance.ageCategory || null},
+        ${performance.entryType || 'live'}, ${performance.videoExternalUrl || null}, ${performance.videoExternalType || null},
+        ${performance.musicFileUrl || null}, ${performance.musicFileName || null}
       )
     `;
     
@@ -949,7 +1004,12 @@ export const db = {
       scheduledTime: row.scheduled_time,
       status: row.status,
       contestantName: row.contestant_name,
-      musicCue: row.music_cue || null
+      musicCue: row.music_cue || null,
+      entryType: row.entry_type || 'live',
+      videoExternalUrl: row.video_external_url || null,
+      videoExternalType: row.video_external_type || null,
+      musicFileUrl: row.music_file_url || null,
+      musicFileName: row.music_file_name || null
     })) as (Performance & { contestantName: string })[];
   },
 
@@ -1005,7 +1065,12 @@ export const db = {
       scheduledTime: row.scheduled_time,
       status: row.status,
       contestantName: row.contestant_name,
-      musicCue: row.music_cue || null
+      musicCue: row.music_cue || null,
+      entryType: row.entry_type || 'live',
+      videoExternalUrl: row.video_external_url || null,
+      videoExternalType: row.video_external_type || null,
+      musicFileUrl: row.music_file_url || null,
+      musicFileName: row.music_file_name || null
     } as Performance & { contestantName: string };
   },
 
@@ -2254,6 +2319,46 @@ export const db = {
       console.error('Migration error for event_end_date:', migrationError);
     }
     
+    // Ensure certificate_template_url column exists (migration check)
+    try {
+      const certColumnCheck = await sqlClient`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'events' 
+        AND column_name = 'certificate_template_url'
+      ` as any[];
+      
+      if (certColumnCheck.length === 0) {
+        await sqlClient`
+          ALTER TABLE events 
+          ADD COLUMN certificate_template_url TEXT
+        `;
+        console.log('✅ Added certificate_template_url column to events table');
+      }
+    } catch (migrationError) {
+      console.error('Migration error for certificate_template_url:', migrationError);
+    }
+    
+    // Ensure participation_mode column exists (migration check)
+    try {
+      const participationCheck = await sqlClient`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'events' 
+        AND column_name = 'participation_mode'
+      ` as any[];
+      
+      if (participationCheck.length === 0) {
+        await sqlClient`
+          ALTER TABLE events 
+          ADD COLUMN participation_mode TEXT DEFAULT 'hybrid' CHECK (participation_mode IN ('live', 'virtual', 'hybrid'))
+        `;
+        console.log('✅ Added participation_mode column to events table');
+      }
+    } catch (migrationError) {
+      console.error('Migration error for participation_mode:', migrationError);
+    }
+    
     const id = `event-${Date.now()}`;
     const createdAt = new Date().toISOString();
     
@@ -2262,7 +2367,8 @@ export const db = {
         id, name, description, region, age_category, performance_type, event_date, event_end_date, 
         registration_deadline, venue, status, max_participants, entry_fee, created_by, created_at,
         registration_fee_per_dancer, solo_1_fee, solo_2_fee, solo_3_fee, solo_additional_fee,
-        duo_trio_fee_per_dancer, group_fee_per_dancer, large_group_fee_per_dancer, currency
+        duo_trio_fee_per_dancer, group_fee_per_dancer, large_group_fee_per_dancer, currency,
+        participation_mode, certificate_template_url
       )
       VALUES (
         ${id}, ${event.name}, ${event.description}, ${event.region}, ${event.ageCategory}, 
@@ -2271,7 +2377,8 @@ export const db = {
         ${event.entryFee}, ${event.createdBy}, ${createdAt},
         ${event.registrationFeePerDancer ?? 300}, ${event.solo1Fee ?? 400}, ${event.solo2Fee ?? 750}, 
         ${event.solo3Fee ?? 1050}, ${event.soloAdditionalFee ?? 100}, ${event.duoTrioFeePerDancer ?? 280},
-        ${event.groupFeePerDancer ?? 220}, ${event.largeGroupFeePerDancer ?? 190}, ${event.currency || 'ZAR'}
+        ${event.groupFeePerDancer ?? 220}, ${event.largeGroupFeePerDancer ?? 190}, ${event.currency || 'ZAR'},
+        ${event.participationMode || 'hybrid'}, ${event.certificateTemplateUrl || null}
       )
     `;
     
@@ -2305,7 +2412,9 @@ export const db = {
       duoTrioFeePerDancer: row.duo_trio_fee_per_dancer != null ? parseFloat(row.duo_trio_fee_per_dancer) : 280,
       groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
       largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
-      currency: row.currency || 'ZAR'
+      currency: row.currency || 'ZAR',
+      participationMode: row.participation_mode || 'hybrid',
+      certificateTemplateUrl: row.certificate_template_url || undefined
     })) as Event[];
   },
 
@@ -2340,7 +2449,8 @@ export const db = {
       groupFeePerDancer: row.group_fee_per_dancer != null ? parseFloat(row.group_fee_per_dancer) : 220,
       largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
       currency: row.currency || 'ZAR',
-      participationMode: row.participation_mode || 'hybrid'
+      participationMode: row.participation_mode || 'hybrid',
+      certificateTemplateUrl: row.certificate_template_url || undefined
     } as Event;
   },
 
