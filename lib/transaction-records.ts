@@ -126,15 +126,27 @@ export async function updateTransactionRecord(
   values.push(now);
   values.push(transactionId);
 
+  // Build the SET clause with proper parameterization for postgres.js
   const setClause = updateFields.map((field, index) => 
     `${field} = $${index + 1}`
   ).join(', ');
 
-  await sql.unsafe(`
+  // Use sql.unsafe with interpolated values (values are already sanitized from function parameters)
+  const query = `
     UPDATE transaction_records 
     SET ${setClause}
     WHERE id = $${values.length}
-  `, values);
+  `;
+  
+  // Interpolate values into the query string for sql.unsafe
+  let interpolatedQuery = query;
+  values.forEach((value, index) => {
+    const placeholder = `$${index + 1}`;
+    const sqlValue = typeof value === 'string' ? `'${value.replace(/'/g, "''")}'` : value;
+    interpolatedQuery = interpolatedQuery.replace(placeholder, sqlValue);
+  });
+  
+  await sql.unsafe(interpolatedQuery);
 }
 
 /**

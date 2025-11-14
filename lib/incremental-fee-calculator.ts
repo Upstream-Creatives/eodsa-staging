@@ -210,16 +210,22 @@ function getSoloFeeBreakdown(soloCount: number, eventConfig: EventFeeConfig): st
                    eventConfig.currency === 'EUR' ? '€' : 
                    eventConfig.currency === 'GBP' ? '£' : 'R';
   
+  // Use defaults from pricing-utils if values are undefined
+  const solo1Fee = eventConfig.solo1Fee ?? 400;
+  const solo2Fee = eventConfig.solo2Fee ?? 750;
+  const solo3Fee = eventConfig.solo3Fee ?? 1050;
+  const soloAdditionalFee = eventConfig.soloAdditionalFee ?? 100;
+  
   if (soloCount === 1) {
-    return `${currency}${eventConfig.solo1Fee} (first solo)`;
+    return `${currency}${solo1Fee} (first solo)`;
   } else if (soloCount === 2) {
-    const incremental = eventConfig.solo2Fee - eventConfig.solo1Fee;
-    return `${currency}${incremental} (package total: ${currency}${eventConfig.solo2Fee})`;
+    const incremental = solo2Fee - solo1Fee;
+    return `${currency}${incremental} (package total: ${currency}${solo2Fee})`;
   } else if (soloCount === 3) {
-    const incremental = eventConfig.solo3Fee - eventConfig.solo2Fee;
-    return `${currency}${incremental} (package total: ${currency}${eventConfig.solo3Fee})`;
+    const incremental = solo3Fee - solo2Fee;
+    return `${currency}${incremental} (package total: ${currency}${solo3Fee})`;
   } else {
-    return `${currency}${eventConfig.soloAdditionalFee} (additional solo)`;
+    return `${currency}${soloAdditionalFee} (additional solo)`;
   }
 }
 

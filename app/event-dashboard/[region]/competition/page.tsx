@@ -152,6 +152,10 @@ interface PerformanceEntry {
   videoFileName?: string;
   videoExternalUrl?: string;
   videoExternalType?: 'youtube' | 'vimeo' | 'other';
+  // Fee validation properties (added during validation)
+  entryFee?: number;
+  registrationFee?: number;
+  validatedFee?: number;
 }
 
 export default function CompetitionEntryPage() {
