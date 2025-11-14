@@ -2183,8 +2183,8 @@ export default function CompetitionEntryPage() {
                     ) && (
                       <div className="text-xs text-slate-400 mt-1">
                         {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 0 && `1st Solo: ${getCurrencySymbol()}${event?.solo1Fee || 400}`}
-                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 1 && `2nd Solo: ${getCurrencySymbol()}${((event?.solo2Fee || 750) - (event?.solo1Fee || 400))} (Package: ${getCurrencySymbol()}${event?.solo2Fee || 750} total)`}
-                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 2 && `3rd Solo: ${getCurrencySymbol()}${((event?.solo3Fee || 1050) - (event?.solo2Fee || 750))} (Package: ${getCurrencySymbol()}${event?.solo3Fee || 1050} total)`}
+                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 1 && `2nd Solo: ${getCurrencySymbol()}${event?.solo2Fee || 200}`}
+                        {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 2 && `3rd Solo: ${getCurrencySymbol()}${event?.solo3Fee || 100}`}
                         {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) === 3 && `4th Solo: ${getCurrencySymbol()}${event?.soloAdditionalFee || 100}`}
                         {(existingDbEntries.filter(e => e.participantIds && e.participantIds.length === 1).length + entries.filter(e => e.performanceType === 'Solo').length) >= 4 && `5th+ Solo: ${getCurrencySymbol()}${event?.soloAdditionalFee || 100} each`}
                       </div>
