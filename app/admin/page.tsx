@@ -269,11 +269,25 @@ function AdminDashboard() {
     duoTrioFeePerDancer: 0,
     groupFeePerDancer: 0,
     largeGroupFeePerDancer: 0,
-    currency: 'ZAR'
+    currency: 'ZAR',
+    // Event configuration fields
+    participationMode: 'hybrid' as 'live' | 'virtual' | 'hybrid',
+    numberOfJudges: 4,
+    certificateTemplateUrl: undefined as string | undefined
   });
+  const [editCertificateTemplateFile, setEditCertificateTemplateFile] = useState<File | null>(null);
+  const [isUploadingEditCertificate, setIsUploadingEditCertificate] = useState(false);
   const [isUpdatingEvent, setIsUpdatingEvent] = useState(false);
   const [updateEventMessage, setUpdateEventMessage] = useState('');
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  const [eventSafetyCheck, setEventSafetyCheck] = useState<{
+    stats: any;
+    restrictions: any;
+    warnings: string[];
+    blocks: string[];
+  } | null>(null);
+  const [showSafetyWarning, setShowSafetyWarning] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<any>(null);
 
   const router = useRouter();
 
@@ -564,8 +578,48 @@ function AdminDashboard() {
     }
   };
 
-  const handleEditEvent = (event: Event) => {
+  const handleEditEvent = async (event: Event) => {
     setEditingEvent(event);
+    
+    // Fetch safety check data
+    let safetyData = null;
+    try {
+      const safetyResponse = await fetch(`/api/events/${event.id}/safety-check`);
+      if (safetyResponse.ok) {
+        const safetyResult = await safetyResponse.json();
+        if (safetyResult.success) {
+          safetyData = safetyResult;
+          setEventSafetyCheck({
+            stats: safetyResult.stats,
+            restrictions: safetyResult.restrictions,
+            warnings: safetyResult.restrictions.warnings || [],
+            blocks: safetyResult.restrictions.blocks || []
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch safety check:', err);
+    }
+    
+    // Fetch current judge count for this event
+    let currentJudgeCount = 4; // Default
+    if (safetyData?.currentJudgeCount) {
+      currentJudgeCount = safetyData.currentJudgeCount;
+    } else {
+      try {
+        // Try to get judge count from judge assignments
+        const judgeResponse = await fetch(`/api/judge-assignments?eventId=${event.id}`);
+        if (judgeResponse.ok) {
+          const judgeData = await judgeResponse.json();
+          if (judgeData.assignments && Array.isArray(judgeData.assignments)) {
+            currentJudgeCount = judgeData.assignments.length || 4;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch judge count, using default:', err);
+      }
+    }
+    
     setEditEventData({
       name: event.name,
       description: event.description,
@@ -584,8 +638,13 @@ function AdminDashboard() {
       duoTrioFeePerDancer: event.duoTrioFeePerDancer !== undefined ? event.duoTrioFeePerDancer : 0,
       groupFeePerDancer: event.groupFeePerDancer !== undefined ? event.groupFeePerDancer : 0,
       largeGroupFeePerDancer: event.largeGroupFeePerDancer !== undefined ? event.largeGroupFeePerDancer : 0,
-      currency: event.currency || 'ZAR'
+      currency: event.currency || 'ZAR',
+      // Event configuration
+      participationMode: (event as any).participationMode || 'hybrid',
+      numberOfJudges: currentJudgeCount,
+      certificateTemplateUrl: (event as any).certificateTemplateUrl
     });
+    setEditCertificateTemplateFile(null);
     setUpdateEventMessage('');
     setShowEditEventModal(true);
   };
@@ -595,6 +654,71 @@ function AdminDashboard() {
     
     if (!editingEvent || isUpdatingEvent) {
       return;
+    }
+
+    // Safety validation - check for risky changes
+    if (editingEvent) {
+      const riskyChanges: string[] = [];
+      const blockedChanges: string[] = [];
+
+        // Check if judge count is being changed
+        if (eventSafetyCheck) {
+          const originalJudgeCount = eventSafetyCheck.stats?.currentJudgeCount || editEventData.numberOfJudges;
+          if (editEventData.numberOfJudges !== originalJudgeCount) {
+            if (eventSafetyCheck.blocks.includes('judgeCount')) {
+              blockedChanges.push(`Cannot change judge count from ${originalJudgeCount} to ${editEventData.numberOfJudges} - event has scores that would be affected.`);
+            } else if (eventSafetyCheck.stats?.scores > 0) {
+              riskyChanges.push(`Changing judge count from ${originalJudgeCount} to ${editEventData.numberOfJudges} after scores exist could break calculations.`);
+            }
+          }
+
+          // Check if event type is being changed
+          const originalEventType = (editingEvent as any).participationMode || 'hybrid';
+          if (originalEventType !== editEventData.participationMode) {
+            if (editEventData.participationMode === 'live' && eventSafetyCheck.stats?.virtualEntries > 0) {
+              riskyChanges.push(`Changing to "Live only" would invalidate ${eventSafetyCheck.stats.virtualEntries} virtual entry/entries.`);
+            }
+            if (editEventData.participationMode === 'virtual' && eventSafetyCheck.stats?.liveEntries > 0) {
+              riskyChanges.push(`Changing to "Virtual only" would invalidate ${eventSafetyCheck.stats.liveEntries} live entry/entries.`);
+            }
+          }
+
+        // Check if fees are being changed
+        if (eventSafetyCheck && eventSafetyCheck.blocks.includes('fees')) {
+          const feeFields = ['registrationFeePerDancer', 'solo1Fee', 'solo2Fee', 'solo3Fee', 'soloAdditionalFee', 'duoTrioFeePerDancer', 'groupFeePerDancer', 'largeGroupFeePerDancer'];
+          const feeChanged = feeFields.some(field => {
+            const originalValue = (editingEvent as any)[field] || 0;
+            const newValue = editEventData[field as keyof typeof editEventData] || 0;
+            return originalValue !== newValue;
+          });
+          if (feeChanged) {
+            blockedChanges.push('Cannot change fees - event has paid entries. This could cause payment discrepancies.');
+          }
+        }
+      }
+
+      // If there are blocked changes, show error
+      if (blockedChanges.length > 0) {
+        setUpdateEventMessage(`❌ ${blockedChanges.join(' ')}`);
+        return;
+      }
+
+      // If there are risky changes, show warning and require confirmation
+      if (riskyChanges.length > 0) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          showConfirm(
+            `⚠️ Risky Changes Detected\n\n${riskyChanges.join('\n\n')}\n\nAre you sure you want to proceed? This action may have unintended consequences.`,
+            () => resolve(true),
+            () => resolve(false)
+          );
+        });
+        
+        if (!confirmed) {
+          setUpdateEventMessage('Update cancelled by user.');
+          return;
+        }
+        // Continue with update if confirmed
+      }
     }
 
     setIsUpdatingEvent(true);
@@ -607,8 +731,10 @@ function AdminDashboard() {
         return;
       }
 
+      // Remove numberOfJudges from payload (it's just for reference, not stored on event)
+      const { numberOfJudges, ...eventUpdateData } = editEventData;
       const updatePayload = {
-        ...editEventData,
+        ...eventUpdateData,
         adminSession: session
       };
       
@@ -625,12 +751,48 @@ function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
+        // Upload certificate template if provided (after event update)
+        if (editCertificateTemplateFile && editingEvent.id) {
+          setIsUploadingEditCertificate(true);
+          try {
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', editCertificateTemplateFile);
+            uploadFormData.append('eventId', editingEvent.id);
+            
+            const uploadResponse = await fetch('/api/upload/certificate-template', {
+              method: 'POST',
+              body: uploadFormData,
+            });
+            
+            const uploadData = await uploadResponse.json();
+            if (uploadData.success) {
+              // Update event with certificate template URL
+              await fetch(`/api/events/${editingEvent.id}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  certificateTemplateUrl: uploadData.url,
+                  adminSession: session
+                }),
+              });
+            }
+          } catch (uploadError) {
+            console.error('Certificate upload error:', uploadError);
+            // Non-critical error, event is already updated
+          } finally {
+            setIsUploadingEditCertificate(false);
+          }
+        }
+        
         setUpdateEventMessage('✅ Event updated successfully!');
         fetchData();
         setTimeout(() => {
           setShowEditEventModal(false);
           setEditingEvent(null);
           setUpdateEventMessage('');
+          setEditCertificateTemplateFile(null);
         }, 1500);
       } else {
         setUpdateEventMessage(`❌ Failed to update event. Error: ${data.error}`);
@@ -2467,28 +2629,28 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>Event Name <span className="text-red-500">*</span></label>
                     <input
                       type="text"
-                      value={newEvent.name}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, name: e.target.value }))}
-                      className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                      required
-                      placeholder="e.g., EODSA Nationals Championships 2024"
-                    />
-                  </div>
+                    value={newEvent.name}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, name: e.target.value }))}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
+                    required
+                    placeholder="e.g., EODSA Nationals Championships 2024"
+                  />
+                </div>
 
                   <div className="sm:col-span-2">
-                    <label className={`block ${themeClasses.label} mb-2`}>Description</label>
-                    <textarea
-                      value={newEvent.description}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
-                      className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
-                      rows={3}
-                      placeholder="Describe the event..."
-                    />
-                  </div>
+                  <label className={`block ${themeClasses.label} mb-2`}>Description</label>
+                  <textarea
+                    value={newEvent.description}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
+                    rows={3}
+                    placeholder="Describe the event..."
+                  />
+                </div>
 
                   <div>
                     <label className={`block ${themeClasses.label} mb-2`}>Venue <span className="text-red-500">*</span></label>
-                    <input
+                  <input
                       type="text"
                       value={newEvent.venue}
                       onChange={(e) => setNewEvent(prev => ({ ...prev, venue: e.target.value }))}
@@ -2496,7 +2658,7 @@ function AdminDashboard() {
                       required
                       placeholder="e.g., Johannesburg Civic Theatre"
                     />
-                  </div>
+                </div>
 
                   <div>
                     <label className={`block ${themeClasses.label} mb-2`}>Number of Judges <span className="text-red-500">*</span></label>
@@ -2513,8 +2675,8 @@ function AdminDashboard() {
                       ⚖️ Target number of judges for this event
                     </p>
                   </div>
+                  </div>
                 </div>
-              </div>
 
               {/* Dates Section */}
               <div className={`mb-6 p-6 border ${themeClasses.modalBorder} ${themeClasses.cardRadius} ${theme === 'dark' ? 'bg-gray-800/50' : 'bg-white'}`}>
@@ -2524,39 +2686,39 @@ function AdminDashboard() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className={`block ${themeClasses.label} mb-2`}>Event Start Date <span className="text-red-500">*</span></label>
-                    <input
-                      type="datetime-local"
-                      value={newEvent.eventDate}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, eventDate: e.target.value }))}
-                      className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
-                      required
-                    />
-                  </div>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.eventDate}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, eventDate: e.target.value }))}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
+                    required
+                  />
+                </div>
 
                   <div>
                     <label className={`block ${themeClasses.label} mb-2`}>Event End Date <span className="text-red-500">*</span></label>
-                    <input
-                      type="datetime-local"
-                      value={newEvent.eventEndDate}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, eventEndDate: e.target.value }))}
-                      className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
-                      required
-                    />
-                  </div>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.eventEndDate}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, eventEndDate: e.target.value }))}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
+                    required
+                  />
+                </div>
 
                   <div className="sm:col-span-2">
                     <label className={`block ${themeClasses.label} mb-2`}>Registration Deadline <span className="text-red-500">*</span></label>
-                    <input
-                      type="datetime-local"
-                      value={newEvent.registrationDeadline}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, registrationDeadline: e.target.value }))}
-                      className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
-                      required
-                    />
-                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.registrationDeadline}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, registrationDeadline: e.target.value }))}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
+                    required
+                  />
+                  <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
                       ⏰ Registration closes at this date and time
-                    </p>
-                  </div>
+                  </p>
+                </div>
                 </div>
               </div>
 
@@ -2573,15 +2735,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>Registration Fee (per dancer)</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.registrationFeePerDancer || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, registrationFeePerDancer: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, registrationFeePerDancer: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="300.00"
-                      />
+                    />
                     </div>
                   </div>
 
@@ -2589,15 +2751,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>1 Solo Package</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.solo1Fee || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, solo1Fee: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, solo1Fee: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="400.00"
-                      />
+                    />
                     </div>
                   </div>
 
@@ -2605,15 +2767,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>2 Solos Package</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.solo2Fee || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, solo2Fee: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, solo2Fee: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="750.00"
-                      />
+                    />
                     </div>
                   </div>
 
@@ -2621,15 +2783,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>3 Solos Package</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.solo3Fee || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, solo3Fee: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, solo3Fee: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="1050.00"
-                      />
+                    />
                     </div>
                   </div>
 
@@ -2637,15 +2799,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>Each Additional Solo</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.soloAdditionalFee || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, soloAdditionalFee: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, soloAdditionalFee: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="100.00"
-                      />
+                    />
                     </div>
                   </div>
 
@@ -2653,15 +2815,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>Duo/Trio (per dancer)</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.duoTrioFeePerDancer || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, duoTrioFeePerDancer: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, duoTrioFeePerDancer: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="280.00"
-                      />
+                    />
                     </div>
                   </div>
 
@@ -2669,15 +2831,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>Small Group (per dancer, 4-9)</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.groupFeePerDancer || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, groupFeePerDancer: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, groupFeePerDancer: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="220.00"
-                      />
+                    />
                     </div>
                   </div>
 
@@ -2685,15 +2847,15 @@ function AdminDashboard() {
                     <label className={`block ${themeClasses.label} mb-2`}>Large Group (per dancer, 10+)</label>
                     <div className="relative">
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${themeClasses.textPrimary} font-medium`}>R</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
                         value={newEvent.largeGroupFeePerDancer || ''}
-                        onChange={(e) => setNewEvent(prev => ({ ...prev, largeGroupFeePerDancer: parseFloat(e.target.value) || 0 }))}
+                      onChange={(e) => setNewEvent(prev => ({ ...prev, largeGroupFeePerDancer: parseFloat(e.target.value) || 0 }))}
                         className={`w-full pl-8 pr-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} placeholder:${themeClasses.textMuted} transition-all duration-200`}
                         placeholder="190.00"
-                      />
+                    />
                     </div>
                   </div>
                 </div>
@@ -2807,6 +2969,7 @@ function AdminDashboard() {
                     setShowEditEventModal(false);
                     setEditingEvent(null);
                     setUpdateEventMessage('');
+                    setEditCertificateTemplateFile(null);
                   }}
                   className={`${themeClasses.textMuted} ${theme === 'dark' ? 'hover:text-white hover:bg-gray-700/50' : 'hover:text-gray-900 hover:bg-gray-100/50'} p-2 rounded-lg transition-colors`}
                 >
@@ -2819,6 +2982,87 @@ function AdminDashboard() {
               <div className={`mb-6 p-4 ${theme === 'dark' ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200'} ${themeClasses.cardRadius} border`}>
                 <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-blue-300' : 'text-blue-800'} mb-2`}>📝 Update Event Details:</h3>
                 <p className={`text-sm ${theme === 'dark' ? 'text-blue-200' : 'text-blue-700'}`}>Modify the event information below. This will update the event for all judges and participants.</p>
+              </div>
+
+              {/* Safety Warnings */}
+              {eventSafetyCheck && eventSafetyCheck.warnings.length > 0 && (
+                <div className={`mb-6 p-4 ${theme === 'dark' ? 'bg-yellow-900/30 border-yellow-700/50' : 'bg-yellow-50 border-yellow-200'} ${themeClasses.cardRadius} border-2`}>
+                  <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'} mb-2 flex items-center gap-2`}>
+                    ⚠️ Safety Warnings
+                  </h3>
+                  <ul className={`text-sm ${theme === 'dark' ? 'text-yellow-200' : 'text-yellow-700'} space-y-1 list-disc list-inside`}>
+                    {eventSafetyCheck.warnings.map((warning: string, idx: number) => (
+                      <li key={idx}>{warning}</li>
+                    ))}
+                  </ul>
+                  {eventSafetyCheck.stats && (
+                    <div className={`mt-3 pt-3 border-t ${theme === 'dark' ? 'border-yellow-700/50' : 'border-yellow-200'} text-xs ${theme === 'dark' ? 'text-yellow-300/80' : 'text-yellow-600'}`}>
+                      <p>📊 Event Stats: {eventSafetyCheck.stats.entries} entries ({eventSafetyCheck.stats.liveEntries} live, {eventSafetyCheck.stats.virtualEntries} virtual), {eventSafetyCheck.stats.payments} payments, {eventSafetyCheck.stats.scores} scores</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Event Type Selection */}
+              <div className={`mb-6 p-4 ${theme === 'dark' ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200'} ${themeClasses.cardRadius} border`}>
+                <label className={`block ${themeClasses.label} mb-3`}>
+                  Event Type <span className="text-red-500">*</span>
+                  {editingEvent && (editingEvent as any).participationMode !== editEventData.participationMode && (
+                    <span className="ml-2 text-yellow-600 text-xs">(⚠️ Changing event type)</span>
+                  )}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditEventData(prev => ({ ...prev, participationMode: 'live' }))}
+                    className={`px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium ${
+                      editEventData.participationMode === 'live'
+                        ? theme === 'dark'
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-blue-500 border-blue-600 text-white'
+                        : theme === 'dark'
+                          ? 'bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    🎭 Live
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditEventData(prev => ({ ...prev, participationMode: 'virtual' }))}
+                    className={`px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium ${
+                      editEventData.participationMode === 'virtual'
+                        ? theme === 'dark'
+                          ? 'bg-purple-600 border-purple-500 text-white'
+                          : 'bg-purple-500 border-purple-600 text-white'
+                        : theme === 'dark'
+                          ? 'bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    🎥 Virtual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditEventData(prev => ({ ...prev, participationMode: 'hybrid' }))}
+                    className={`px-4 py-3 rounded-xl border-2 transition-all duration-200 font-medium ${
+                      editEventData.participationMode === 'hybrid'
+                        ? theme === 'dark'
+                          ? 'bg-indigo-600 border-indigo-500 text-white'
+                          : 'bg-indigo-500 border-indigo-600 text-white'
+                        : theme === 'dark'
+                          ? 'bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    🔀 Hybrid
+                  </button>
+                </div>
+                <p className={`text-xs ${themeClasses.textMuted} mt-2`}>
+                  {editEventData.participationMode === 'live' && 'Only live in-person entries will be allowed during registration.'}
+                  {editEventData.participationMode === 'virtual' && 'Only virtual video submissions will be allowed during registration.'}
+                  {editEventData.participationMode === 'hybrid' && 'Both live and virtual entries will be allowed during registration.'}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2846,6 +3090,34 @@ function AdminDashboard() {
                     <option value="Free State">Free State</option>
                     <option value="Mpumalanga">Mpumalanga</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className={`block ${themeClasses.label} mb-2`}>
+                    Number of Judges
+                    {eventSafetyCheck?.blocks.includes('judgeCount') && (
+                      <span className="ml-2 text-red-500 text-xs">(⚠️ Cannot change - scores exist)</span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={editEventData.numberOfJudges}
+                    onChange={(e) => setEditEventData(prev => ({ ...prev, numberOfJudges: parseInt(e.target.value) || 4 }))}
+                    disabled={eventSafetyCheck?.blocks.includes('judgeCount') || false}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200 ${
+                      eventSafetyCheck?.blocks.includes('judgeCount') ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  />
+                  <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
+                    ⚖️ Current number of judges assigned to this event (for reference)
+                    {eventSafetyCheck?.stats?.scores > 0 && (
+                      <span className="block text-red-500 mt-1">
+                        ⚠️ {eventSafetyCheck?.stats?.scores} score(s) exist - changing judge count could break calculations
+                      </span>
+                    )}
+                  </p>
                 </div>
 
                 <div>
@@ -2946,7 +3218,10 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.registrationFeePerDancer}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, registrationFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
 
@@ -2958,7 +3233,10 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.solo1Fee}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, solo1Fee: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
 
@@ -2970,7 +3248,10 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.solo2Fee}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, solo2Fee: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
 
@@ -2982,7 +3263,10 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.solo3Fee}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, solo3Fee: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
 
@@ -2994,7 +3278,10 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.soloAdditionalFee}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, soloAdditionalFee: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
 
@@ -3006,7 +3293,10 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.duoTrioFeePerDancer}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, duoTrioFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
 
@@ -3018,7 +3308,10 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.groupFeePerDancer}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, groupFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
 
@@ -3030,9 +3323,59 @@ function AdminDashboard() {
                       step="0.01"
                       value={editEventData.largeGroupFeePerDancer}
                       onChange={(e) => setEditEventData(prev => ({ ...prev, largeGroupFeePerDancer: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary}`}
+                      disabled={eventSafetyCheck?.blocks.includes('fees') || false}
+                      className={`w-full px-4 py-2 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} ${
+                        eventSafetyCheck?.blocks.includes('fees') ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Certificate Settings Section */}
+              <div className={`mt-8 p-6 border ${themeClasses.modalBorder} ${themeClasses.cardRadius} ${theme === 'dark' ? 'bg-gray-800/50' : 'bg-white'}`}>
+                <h3 className={`${themeClasses.heading3} mb-4 flex items-center gap-2`}>
+                  🏆 Certificate Settings
+                </h3>
+                <div>
+                  <label className={`block ${themeClasses.label} mb-2`}>Custom Certificate Template (Optional)</label>
+                  <p className={`text-xs ${themeClasses.textMuted} mb-3`}>
+                    Upload a new certificate template (PDF or PNG) to replace the current one. If not provided, the existing template (or default) will be used.
+                  </p>
+                  {editEventData.certificateTemplateUrl && (
+                    <div className={`mb-3 p-3 ${theme === 'dark' ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200'} ${themeClasses.cardRadius} border`}>
+                      <p className={`text-sm ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>
+                        📄 Current template: <a href={editEventData.certificateTemplateUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500">View current template</a>
+                      </p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Validate file type
+                        const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+                        if (!allowedTypes.includes(file.type)) {
+                          error('Invalid file type. Please upload a PDF or PNG file.');
+                          return;
+                        }
+                        // Validate file size (10MB limit)
+                        if (file.size > 10 * 1024 * 1024) {
+                          error('File too large. Maximum size is 10MB.');
+                          return;
+                        }
+                        setEditCertificateTemplateFile(file);
+                      }
+                    }}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
+                  />
+                  {editCertificateTemplateFile && (
+                    <p className={`text-sm ${theme === 'dark' ? 'text-green-400' : 'text-green-600'} mt-2`}>
+                      ✅ Selected: {editCertificateTemplateFile.name}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -3060,6 +3403,7 @@ function AdminDashboard() {
                     setShowEditEventModal(false);
                     setEditingEvent(null);
                     setUpdateEventMessage('');
+                    setEditCertificateTemplateFile(null);
                   }}
                   className={`px-6 py-3 border ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-700/50' : 'border-gray-300 hover:bg-gray-50'} ${themeClasses.textSecondary} ${themeClasses.cardRadius} transition-colors font-medium`}
                 >
@@ -3067,20 +3411,20 @@ function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isUpdatingEvent}
-                  className={`inline-flex items-center space-x-3 px-8 py-3 ${themeClasses.buttonBase} ${themeClasses.buttonPrimary} ${isUpdatingEvent ? themeClasses.buttonDisabled : ''} font-semibold`}
+                  disabled={isUpdatingEvent || isUploadingEditCertificate}
+                  className={`inline-flex items-center space-x-3 px-8 py-3 ${themeClasses.buttonBase} ${themeClasses.buttonPrimary} ${isUpdatingEvent || isUploadingEditCertificate ? themeClasses.buttonDisabled : ''} font-semibold`}
                 >
-                  {isUpdatingEvent ? (
+                  {isUpdatingEvent || isUploadingEditCertificate ? (
                     <>
                       <div className="relative w-5 h-5">
                         <div className={`absolute inset-0 border-2 ${theme === 'dark' ? 'border-white/30' : 'border-white/30'} rounded-full`}></div>
                         <div className={`absolute inset-0 border-t-2 ${theme === 'dark' ? 'border-white' : 'border-white'} rounded-full animate-spin`}></div>
                       </div>
-                      <span>Updating...</span>
+                      <span>{isUploadingEditCertificate ? 'Uploading certificate...' : 'Updating...'}</span>
                     </>
                   ) : (
                     <>
-                      <span>✨</span>
+                      <span>💾</span>
                       <span>Update Event</span>
                     </>
                   )}

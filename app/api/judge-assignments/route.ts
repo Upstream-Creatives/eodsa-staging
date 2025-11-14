@@ -1,9 +1,21 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const assignments = await db.getAllJudgeAssignments();
+    const { searchParams } = new URL(request.url);
+    const eventId = searchParams.get('eventId');
+    
+    let assignments;
+    if (eventId) {
+      // Get assignments for a specific event
+      const allAssignments = await db.getAllJudgeAssignments();
+      assignments = allAssignments.filter(a => a.eventId === eventId);
+    } else {
+      // Get all assignments
+      assignments = await db.getAllJudgeAssignments();
+    }
+    
     return NextResponse.json({
       success: true,
       assignments

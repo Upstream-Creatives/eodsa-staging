@@ -38,6 +38,8 @@ interface Certificate {
   certificateUrl: string;
   sentAt?: string;
   createdAt: string;
+  eventId?: string;
+  eventName?: string;
 }
 
 function AdminCertificatesPageContent() {
@@ -81,14 +83,21 @@ function AdminCertificatesPageContent() {
   const [selectedPerformanceType, setSelectedPerformanceType] = useState('Solo'); // Default to Solo
   const [selectedStyle, setSelectedStyle] = useState('');
   const [masteryFilter, setMasteryFilter] = useState<'all' | 'competitive' | 'advanced'>('all');
+  const [selectedEventId, setSelectedEventId] = useState<string>('all');
+  const [events, setEvents] = useState<Array<{id: string; name: string}>>([]);
+  const [filteredCertificates, setFilteredCertificates] = useState<Certificate[]>([]);
 
   useEffect(() => {
     loadData();
   }, [viewMode]);
 
   useEffect(() => {
-    applyFilters();
-  }, [rankings, selectedAgeCategory, selectedPerformanceType, selectedStyle, masteryFilter]);
+    if (viewMode === 'rankings') {
+      applyFilters();
+    } else {
+      applyCertificateFilters();
+    }
+  }, [rankings, certificates, selectedAgeCategory, selectedPerformanceType, selectedStyle, masteryFilter, selectedEventId]);
 
   useEffect(() => {
     if (previewRanking) {
@@ -103,6 +112,15 @@ function AdminCertificatesPageContent() {
     setError('');
     
     try {
+      // Load events list for filter
+      const eventsRes = await fetch('/api/events');
+      if (eventsRes.ok) {
+        const eventsData = await eventsRes.json();
+        if (eventsData.success) {
+          setEvents(eventsData.events.map((e: any) => ({ id: e.id, name: e.name })));
+        }
+      }
+      
       if (viewMode === 'rankings') {
         const response = await fetch('/api/rankings?type=nationals');
         if (!response.ok) throw new Error('Failed to load rankings');
@@ -112,7 +130,22 @@ function AdminCertificatesPageContent() {
         const response = await fetch('/api/certificates/list');
         if (!response.ok) throw new Error('Failed to load certificates');
         const data = await response.json();
-        setCertificates(data);
+        // Map the API response to match the Certificate interface
+        const mappedCertificates = data.map((cert: any) => ({
+          id: cert.id,
+          dancerName: cert.dancer_name,
+          percentage: cert.percentage,
+          style: cert.style,
+          title: cert.title,
+          medallion: cert.medallion,
+          eventDate: cert.event_date,
+          certificateUrl: cert.certificate_url,
+          sentAt: cert.sent_at,
+          createdAt: cert.created_at,
+          eventId: cert.event_id,
+          eventName: cert.event_name
+        }));
+        setCertificates(mappedCertificates);
       }
     } catch (err: any) {
       setError(err.message);
@@ -151,6 +184,16 @@ function AdminCertificatesPageContent() {
     }
     
     setFilteredRankings(filtered);
+  };
+
+  const applyCertificateFilters = () => {
+    let filtered = certificates;
+    
+    if (selectedEventId && selectedEventId !== 'all') {
+      filtered = filtered.filter(c => c.eventId === selectedEventId);
+    }
+    
+    setFilteredCertificates(filtered);
   };
 
   const selectTopRanked = (limit: number) => {
@@ -291,14 +334,17 @@ function AdminCertificatesPageContent() {
 
       for (const winner of winnersToGenerate) {
         try {
-          const percentage = Math.round(winner.averageScore);
-          // Hard-coded event date for Nationals 2025
-          const eventDate = 'October 11, 2025';
+          // Calculate percentage correctly: (totalScore / (judgeCount * 100)) * 100
+          const maxPossibleScore = winner.judgeCount * 100; // Each judge can give max 100 points
+          const percentage = maxPossibleScore > 0 ? Math.round((winner.totalScore / maxPossibleScore) * 100 * 10) / 10 : 0;
           
-          // Fetch the performance to get the actual dancer ID and EODSA ID
+          // Fetch the performance to get the actual dancer ID, EODSA ID, and event details
           let dancerId = winner.performanceId; // fallback to performanceId
           let eodsaId = null;
           let email = null;
+          // Use eventId from winner first (most reliable), fallback to performance fetch
+          let eventId = winner.eventId; // Get eventId from rankings data
+          let eventDate = 'October 11, 2025'; // Default fallback
           
           try {
             const perfResponse = await fetch(`/api/performances/${winner.performanceId}`);
@@ -307,6 +353,10 @@ function AdminCertificatesPageContent() {
               if (perfData.performance?.contestantId) {
                 dancerId = perfData.performance.contestantId;
                 eodsaId = perfData.performance.eodsaId;
+              }
+              // Only update eventId if we don't already have it from winner
+              if (!eventId && perfData.performance?.eventId) {
+                eventId = perfData.performance.eventId;
               }
               
               // Try to get email from contestant/dancer
@@ -324,10 +374,34 @@ function AdminCertificatesPageContent() {
                   console.warn('Could not fetch dancer details');
                 }
               }
+              
+              // Get event date if eventId is available
+              if (eventId) {
+                try {
+                  const eventResponse = await fetch(`/api/events/${eventId}`);
+                  if (eventResponse.ok) {
+                    const eventData = await eventResponse.json();
+                    if (eventData.event?.eventDate) {
+                      const date = new Date(eventData.event.eventDate);
+                      eventDate = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                    }
+                  }
+                } catch (err) {
+                  console.warn('Could not fetch event details');
+                }
+              }
             }
           } catch (err) {
             console.warn('Could not fetch performance details, using performanceId as dancerId');
           }
+          
+          // Log the data being sent for debugging
+          console.log('📤 Generating certificate with:', {
+            performanceId: winner.performanceId,
+            eventId: eventId,
+            eventName: winner.eventName,
+            hasEventId: !!eventId
+          });
           
           const response = await fetch('/api/certificates/generate', {
             method: 'POST',
@@ -338,6 +412,7 @@ function AdminCertificatesPageContent() {
               eodsaId: eodsaId, // Include EODSA ID for lookup
               email: email, // Include email for sending
               performanceId: winner.performanceId,
+              eventId: eventId, // Include eventId for custom certificate template
               performanceType: winner.performanceType, // Include performance type for group/duo/trio detection
               studioName: winner.studioName || null, // Include studio name for group performances
               percentage: percentage,
@@ -686,14 +761,42 @@ function AdminCertificatesPageContent() {
         {/* Certificates View */}
         {viewMode === 'certificates' && (
           <>
+            {/* Event Filter */}
+            <div className={`${themeClasses.cardBg} ${themeClasses.cardRadius} ${themeClasses.cardShadow} ${themeClasses.cardPadding} mb-6 border ${themeClasses.cardBorder}`}>
+              <h3 className={`${themeClasses.heading3} mb-3`}>Filters</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={`block ${themeClasses.label} mb-2`}>Event</label>
+                  <select
+                    value={selectedEventId}
+                    onChange={(e) => setSelectedEventId(e.target.value)}
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
+                  >
+                    <option value="all">All Events</option>
+                    {events.map((event) => (
+                      <option key={event.id} value={event.id}>
+                        {event.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            
             {isLoading ? (
               <div className="bg-white rounded-lg shadow-md p-12 text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-gray-600">Loading certificates...</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {certificates.map((cert) => (
+              <>
+                {filteredCertificates.length === 0 ? (
+                  <div className={`${themeClasses.cardBg} ${themeClasses.cardRadius} ${themeClasses.cardShadow} ${themeClasses.cardPadding} text-center border ${themeClasses.cardBorder}`}>
+                    <p className={themeClasses.textSecondary}>No certificates found matching the selected filters.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredCertificates.map((cert) => (
                   <div key={cert.id} className="bg-white rounded-lg shadow-md overflow-hidden">
                     <img
                       src={cert.certificateUrl}
@@ -707,6 +810,9 @@ function AdminCertificatesPageContent() {
                         <p>Style: {cert.style}</p>
                         <p>Title: {cert.title}</p>
                         <p>Medal: {cert.medallion}</p>
+                        {cert.eventName && (
+                          <p className="text-blue-600 font-medium">Event: {cert.eventName}</p>
+                        )}
                         {cert.sentAt && (
                           <p className="text-green-600">✓ Sent {new Date(cert.sentAt).toLocaleDateString()}</p>
                         )}
@@ -734,8 +840,10 @@ function AdminCertificatesPageContent() {
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

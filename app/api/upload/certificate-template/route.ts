@@ -44,11 +44,12 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // Upload to Cloudinary
+    // Note: public_id should not include the folder prefix when folder is specified
     const uploadResult = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: 'certificate-templates',
-          public_id: `certificate-templates/event-${eventId}-template`,
+          public_id: `event-${eventId}-template`, // Don't include folder in public_id
           resource_type: fileType === 'application/pdf' ? 'raw' : 'image',
           overwrite: true,
         },
