@@ -1269,77 +1269,19 @@ export default function CompetitionEntryPage() {
     setIsSubmitting(true);
 
     try {
-      // Validate fees server-side before submission
-      // This ensures fees match database truth (existing entries count)
+      // Prepare entry data for backend validation
+      // The backend will validate all entries together and calculate correct fees
       const dancerId = isStudioMode ? studioInfo?.id : contestant?.id;
       const eodsaId = isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId;
       
-      // Validate each entry's fee server-side
-      const validatedEntries = await Promise.all(
-        entries.map(async (entry) => {
-          try {
-            // For solo entries, use the participant's EODSA ID; for group entries, use contestant's EODSA ID
-            const entryEodsaId = entry.performanceType === 'Solo' && entry.participantIds.length === 1
-              ? entry.participantIds[0] // Solo: use participant's EODSA ID
-              : eodsaId; // Group: use contestant's EODSA ID
-            
-            const validationResponse = await fetch('/api/payments/validate-fee', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                eventId: eventId,
-                dancerId: dancerId,
-                eodsaId: entryEodsaId, // Use correct EODSA ID based on entry type
-                performanceType: entry.performanceType,
-                participantIds: entry.participantIds,
-                masteryLevel: entry.mastery,
-                clientSentTotal: entry.fee
-              })
-            });
-
-            if (!validationResponse.ok) {
-              const errorData = await validationResponse.json();
-              throw new Error(errorData.error || 'Fee validation failed');
-            }
-
-            const validation = await validationResponse.json();
-            
-            if (!validation.isValid) {
-              console.warn(`Fee mismatch for entry "${entry.itemName}":`, {
-                clientSent: entry.fee,
-                computed: validation.computedFee,
-                reason: validation.mismatchReason
-              });
-            }
-
-            // Use server-computed fee instead of client-calculated fee
-            return {
-              ...entry,
-              fee: validation.computedFee, // Use server-computed total fee (includes registration)
-              registrationFee: validation.registrationFee,
-              entryFee: validation.entryFee,
-              validatedFee: validation.computedFee // Store validated fee for later use
-            };
-          } catch (validationError: any) {
-            console.error(`Error validating fee for entry "${entry.itemName}":`, validationError);
-            // Continue with original fee if validation fails (backend will catch it)
-            return entry;
-          }
-        })
-      );
-
-      // Recalculate total with validated fees
-      const validatedTotalFee = validatedEntries.reduce((total, entry) => {
-        // For each entry, we need to sum registration + entry fee
-        // But registration is only charged once per dancer, so we need to be careful
-        // Let's use the entry fee and add registration separately
-        return total + (entry.entryFee || entry.fee);
-      }, 0);
-
-      // Calculate registration fee separately (only for dancers who need it)
-      // The backend will handle this correctly, but we need to send accurate entry fees
       // For solo entries, use the participant's EODSA ID; for group entries, use contestant's EODSA ID
-      const batchEntryData = validatedEntries.map(entry => {
+      const batchEntryData = entries.map(entry => {
+        // For solo entries, the eodsaId should be the participant's EODSA ID
+        // For group entries, use the contestant's EODSA ID
+        const entryEodsaId = entry.performanceType === 'Solo' && entry.participantIds.length === 1
+          ? entry.participantIds[0] // Solo: use participant's EODSA ID
+          : eodsaId; // Group: use contestant's EODSA ID
+        
         // For solo entries, the eodsaId should be the participant's EODSA ID
         // For group entries, use the contestant's EODSA ID
         const entryEodsaId = entry.performanceType === 'Solo' && entry.participantIds.length === 1
@@ -1351,7 +1293,7 @@ export default function CompetitionEntryPage() {
           contestantId: dancerId,
           eodsaId: entryEodsaId,
           participantIds: entry.participantIds,
-          calculatedFee: entry.validatedFee || entry.fee, // Use validated total fee (includes registration if charged)
+          calculatedFee: entry.fee, // Send client-calculated entry fee (backend will validate and correct)
           itemName: entry.itemName,
           choreographer: entry.choreographer,
           mastery: entry.mastery,
