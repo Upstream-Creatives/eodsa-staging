@@ -1343,7 +1343,11 @@ export default function CompetitionEntryPage() {
           // Close EFT modal and show success
           setShowEftModal(false);
           setEftInvoiceNumber('');
-          setSubmissionResult({ entries: entries.length, totalFee: result.computedTotal || totalFeeCalculation.total });
+          // Use computed total from backend (may differ from client calculation)
+          setSubmissionResult({ 
+            entries: entries.length, 
+            totalFee: result.computedTotal || totalFeeCalculation.total 
+          });
           setShowSuccessModal(true);
           setEntries([]); // Clear entries after successful submission
           
@@ -1358,7 +1362,10 @@ export default function CompetitionEntryPage() {
         // Show detailed error if available
         if (errorData.details) {
           console.error('Payment validation error details:', errorData.details);
-          throw new Error(`${errorData.error}: ${errorData.details.mismatchReason || 'Please refresh and try again'}`);
+          const errorMsg = errorData.details.mismatchReason 
+            ? `${errorData.error}: ${errorData.details.mismatchReason}. Expected: ${errorData.details.computedTotal || 'N/A'}, Sent: ${errorData.details.clientSentTotal || 'N/A'}`
+            : `${errorData.error}: Please refresh and try again`;
+          throw new Error(errorMsg);
         }
         throw new Error(errorData.error || 'Failed to submit EFT payment');
       }

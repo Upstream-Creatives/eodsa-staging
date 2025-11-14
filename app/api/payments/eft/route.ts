@@ -176,7 +176,9 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'EFT payment submitted successfully. Entries are now pending payment verification.',
       paymentId: paymentLogId,
-      entriesSubmitted: entries?.length || 0
+      entriesSubmitted: entries?.length || 0,
+      computedTotal: computedTotal, // Return computed total for frontend display
+      clientSentTotal: amount // Return original client-sent total for reference
     });
 
   } catch (error: any) {
