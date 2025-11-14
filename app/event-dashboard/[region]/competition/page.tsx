@@ -152,6 +152,10 @@ interface PerformanceEntry {
   videoFileName?: string;
   videoExternalUrl?: string;
   videoExternalType?: 'youtube' | 'vimeo' | 'other';
+  // Fee validation properties (added during validation)
+  entryFee?: number;
+  registrationFee?: number;
+  validatedFee?: number;
 }
 
 export default function CompetitionEntryPage() {
@@ -1269,29 +1273,104 @@ export default function CompetitionEntryPage() {
     setIsSubmitting(true);
 
     try {
-      const totalFee = totalFeeCalculation.total;
+      // Validate fees server-side before submission
+      // This ensures fees match database truth (existing entries count)
+      const dancerId = isStudioMode ? studioInfo?.id : contestant?.id;
+      const eodsaId = isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId;
       
-      // Create entry data for EFT payment - submit entries immediately as pending
-      const batchEntryData = entries.map(entry => ({
-        eventId: eventId,
-        contestantId: isStudioMode ? studioInfo?.id : contestant?.id,
-        eodsaId: isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId,
-        participantIds: entry.participantIds,
-        calculatedFee: entry.fee,
-        itemName: entry.itemName,
-        choreographer: entry.choreographer,
-        mastery: entry.mastery,
-        itemStyle: entry.itemStyle,
-        estimatedDuration: parseFloat(entry.estimatedDuration.replace(':', '.')) || 2,
-        entryType: entry.entryType,
-        musicFileUrl: entry.musicFileUrl || null,
-        musicFileName: entry.musicFileName || null,
-        videoFileUrl: entry.videoFileUrl || null,
-        videoFileName: entry.videoFileName || null,
-        videoExternalUrl: entry.videoExternalUrl || null,
-        videoExternalType: entry.videoExternalType || null,
-        performanceType: entry.performanceType
-      }));
+      // Validate each entry's fee server-side
+      const validatedEntries = await Promise.all(
+        entries.map(async (entry) => {
+          try {
+            // For solo entries, use the participant's EODSA ID; for group entries, use contestant's EODSA ID
+            const entryEodsaId = entry.performanceType === 'Solo' && entry.participantIds.length === 1
+              ? entry.participantIds[0] // Solo: use participant's EODSA ID
+              : eodsaId; // Group: use contestant's EODSA ID
+            
+            const validationResponse = await fetch('/api/payments/validate-fee', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                eventId: eventId,
+                dancerId: dancerId,
+                eodsaId: entryEodsaId, // Use correct EODSA ID based on entry type
+                performanceType: entry.performanceType,
+                participantIds: entry.participantIds,
+                masteryLevel: entry.mastery,
+                clientSentTotal: entry.fee
+              })
+            });
+
+            if (!validationResponse.ok) {
+              const errorData = await validationResponse.json();
+              throw new Error(errorData.error || 'Fee validation failed');
+            }
+
+            const validation = await validationResponse.json();
+            
+            if (!validation.isValid) {
+              console.warn(`Fee mismatch for entry "${entry.itemName}":`, {
+                clientSent: entry.fee,
+                computed: validation.computedFee,
+                reason: validation.mismatchReason
+              });
+            }
+
+            // Use server-computed fee instead of client-calculated fee
+            return {
+              ...entry,
+              fee: validation.computedFee, // Use server-computed total fee (includes registration)
+              registrationFee: validation.registrationFee,
+              entryFee: validation.entryFee,
+              validatedFee: validation.computedFee // Store validated fee for later use
+            };
+          } catch (validationError: any) {
+            console.error(`Error validating fee for entry "${entry.itemName}":`, validationError);
+            // Continue with original fee if validation fails (backend will catch it)
+            return entry;
+          }
+        })
+      );
+
+      // Recalculate total with validated fees
+      const validatedTotalFee = validatedEntries.reduce((total, entry) => {
+        // For each entry, we need to sum registration + entry fee
+        // But registration is only charged once per dancer, so we need to be careful
+        // Let's use the entry fee and add registration separately
+        return total + (entry.entryFee || entry.fee);
+      }, 0);
+
+      // Calculate registration fee separately (only for dancers who need it)
+      // The backend will handle this correctly, but we need to send accurate entry fees
+      // For solo entries, use the participant's EODSA ID; for group entries, use contestant's EODSA ID
+      const batchEntryData = validatedEntries.map(entry => {
+        // For solo entries, the eodsaId should be the participant's EODSA ID
+        // For group entries, use the contestant's EODSA ID
+        const entryEodsaId = entry.performanceType === 'Solo' && entry.participantIds.length === 1
+          ? entry.participantIds[0] // Solo: use participant's EODSA ID
+          : eodsaId; // Group: use contestant's EODSA ID
+        
+        return {
+          eventId: eventId,
+          contestantId: dancerId,
+          eodsaId: entryEodsaId,
+          participantIds: entry.participantIds,
+          calculatedFee: entry.validatedFee || entry.fee, // Use validated total fee (includes registration if charged)
+          itemName: entry.itemName,
+          choreographer: entry.choreographer,
+          mastery: entry.mastery,
+          itemStyle: entry.itemStyle,
+          estimatedDuration: parseFloat(entry.estimatedDuration.replace(':', '.')) || 2,
+          entryType: entry.entryType,
+          musicFileUrl: entry.musicFileUrl || null,
+          musicFileName: entry.musicFileName || null,
+          videoFileUrl: entry.videoFileUrl || null,
+          videoFileName: entry.videoFileName || null,
+          videoExternalUrl: entry.videoExternalUrl || null,
+          videoExternalType: entry.videoExternalType || null,
+          performanceType: entry.performanceType
+        };
+      });
 
       const userName = isStudioMode ? 
         (studioInfo?.name || 'Studio Manager') : 
@@ -1301,13 +1380,15 @@ export default function CompetitionEntryPage() {
         (studioInfo?.email || 'studio@example.com') : 
         (contestant?.email || 'contestant@example.com');
 
+      // Calculate total fee by validating all entries together
+      // The backend will compute the correct total including registration fees
       const eftPaymentData = {
         eventId: eventId,
-        userId: isStudioMode ? studioInfo?.id : contestant?.id,
+        userId: dancerId,
         userEmail: userEmail,
         userName: userName,
-        eodsaId: isStudioMode ? studioInfo?.registrationNumber : contestant?.eodsaId,
-        amount: totalFee,
+        eodsaId: eodsaId,
+        amount: totalFeeCalculation.total, // Send client-calculated total, backend will validate
         invoiceNumber: eftInvoiceNumber.trim() || undefined,
         itemDescription: entries.map(e => `${e.performanceType}: ${e.itemName}`).join(', '),
         entries: batchEntryData,
@@ -1330,7 +1411,7 @@ export default function CompetitionEntryPage() {
           // Close EFT modal and show success
           setShowEftModal(false);
           setEftInvoiceNumber('');
-          setSubmissionResult({ entries: entries.length, totalFee });
+          setSubmissionResult({ entries: entries.length, totalFee: result.computedTotal || totalFeeCalculation.total });
           setShowSuccessModal(true);
           setEntries([]); // Clear entries after successful submission
           
@@ -1342,6 +1423,11 @@ export default function CompetitionEntryPage() {
         }
       } else {
         const errorData = await response.json();
+        // Show detailed error if available
+        if (errorData.details) {
+          console.error('Payment validation error details:', errorData.details);
+          throw new Error(`${errorData.error}: ${errorData.details.mismatchReason || 'Please refresh and try again'}`);
+        }
         throw new Error(errorData.error || 'Failed to submit EFT payment');
       }
     } catch (eftError: any) {
