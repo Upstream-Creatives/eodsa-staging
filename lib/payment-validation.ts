@@ -235,6 +235,22 @@ export async function validateBatchEntryFees(
   const totalMismatchReason = totalMismatchDetected
     ? `Total mismatch: Client sent ${clientSentTotal}, computed ${totalComputedFee}, difference: ${Math.abs(clientSentTotal - totalComputedFee)}`
     : undefined;
+  
+  // Debug logging for total
+  console.log(`📊 Batch validation summary:`, {
+    entriesCount: entries.length,
+    clientSentTotal,
+    totalComputedFee,
+    mismatchDetected: totalMismatchDetected,
+    mismatchReason: totalMismatchReason,
+    validations: validations.map(v => ({
+      index: v.entryIndex,
+      itemName: v.entry.itemName,
+      clientSent: v.clientSentFee,
+      computed: v.computedFee,
+      mismatch: v.mismatchDetected
+    }))
+  });
 
   return {
     totalComputedFee,
