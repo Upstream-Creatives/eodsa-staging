@@ -495,40 +495,40 @@ function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        // Upload certificate template if provided (after event creation)
-        if (certificateTemplateFile && data.event?.id) {
-          setIsUploadingCertificate(true);
-          try {
-            const uploadFormData = new FormData();
-            uploadFormData.append('file', certificateTemplateFile);
-            uploadFormData.append('eventId', data.event.id);
-            
-            const uploadResponse = await fetch('/api/upload/certificate-template', {
-              method: 'POST',
-              body: uploadFormData,
-            });
-            
-            const uploadData = await uploadResponse.json();
-            if (uploadData.success) {
-              // Update event with certificate template URL
-              await fetch(`/api/events/${data.event.id}`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  certificateTemplateUrl: uploadData.url,
-                  adminSession: session
-                }),
-              });
-            }
-          } catch (uploadError) {
-            console.error('Certificate upload error:', uploadError);
-            // Non-critical error, event is already created
-          } finally {
-            setIsUploadingCertificate(false);
-          }
-        }
+        // Certificate upload temporarily disabled - will be re-enabled after deployment
+        // if (certificateTemplateFile && data.event?.id) {
+        //   setIsUploadingCertificate(true);
+        //   try {
+        //     const uploadFormData = new FormData();
+        //     uploadFormData.append('file', certificateTemplateFile);
+        //     uploadFormData.append('eventId', data.event.id);
+        //     
+        //     const uploadResponse = await fetch('/api/upload/certificate-template', {
+        //       method: 'POST',
+        //       body: uploadFormData,
+        //     });
+        //     
+        //     const uploadData = await uploadResponse.json();
+        //     if (uploadData.success) {
+        //       // Update event with certificate template URL
+        //       await fetch(`/api/events/${data.event.id}`, {
+        //         method: 'PUT',
+        //         headers: {
+        //           'Content-Type': 'application/json',
+        //         },
+        //         body: JSON.stringify({
+        //           certificateTemplateUrl: uploadData.url,
+        //           adminSession: session
+        //         }),
+        //       });
+        //     }
+        //   } catch (uploadError) {
+        //     console.error('Certificate upload error:', uploadError);
+        //     // Non-critical error, event is already created
+        //   } finally {
+        //     setIsUploadingCertificate(false);
+        //   }
+        // }
         setCreateEventMessage('🎉 Event created successfully! This event can accommodate all performance types (Solo, Duet, Trio, Group)');
         setNewEvent({
           name: '',
@@ -751,40 +751,40 @@ function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        // Upload certificate template if provided (after event update)
-        if (editCertificateTemplateFile && editingEvent.id) {
-          setIsUploadingEditCertificate(true);
-          try {
-            const uploadFormData = new FormData();
-            uploadFormData.append('file', editCertificateTemplateFile);
-            uploadFormData.append('eventId', editingEvent.id);
-            
-            const uploadResponse = await fetch('/api/upload/certificate-template', {
-              method: 'POST',
-              body: uploadFormData,
-            });
-            
-            const uploadData = await uploadResponse.json();
-            if (uploadData.success) {
-              // Update event with certificate template URL
-              await fetch(`/api/events/${editingEvent.id}`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  certificateTemplateUrl: uploadData.url,
-                  adminSession: session
-                }),
-              });
-            }
-          } catch (uploadError) {
-            console.error('Certificate upload error:', uploadError);
-            // Non-critical error, event is already updated
-          } finally {
-            setIsUploadingEditCertificate(false);
-          }
-        }
+        // Certificate upload temporarily disabled - will be re-enabled after deployment
+        // if (editCertificateTemplateFile && editingEvent.id) {
+        //   setIsUploadingEditCertificate(true);
+        //   try {
+        //     const uploadFormData = new FormData();
+        //     uploadFormData.append('file', editCertificateTemplateFile);
+        //     uploadFormData.append('eventId', editingEvent.id);
+        //     
+        //     const uploadResponse = await fetch('/api/upload/certificate-template', {
+        //       method: 'POST',
+        //       body: uploadFormData,
+        //     });
+        //     
+        //     const uploadData = await uploadResponse.json();
+        //     if (uploadData.success) {
+        //       // Update event with certificate template URL
+        //       await fetch(`/api/events/${editingEvent.id}`, {
+        //         method: 'PUT',
+        //         headers: {
+        //           'Content-Type': 'application/json',
+        //         },
+        //         body: JSON.stringify({
+        //           certificateTemplateUrl: uploadData.url,
+        //           adminSession: session
+        //         }),
+        //       });
+        //     }
+        //   } catch (uploadError) {
+        //     console.error('Certificate upload error:', uploadError);
+        //     // Non-critical error, event is already updated
+        //   } finally {
+        //     setIsUploadingEditCertificate(false);
+        //   }
+        // }
         
         setUpdateEventMessage('✅ Event updated successfully!');
         fetchData();
@@ -2869,35 +2869,17 @@ function AdminDashboard() {
                 <div>
                   <label className={`block ${themeClasses.label} mb-2`}>Custom Certificate Template (Optional)</label>
                   <p className={`text-xs ${themeClasses.textMuted} mb-3`}>
-                    Upload a custom certificate template (PDF or PNG) for this event. If not provided, the default template will be used.
+                    Certificate template upload is temporarily disabled. The default template will be used for all events.
                   </p>
                   <input
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        // Validate file type
-                        const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-                        if (!allowedTypes.includes(file.type)) {
-                          error('Invalid file type. Please upload a PDF or PNG file.');
-                          return;
-                        }
-                        // Validate file size (10MB limit)
-                        if (file.size > 10 * 1024 * 1024) {
-                          error('File too large. Maximum size is 10MB.');
-                          return;
-                        }
-                        setCertificateTemplateFile(file);
-                      }
-                    }}
-                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
+                    disabled
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200 opacity-50 cursor-not-allowed`}
                   />
-                  {certificateTemplateFile && (
-                    <p className={`text-sm ${theme === 'dark' ? 'text-green-400' : 'text-green-600'} mt-2`}>
-                      ✅ Selected: {certificateTemplateFile.name}
-                    </p>
-                  )}
+                  <p className={`text-xs ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'} mt-2`}>
+                    ⚠️ Upload feature temporarily disabled
+                  </p>
                 </div>
               </div>
 
@@ -3340,7 +3322,7 @@ function AdminDashboard() {
                 <div>
                   <label className={`block ${themeClasses.label} mb-2`}>Custom Certificate Template (Optional)</label>
                   <p className={`text-xs ${themeClasses.textMuted} mb-3`}>
-                    Upload a new certificate template (PDF or PNG) to replace the current one. If not provided, the existing template (or default) will be used.
+                    Certificate template upload is temporarily disabled. The default template will be used.
                   </p>
                   {editEventData.certificateTemplateUrl && (
                     <div className={`mb-3 p-3 ${theme === 'dark' ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200'} ${themeClasses.cardRadius} border`}>
@@ -3352,30 +3334,12 @@ function AdminDashboard() {
                   <input
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        // Validate file type
-                        const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-                        if (!allowedTypes.includes(file.type)) {
-                          error('Invalid file type. Please upload a PDF or PNG file.');
-                          return;
-                        }
-                        // Validate file size (10MB limit)
-                        if (file.size > 10 * 1024 * 1024) {
-                          error('File too large. Maximum size is 10MB.');
-                          return;
-                        }
-                        setEditCertificateTemplateFile(file);
-                      }
-                    }}
-                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200`}
+                    disabled
+                    className={`w-full px-4 py-3 ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardRadius} ${themeClasses.inputFocus} ${themeClasses.textPrimary} transition-all duration-200 opacity-50 cursor-not-allowed`}
                   />
-                  {editCertificateTemplateFile && (
-                    <p className={`text-sm ${theme === 'dark' ? 'text-green-400' : 'text-green-600'} mt-2`}>
-                      ✅ Selected: {editCertificateTemplateFile.name}
-                    </p>
-                  )}
+                  <p className={`text-xs ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'} mt-2`}>
+                    ⚠️ Upload feature temporarily disabled
+                  </p>
                 </div>
               </div>
 
