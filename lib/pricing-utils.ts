@@ -248,13 +248,19 @@ export function validateAndCorrectEntryFee(
  * Get a human-readable explanation for solo pricing
  */
 function getSoloFeeExplanation(soloCount: number, eventConfig?: EventFeeConfig): string {
-  const fees = { ...DEFAULT_FEES, ...eventConfig };
+  const fees: Required<EventFeeConfig> = { ...DEFAULT_FEES, ...eventConfig };
   const currencySymbol = fees.currency === 'USD' ? '$' : fees.currency === 'EUR' ? '€' : fees.currency === 'GBP' ? '£' : 'R';
   
-  if (soloCount === 1) return `${currencySymbol}${fees.solo1Fee} (first solo)`;
-  if (soloCount === 2) return `${currencySymbol}${fees.solo2Fee - fees.solo1Fee} (package total ${currencySymbol}${fees.solo2Fee})`;
-  if (soloCount === 3) return `${currencySymbol}${fees.solo3Fee - fees.solo2Fee} (package total ${currencySymbol}${fees.solo3Fee})`;
-  return `${currencySymbol}${fees.soloAdditionalFee} (additional solo)`;
+  // All fees are guaranteed to be defined due to DEFAULT_FEES spread
+  const solo1Fee = fees.solo1Fee;
+  const solo2Fee = fees.solo2Fee;
+  const solo3Fee = fees.solo3Fee;
+  const soloAdditionalFee = fees.soloAdditionalFee;
+  
+  if (soloCount === 1) return `${currencySymbol}${solo1Fee} (first solo)`;
+  if (soloCount === 2) return `${currencySymbol}${solo2Fee - solo1Fee} (package total ${currencySymbol}${solo2Fee})`;
+  if (soloCount === 3) return `${currencySymbol}${solo3Fee - solo2Fee} (package total ${currencySymbol}${solo3Fee})`;
+  return `${currencySymbol}${soloAdditionalFee} (additional solo)`;
 }
 
 /**
