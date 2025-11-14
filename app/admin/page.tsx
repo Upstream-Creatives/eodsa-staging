@@ -2562,7 +2562,7 @@ function AdminDashboard() {
             <form onSubmit={handleCreateEvent} className={themeClasses.cardPadding}>
               {/* Event Type Selection - Top of Form */}
               <div className={`mb-6 p-4 ${theme === 'dark' ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200'} ${themeClasses.cardRadius} border`}>
-                <label className={`block ${themeClasses.label} mb-3`}>
+                <label className={`block ${themeClasses.label} mb-3 font-semibold`}>
                   Event Type <span className="text-red-500">*</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2661,7 +2661,7 @@ function AdminDashboard() {
                 </div>
 
                   <div>
-                    <label className={`block ${themeClasses.label} mb-2`}>Number of Judges <span className="text-red-500">*</span></label>
+                    <label className={`block ${themeClasses.label} mb-2 font-semibold`}>Number of Judges <span className="text-red-500">*</span></label>
                     <input
                       type="number"
                       min="1"
@@ -2672,7 +2672,7 @@ function AdminDashboard() {
                       required
                     />
                     <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
-                      ⚖️ Target number of judges for this event
+                      ⚖️ Target number of judges for this event (1-10)
                     </p>
                   </div>
                   </div>
