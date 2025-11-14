@@ -2560,7 +2560,7 @@ function AdminDashboard() {
             </div>
             
             <form onSubmit={handleCreateEvent} className={themeClasses.cardPadding}>
-              {/* Event Type Selection - Top of Form */}
+              {/* Event Type Selection - Top of Form - v2.0 */}
               <div className={`mb-6 p-4 ${theme === 'dark' ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200'} ${themeClasses.cardRadius} border`}>
                 <label className={`block ${themeClasses.label} mb-3 font-semibold`}>
                   Event Type <span className="text-red-500">*</span>
