@@ -153,9 +153,10 @@ export async function computeIncrementalFee(
   let breakdown = '';
 
   if (performanceType === 'Solo') {
-    const nextSoloCount = entryCount + 1;
-    entryFee = calculateSoloEntryFee(nextSoloCount, eventConfig);
-    breakdown = `Solo entry #${nextSoloCount}: ${getSoloFeeBreakdown(nextSoloCount, eventConfig)}`;
+    // For solo entries, the solo number is: existing count + 1
+    const soloNumber = entryCount + 1;
+    entryFee = calculateSoloEntryFee(soloNumber, eventConfig);
+    breakdown = `Solo entry #${soloNumber}: ${getSoloFeeBreakdown(soloNumber, eventConfig)}`;
   } else {
     // For duet/trio/group, fee is per participant
     entryFee = calculateNonSoloFee(performanceType, participantIds.length, eventConfig);
@@ -205,21 +206,19 @@ export async function computeIncrementalFee(
 /**
  * Get human-readable breakdown for solo pricing
  */
-function getSoloFeeBreakdown(soloCount: number, eventConfig: EventFeeConfig): string {
+function getSoloFeeBreakdown(soloNumber: number, eventConfig: EventFeeConfig): string {
   const currency = eventConfig.currency === 'USD' ? '$' : 
                    eventConfig.currency === 'EUR' ? '€' : 
                    eventConfig.currency === 'GBP' ? '£' : 'R';
   
-  if (soloCount === 1) {
-    return `${currency}${eventConfig.solo1Fee} (first solo)`;
-  } else if (soloCount === 2) {
-    const incremental = eventConfig.solo2Fee - eventConfig.solo1Fee;
-    return `${currency}${incremental} (package total: ${currency}${eventConfig.solo2Fee})`;
-  } else if (soloCount === 3) {
-    const incremental = eventConfig.solo3Fee - eventConfig.solo2Fee;
-    return `${currency}${incremental} (package total: ${currency}${eventConfig.solo3Fee})`;
+  if (soloNumber === 1) {
+    return `${currency}${eventConfig.solo1Fee} (1st solo)`;
+  } else if (soloNumber === 2) {
+    return `${currency}${eventConfig.solo2Fee} (2nd solo)`;
+  } else if (soloNumber === 3) {
+    return `${currency}${eventConfig.solo3Fee} (3rd solo)`;
   } else {
-    return `${currency}${eventConfig.soloAdditionalFee} (additional solo)`;
+    return `${currency}${eventConfig.soloAdditionalFee} (${soloNumber}th solo)`;
   }
 }
 

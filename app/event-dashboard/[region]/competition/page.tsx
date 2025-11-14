@@ -702,32 +702,19 @@ export default function CompetitionEntryPage() {
       // Compute performance-only fee locally using event configuration
       let fee = 0;
       if (capitalizedPerformanceType === 'Solo') {
-        // Use event-specific solo pricing
+        // Solo pricing: solo1Fee, solo2Fee, solo3Fee are INDIVIDUAL fees, NOT cumulative
+        // soloCount is the solo number (1st, 2nd, 3rd, etc.)
         const solo1Fee = event?.solo1Fee || 400;
-        const solo2Fee = event?.solo2Fee || 750;
-        const solo3Fee = event?.solo3Fee || 1050;
+        const solo2Fee = event?.solo2Fee || 200;
+        const solo3Fee = event?.solo3Fee || 100;
         const soloAdditionalFee = event?.soloAdditionalFee || 100;
-        
-        // Validate fee structure to prevent negative fees
-        const validatedSolo2Fee = solo2Fee >= solo1Fee ? solo2Fee : solo1Fee;
-        const validatedSolo3Fee = solo3Fee >= validatedSolo2Fee ? solo3Fee : validatedSolo2Fee;
         
         if (soloCount === 1) {
           fee = solo1Fee;
         } else if (soloCount === 2) {
-          // 2nd solo: Calculate incremental cost from package pricing
-          fee = validatedSolo2Fee - solo1Fee;
-          if (fee < 0) {
-            console.warn(`⚠️ Negative fee detected for 2nd solo: ${fee}. Event config: solo1Fee=${solo1Fee}, solo2Fee=${solo2Fee}. Using 0.`);
-            fee = 0;
-          }
+          fee = solo2Fee;
         } else if (soloCount === 3) {
-          // 3rd solo: Calculate incremental cost from package pricing
-          fee = validatedSolo3Fee - validatedSolo2Fee;
-          if (fee < 0) {
-            console.warn(`⚠️ Negative fee detected for 3rd solo: ${fee}. Event config: solo2Fee=${solo2Fee}, solo3Fee=${solo3Fee}. Using 0.`);
-            fee = 0;
-          }
+          fee = solo3Fee;
         } else {
           // 4th+ solos: Additional solo fee
           fee = soloAdditionalFee;
@@ -795,25 +782,21 @@ export default function CompetitionEntryPage() {
       // Use event-specific solo pricing
       let performanceFee = 0;
       
+      // Solo pricing: solo1Fee, solo2Fee, solo3Fee are INDIVIDUAL fees, NOT cumulative
       const solo1Fee = event?.solo1Fee || 400;
-      const solo2Fee = event?.solo2Fee || 750;
-      const solo3Fee = event?.solo3Fee || 1050;
-      
-      // Validate fee structure to prevent negative fees
-      const validatedSolo2Fee = solo2Fee >= solo1Fee ? solo2Fee : solo1Fee;
-      const validatedSolo3Fee = solo3Fee >= validatedSolo2Fee ? solo3Fee : validatedSolo2Fee;
+      const solo2Fee = event?.solo2Fee || 200;
+      const solo3Fee = event?.solo3Fee || 100;
+      const soloAdditionalFee = event?.soloAdditionalFee || 100;
       
       if (totalSoloCount === 1) {
         performanceFee = solo1Fee;
       } else if (totalSoloCount === 2) {
-        // Calculate cumulative, then subtract previous
-        performanceFee = Math.max(0, validatedSolo2Fee - solo1Fee);
+        performanceFee = solo2Fee;
       } else if (totalSoloCount === 3) {
-        // Calculate cumulative, then subtract previous
-        performanceFee = Math.max(0, validatedSolo3Fee - validatedSolo2Fee);
+        performanceFee = solo3Fee;
       } else {
         // More than 3: additional fee
-        performanceFee = event?.soloAdditionalFee || 100;
+        performanceFee = soloAdditionalFee;
       }
       // Performance-only
       return performanceFee;
@@ -1028,25 +1011,20 @@ export default function CompetitionEntryPage() {
         const soloEntries = newEntries.filter(entry => entry.performanceType === 'Solo');
         
         // Recalculate solo fees based on new positioning using event configuration
+        // Solo pricing: solo1Fee, solo2Fee, solo3Fee are INDIVIDUAL fees, NOT cumulative
         soloEntries.forEach((entry, index) => {
-          const soloCount = index + 1;
+          const soloNumber = index + 1;
           const solo1Fee = event?.solo1Fee || 400;
-          const solo2Fee = event?.solo2Fee || 750;
-          const solo3Fee = event?.solo3Fee || 1050;
+          const solo2Fee = event?.solo2Fee || 200;
+          const solo3Fee = event?.solo3Fee || 100;
           const soloAdditionalFee = event?.soloAdditionalFee || 100;
           
-          // Validate fee structure to prevent negative fees
-          const validatedSolo2Fee = solo2Fee >= solo1Fee ? solo2Fee : solo1Fee;
-          const validatedSolo3Fee = solo3Fee >= validatedSolo2Fee ? solo3Fee : validatedSolo2Fee;
-          
-          if (soloCount === 1) {
+          if (soloNumber === 1) {
             entry.fee = solo1Fee;
-          } else if (soloCount === 2) {
-            // 2nd solo: incremental cost
-            entry.fee = Math.max(0, validatedSolo2Fee - solo1Fee);
-          } else if (soloCount === 3) {
-            // 3rd solo: incremental cost
-            entry.fee = Math.max(0, validatedSolo3Fee - validatedSolo2Fee);
+          } else if (soloNumber === 2) {
+            entry.fee = solo2Fee;
+          } else if (soloNumber === 3) {
+            entry.fee = solo3Fee;
           } else {
             // 4th+ solos: additional fee
             entry.fee = soloAdditionalFee;
