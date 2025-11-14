@@ -1282,12 +1282,6 @@ export default function CompetitionEntryPage() {
           ? entry.participantIds[0] // Solo: use participant's EODSA ID
           : eodsaId; // Group: use contestant's EODSA ID
         
-        // For solo entries, the eodsaId should be the participant's EODSA ID
-        // For group entries, use the contestant's EODSA ID
-        const entryEodsaId = entry.performanceType === 'Solo' && entry.participantIds.length === 1
-          ? entry.participantIds[0] // Solo: use participant's EODSA ID
-          : eodsaId; // Group: use contestant's EODSA ID
-        
         return {
           eventId: eventId,
           contestantId: dancerId,
