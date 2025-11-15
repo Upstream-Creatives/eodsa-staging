@@ -121,56 +121,7 @@ export async function POST(request: Request) {
       participationMode: (event as any).participationMode
     });
 
-    // 🚀 AUTO-ASSIGN: Automatically assign judges who are already assigned to this region
-    // But respect the event's numberOfJudges limit
-    try {
-      const eventNumberOfJudges = (event as any).numberOfJudges || 4;
-      console.log(`🔍 [Auto-Assign] Event requires ${eventNumberOfJudges} judges`);
-      
-      const existingAssignments = await database.getAllJudgeAssignments();
-      const nationalsJudges = existingAssignments
-        .filter(assignment => assignment.region === body.region)
-        .reduce((unique, assignment) => {
-          if (!unique.find(j => j.judgeId === assignment.judgeId)) {
-            unique.push({ judgeId: assignment.judgeId, assignedBy: assignment.assignedBy });
-          }
-          return unique;
-        }, [] as { judgeId: string; assignedBy: string }[]);
-
-      // Only auto-assign up to the event's numberOfJudges limit
-      const judgesToAssign = nationalsJudges.slice(0, eventNumberOfJudges);
-      let assignedCount = 0;
-      let skippedCount = 0;
-
-      // Auto-assign each judge up to the limit
-      for (const judge of judgesToAssign) {
-        try {
-          await database.createJudgeEventAssignment({
-            judgeId: judge.judgeId,
-            eventId: event.id,
-            assignedBy: judge.assignedBy // Use original admin who assigned them to region
-          });
-          assignedCount++;
-        } catch (assignError: any) {
-          // Skip if already assigned or limit reached
-          if (assignError.message?.includes('already assigned') || assignError.message?.includes('maximum')) {
-            skippedCount++;
-            console.log(`⚠️ [Auto-Assign] Skipped judge ${judge.judgeId}: ${assignError.message}`);
-          } else {
-            throw assignError; // Re-throw unexpected errors
-          }
-        }
-      }
-
-      if (assignedCount > 0) {
-        console.log(`✅ Auto-assigned ${assignedCount}/${eventNumberOfJudges} judges to new event: ${event.name}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`);
-      } else if (nationalsJudges.length > 0) {
-        console.log(`ℹ️ [Auto-Assign] No judges auto-assigned (${skippedCount} skipped, limit: ${eventNumberOfJudges})`);
-      }
-    } catch (assignmentError) {
-      console.error('Auto-assignment failed (non-critical):', assignmentError);
-      // Don't fail event creation if auto-assignment fails
-    }
+    // Auto-assignment removed - judges must be manually assigned after event creation
 
     return NextResponse.json({
       success: true,
