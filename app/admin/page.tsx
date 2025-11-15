@@ -25,6 +25,8 @@ interface Event {
   entryFee: number;
   createdBy: string;
   createdAt: string;
+  // Event type (participation mode)
+  participationMode?: 'live' | 'virtual' | 'hybrid';
   // Fee configuration
   registrationFeePerDancer?: number;
   solo1Fee?: number;
@@ -4547,16 +4549,22 @@ function EventsTabContent({ events, setShowCreateEventModal, handleEditEvent, ha
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium hidden sm:table-cell">{event.region}</td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
                       <div className="space-y-1">
-                        {event.performanceType === 'All' ? (
-                          <span className="inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-purple-50 to-blue-50 text-purple-700 border-purple-200">
-                            🎭 All Types
+                        {/* Show Event Type (participationMode) instead of performanceType */}
+                        {event.participationMode ? (
+                          <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border ${
+                            event.participationMode === 'live' 
+                              ? 'bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border-blue-200'
+                              : event.participationMode === 'virtual'
+                              ? 'bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border-purple-200'
+                              : 'bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-700 border-indigo-200'
+                          }`}>
+                            {event.participationMode === 'live' ? '🎭' : 
+                             event.participationMode === 'virtual' ? '🎥' : 
+                             '🔀'} {event.participationMode.charAt(0).toUpperCase() + event.participationMode.slice(1)}
                           </span>
                         ) : (
-                          <span className="inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-green-50 to-teal-50 text-green-700 border-green-200">
-                            {event.performanceType === 'Solo' ? '🕺' : 
-                             event.performanceType === 'Duet' ? '👯' : 
-                             event.performanceType === 'Trio' ? '👨‍👩‍👧' : 
-                             event.performanceType === 'Group' ? '👥' : '🎭'} {event.performanceType}
+                          <span className="inline-flex px-2 sm:px-3 py-1 text-xs font-bold rounded-full border bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 border-gray-200">
+                            🎭 Hybrid
                           </span>
                         )}
                         <div className={`text-xs sm:text-sm ${themeClasses.textSecondary}`}>{event.ageCategory}</div>
