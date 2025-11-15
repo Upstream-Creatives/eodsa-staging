@@ -2538,6 +2538,12 @@ export const db = {
       throw new Error('This judge is already assigned to this event');
     }
     
+    // Get the event to check numberOfJudges limit
+    const event = await this.getEventById(assignment.eventId);
+    if (!event) {
+      throw new Error('Event not found');
+    }
+    
     // Check how many judges are already assigned to this event
     const judgeCount = await sqlClient`
       SELECT COUNT(*) as count FROM judge_event_assignments 
@@ -2546,8 +2552,10 @@ export const db = {
     ` as any[];
     
     const currentJudgeCount = parseInt(judgeCount[0].count);
-    if (currentJudgeCount >= 4) {
-      throw new Error('This event already has the maximum of 4 judges assigned');
+    const maxJudges = event.numberOfJudges || 4;
+    
+    if (currentJudgeCount >= maxJudges) {
+      throw new Error(`This event already has the maximum of ${maxJudges} judges assigned`);
     }
     
     const id = `assignment-${Date.now()}`;
