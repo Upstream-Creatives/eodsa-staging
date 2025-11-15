@@ -163,6 +163,33 @@ export interface Performance {
   announcerNotes?: string;
 }
 
+// Unified User interface - replaces Judge for all user types
+// Note: Database uses 'role' column with values: 'judge', 'admin', 'superadmin', 'backstage_manager', 'announcer', 'registration', 'media'
+// 'userType' is computed from 'role' for frontend display purposes
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  password: string; // hashed
+  userType: 'judge' | 'staff' | 'admin' | 'superadmin'; // Computed from role for frontend
+  isAdmin: boolean; // Legacy field, kept for backward compatibility. true for admin/superadmin, false for judge/staff
+  role: 'judge' | 'admin' | 'superadmin' | 'backstage_manager' | 'announcer' | 'registration' | 'media'; // Database column
+  specialization?: string[];
+  // Staff permissions (only for staff users)
+  staffPermissions?: {
+    announcer?: boolean;
+    backstage?: boolean;
+    media?: boolean;
+    runner?: boolean;
+    eventViewer?: boolean;
+    scoreApprover?: boolean;
+    judgeAccess?: boolean; // Only if intentionally checked
+  };
+  createdAt: string;
+}
+
+// Legacy Judge interface - kept for backward compatibility
 export interface Judge {
   id: string;
   name: string;
@@ -182,6 +209,17 @@ export interface JudgeEventAssignment {
   assignedBy: string; // admin id who made the assignment
   assignedAt: string;
   status: 'active' | 'inactive';
+  displayOrder?: number; // For drag-and-drop reordering
+}
+
+// NEW: Event staff assignments
+export interface EventStaffAssignment {
+  id: string;
+  eventId: string;
+  staffId: string;
+  eventRole: 'announcer' | 'backstage' | 'media' | 'runner' | 'score_approver';
+  assignedBy?: string;
+  assignedAt: string;
 }
 
 export interface Score {

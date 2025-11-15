@@ -262,6 +262,38 @@ export const initializeDatabase = async () => {
     // NEW: Add role column to judges table for new user types
     await sqlClient`ALTER TABLE judges ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'judge'`;
     
+    // NEW: Unified User Management System - Add new columns to judges table
+    await sqlClient`ALTER TABLE judges ADD COLUMN IF NOT EXISTS phone TEXT`;
+    await sqlClient`ALTER TABLE judges ADD COLUMN IF NOT EXISTS user_type TEXT DEFAULT 'judge' CHECK (user_type IN ('judge', 'staff', 'admin', 'superadmin'))`;
+    // Staff permissions (only relevant for staff users)
+    await sqlClient`ALTER TABLE judges ADD COLUMN IF NOT EXISTS staff_permissions JSONB DEFAULT '{}'::jsonb`;
+    // Update role to match user_type if not already set
+    await sqlClient`
+      UPDATE judges 
+      SET user_type = CASE 
+        WHEN is_admin = true AND role = 'admin' THEN 'admin'
+        WHEN role IN ('backstage_manager', 'announcer', 'registration', 'media') THEN 'staff'
+        ELSE 'judge'
+      END
+      WHERE user_type IS NULL OR user_type = 'judge'
+    `;
+    
+    // Create event_staff_assignments table for event-level staff role assignments
+    await sqlClient`
+      CREATE TABLE IF NOT EXISTS event_staff_assignments (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        event_id TEXT NOT NULL,
+        staff_id TEXT NOT NULL,
+        event_role TEXT NOT NULL CHECK (event_role IN ('announcer', 'backstage', 'media', 'runner', 'score_approver')),
+        assigned_by TEXT,
+        assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(event_id, staff_id, event_role)
+      )
+    `;
+    
+    // Add ordering to judge_event_assignments for drag-and-drop reordering
+    await sqlClient`ALTER TABLE judge_event_assignments ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0`;
+    
     // NEW: Performance presence tracking table
     await sqlClient`
       CREATE TABLE IF NOT EXISTS performance_presence (

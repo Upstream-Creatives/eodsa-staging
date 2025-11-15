@@ -46,6 +46,8 @@ interface Judge {
   createdAt: string;
 }
 
+// Removed - no longer used
+/*
 interface JudgeAssignment {
   id: string;
   judgeId: string;
@@ -55,6 +57,7 @@ interface JudgeAssignment {
   eventName: string;
   eventDate?: string;
 }
+*/
 
 interface Dancer {
   id: string;
@@ -133,17 +136,38 @@ interface StudioApplication {
   };
 }
 
+// Judge Assignments Tab Component
+interface JudgeAssignmentsTabContentProps {
+  events: any[];
+  availableJudges: any[];
+  expandedEventId: string | null;
+  setExpandedEventId: (id: string | null) => void;
+  showAddJudgeModal: boolean;
+  selectedEventId: string | null;
+  openAddJudgeModal: (eventId: string) => void;
+  handleAddJudge: (judgeId: string) => void;
+  handleRemoveJudge: (eventId: string, judgeId: string, assignmentId?: string) => void;
+  getAvailableJudgesForEvent: (eventId: string) => any[];
+  setShowAddJudgeModal: (show: boolean) => void;
+  setSelectedEventId: (id: string | null) => void;
+  staffAccounts: Client[];
+  expandedStaffId: string | null;
+  setExpandedStaffId: (id: string | null) => void;
+  handleUpdateDashboardAccess: (clientId: string, dashboardId: string, enabled: boolean) => void;
+  loadingAssignments: boolean;
+  theme: string;
+  themeClasses: any;
+}
+
 function AdminDashboard() {
   const { theme } = useTheme();
   const themeClasses = getThemeClasses(theme);
   const [events, setEvents] = useState<Event[]>([]);
-  const [judges, setJudges] = useState<Judge[]>([]);
-  const [assignments, setAssignments] = useState<JudgeAssignment[]>([]);
   const [dancers, setDancers] = useState<Dancer[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [studioApplications, setStudioApplications] = useState<StudioApplication[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [activeTab, setActiveTab] = useState<'events' | 'staff' | 'assignments' | 'dancers' | 'studios' | 'sound-tech' | 'music-tracking' | 'clients'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'users' | 'dancers' | 'studios' | 'sound-tech' | 'music-tracking' | 'assignments'>('events');
   const [isLoading, setIsLoading] = useState(true);
   const { success, error, warning, info } = useToast();
   const { showAlert, showConfirm, showPrompt } = useAlert();
@@ -187,25 +211,6 @@ function AdminDashboard() {
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [createEventMessage, setCreateEventMessage] = useState('');
 
-  // Judge creation state
-  const [newJudge, setNewJudge] = useState({
-    name: '',
-    email: '',
-    password: '',
-    isAdmin: false
-  });
-  const [isCreatingJudge, setIsCreatingJudge] = useState(false);
-  const [createJudgeMessage, setCreateJudgeMessage] = useState('');
-
-  // Assignment state
-  const [assignment, setAssignment] = useState({
-    judgeId: '',
-    eventId: ''
-  });
-  const [isAssigning, setIsAssigning] = useState(false);
-  const [assignmentMessage, setAssignmentMessage] = useState('');
-  const [reassigningJudges, setReassigningJudges] = useState<Set<string>>(new Set());
-  const [unassigningJudges, setUnassigningJudges] = useState<Set<string>>(new Set());
 
   // Database cleaning state
   const [isCleaningDatabase, setIsCleaningDatabase] = useState(false);
@@ -235,15 +240,24 @@ function AdminDashboard() {
   const [studioSearchTerm, setStudioSearchTerm] = useState('');
   const [studioStatusFilter, setStudioStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
 
+  // Judge assignments state
+  const [eventsWithJudges, setEventsWithJudges] = useState<any[]>([]);
+  const [availableJudges, setAvailableJudges] = useState<any[]>([]);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [showAddJudgeModal, setShowAddJudgeModal] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  
+  // Dashboard access management state
+  const [staffAccounts, setStaffAccounts] = useState<Client[]>([]);
+  const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null);
+
   // Modal states
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
   const [showEditEventModal, setShowEditEventModal] = useState(false);
-  const [showCreateJudgeModal, setShowCreateJudgeModal] = useState(false);
-  const [showJudgePassword, setShowJudgePassword] = useState(false);
   const [showFinancialModal, setShowFinancialModal] = useState(false);
   const [selectedDancerFinances, setSelectedDancerFinances] = useState<any>(null);
   const [loadingFinances, setLoadingFinances] = useState(false);
-  const [showAssignJudgeModal, setShowAssignJudgeModal] = useState(false);
   const [showEmailTestModal, setShowEmailTestModal] = useState(false);
   const [showStudioModal, setShowStudioModal] = useState(false);
   const [selectedStudioProfile, setSelectedStudioProfile] = useState<any>(null);
@@ -310,10 +324,8 @@ function AdminDashboard() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [eventsRes, judgesRes, assignmentsRes, dancersRes, studiosRes, applicationsRes, clientsRes] = await Promise.all([
+      const [eventsRes, dancersRes, studiosRes, applicationsRes, clientsRes] = await Promise.all([
         fetch('/api/events'),
-        fetch('/api/judges'),
-        fetch('/api/judge-assignments/nationals-view'),
         fetch('/api/admin/dancers'),
         fetch('/api/admin/studios'),
         fetch('/api/admin/studio-applications'),
@@ -321,16 +333,12 @@ function AdminDashboard() {
       ]);
 
       const eventsData = await eventsRes.json();
-      const judgesData = await judgesRes.json();
-      const assignmentsData = await assignmentsRes.json();
       const dancersData = await dancersRes.json();
       const studiosData = await studiosRes.json();
       const applicationsData = await applicationsRes.json();
       const clientsData = await clientsRes.json();
 
       if (eventsData.success) setEvents(eventsData.events);
-      if (judgesData.success) setJudges(judgesData.judges);
-      if (assignmentsData.success) setAssignments(assignmentsData.assignments);
       if (dancersData.success) setDancers(dancersData.dancers);
       if (studiosData.success) setStudios(studiosData.studios);
       if (applicationsData.success) setStudioApplications(applicationsData.applications);
@@ -874,79 +882,6 @@ function AdminDashboard() {
     );
   };
 
-  const handleCreateJudge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Prevent double submission
-    if (isCreatingJudge) {
-      return;
-    }
-
-    // Validate password strength
-    if (newJudge.password.length < 8) {
-      setCreateJudgeMessage('Error: Password must be at least 8 characters long');
-      return;
-    }
-    
-    // Check for uppercase letter
-    if (!/[A-Z]/.test(newJudge.password)) {
-      setCreateJudgeMessage('Error: Password must contain at least one uppercase letter');
-      return;
-    }
-    
-    // Check for lowercase letter
-    if (!/[a-z]/.test(newJudge.password)) {
-      setCreateJudgeMessage('Error: Password must contain at least one lowercase letter');
-      return;
-    }
-    
-    // Check for number
-    if (!/[0-9]/.test(newJudge.password)) {
-      setCreateJudgeMessage('Error: Password must contain at least one number');
-      return;
-    }
-    
-    // Check for special character
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(newJudge.password)) {
-      setCreateJudgeMessage('Error: Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)');
-      return;
-    }
-
-    setIsCreatingJudge(true);
-    setCreateJudgeMessage('');
-
-    try {
-      const response = await fetch('/api/judges', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newJudge),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setCreateJudgeMessage('Judge created successfully!');
-        setNewJudge({
-          name: '',
-          email: '',
-          password: '',
-          isAdmin: false
-        });
-        fetchData();
-        setShowCreateJudgeModal(false);
-        setTimeout(() => setCreateJudgeMessage(''), 5000);
-      } else {
-        setCreateJudgeMessage(`Error: ${data.error || 'Unknown error occurred'}`);
-      }
-    } catch (error) {
-      console.error('Error creating judge:', error);
-      setCreateJudgeMessage('Error creating judge. Please check your connection and try again.');
-    } finally {
-      setIsCreatingJudge(false);
-    }
-  };
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1015,106 +950,6 @@ function AdminDashboard() {
     }
   };
 
-  const handleAssignJudge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Prevent double submission
-    if (isAssigning) {
-      return;
-    }
-
-    setIsAssigning(true);
-    setAssignmentMessage('');
-
-    try {
-      const session = localStorage.getItem('adminSession');
-      if (!session) {
-        setAssignmentMessage('Error: Session expired. Please log in again.');
-        return;
-      }
-
-      const adminData = JSON.parse(session);
-
-      // Find the selected event by ID
-      const selectedEvent = events.find(event => event.id === assignment.eventId);
-
-      if (!selectedEvent) {
-        setAssignmentMessage('Error: Selected event not found.');
-        return;
-      }
-
-      // Assign judge to the unified event
-      const response = await fetch('/api/judge-assignments/event', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          judgeId: assignment.judgeId,
-          eventId: selectedEvent.id,
-          assignedBy: adminData.id
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setAssignmentMessage(`🎉 Judge assigned to "${selectedEvent.name}" successfully! This judge can now score all performance types within this event.`);
-        setAssignment({
-          judgeId: '',
-          eventId: ''
-        });
-        fetchData();
-        setShowAssignJudgeModal(false);
-        setTimeout(() => setAssignmentMessage(''), 5000);
-      } else {
-        setAssignmentMessage(`❌ Failed to assign judge. Error: ${data.error}`);
-      }
-    } catch (error) {
-      console.error('Error assigning judge:', error);
-      setAssignmentMessage('Error assigning judge. Please check your connection and try again.');
-    } finally {
-      setIsAssigning(false);
-    }
-  };
-
-  const handleUnassignJudge = async (assignment: JudgeAssignment) => {
-    if (unassigningJudges.has(assignment.id)) return;
-    
-    showConfirm(
-      `Are you sure you want to unassign ${assignment.judgeName} from "${assignment.eventName}"?`,
-      async () => {
-        setUnassigningJudges(prev => new Set(prev).add(assignment.id));
-        
-        try {
-          const response = await fetch(`/api/judge-assignments/${assignment.id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': 'Bearer admin',
-            },
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            success(result.message);
-            fetchData(); // Reload data
-          } else {
-            const errorData = await response.json();
-            error(`Failed to unassign judge: ${errorData.error}`);
-          }
-        } catch (err) {
-          console.error('Error unassigning judge:', err);
-          error('Failed to unassign judge');
-        } finally {
-          setUnassigningJudges(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(assignment.id);
-            return newSet;
-          });
-        }
-      }
-    );
-  };
 
   const handleCleanDatabase = async () => {
     // Prevent double submission
@@ -1571,40 +1406,6 @@ function AdminDashboard() {
     }
   };
 
-  const handleDeleteJudge = async (judgeId: string, judgeName: string) => {
-    if (!confirm(`Are you sure you want to delete judge "${judgeName}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      const session = localStorage.getItem('adminSession');
-      if (!session) {
-        setCreateJudgeMessage('Please log in again to continue');
-        return;
-      }
-
-      const adminData = JSON.parse(session);
-
-      const response = await fetch(`/api/judges/${judgeId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${adminData.id}`
-        }
-      });
-
-      if (response.ok) {
-        setCreateJudgeMessage(`Judge "${judgeName}" deleted successfully`);
-        fetchData();
-        setTimeout(() => setCreateJudgeMessage(''), 5000);
-      } else {
-        const error = await response.json();
-        setCreateJudgeMessage(`Error: ${error.error || 'Failed to delete judge'}`);
-      }
-    } catch (error) {
-      console.error('Delete judge error:', error);
-      setCreateJudgeMessage('Error: Failed to delete judge');
-    }
-  };
 
 
   const handleLogout = () => {
@@ -1614,13 +1415,9 @@ function AdminDashboard() {
 
   const clearMessages = () => {
     setCreateEventMessage('');
-    setCreateJudgeMessage('');
-    setAssignmentMessage('');
     setCleanDatabaseMessage('');
     setEmailTestResults('');
     setShowCreateEventModal(false);
-    setShowCreateJudgeModal(false);
-    setShowAssignJudgeModal(false);
     setShowEmailTestModal(false);
   };
 
@@ -1685,7 +1482,256 @@ function AdminDashboard() {
 
   useEffect(() => {
     clearMessages();
+    if (activeTab === 'assignments') {
+      loadJudgeAssignments();
+      loadStaffAccounts();
+    }
   }, [activeTab]);
+
+  const loadJudgeAssignments = async () => {
+    setLoadingAssignments(true);
+    try {
+      // Load all judge assignments (same as old assignments page)
+      const assignmentsRes = await fetch('/api/judge-assignments');
+      if (!assignmentsRes.ok) {
+        throw new Error('Failed to fetch assignments');
+      }
+      
+      const assignmentsData = await assignmentsRes.json();
+      if (!assignmentsData.success) {
+        throw new Error('Failed to load assignments');
+      }
+      
+      const allAssignments = assignmentsData.assignments || [];
+      console.log('[Judge Assignments] Loaded assignments:', allAssignments.length);
+
+      // Load events
+      const eventsRes = await fetch('/api/events');
+      if (!eventsRes.ok) {
+        throw new Error('Failed to fetch events');
+      }
+      
+      const eventsData = await eventsRes.json();
+      if (!eventsData.success) {
+        throw new Error('Failed to load events');
+      }
+      
+      const allEvents = eventsData.events || [];
+      console.log('[Judge Assignments] Loaded events:', allEvents.length);
+
+      // Group assignments by event
+      const assignmentsByEvent = new Map<string, any[]>();
+      allAssignments.forEach((assignment: any) => {
+        if (!assignmentsByEvent.has(assignment.eventId)) {
+          assignmentsByEvent.set(assignment.eventId, []);
+        }
+        assignmentsByEvent.get(assignment.eventId)!.push(assignment);
+      });
+
+      // Map events with their judges
+      // Default expected judges to 4 (standard for competitions)
+      const eventsWithJudgesData = allEvents.map((event: Event) => {
+        const eventAssignments = assignmentsByEvent.get(event.id) || [];
+        const judges = eventAssignments.map((assignment: any) => ({
+          id: assignment.judgeId,
+          name: assignment.judgeName,
+          email: assignment.judgeEmail,
+          assignmentId: assignment.id,
+          displayOrder: 0 // We can add this from the assignment if needed
+        }));
+        
+        // Get expected judge count (default to 4 if not specified)
+        const expectedJudges = 4; // Standard competition judge count
+        
+        console.log(`[Judge Assignments] Event ${event.name}: ${judges.length}/${expectedJudges} judges`);
+        
+        return {
+          ...event,
+          judges: judges,
+          expectedJudges: expectedJudges
+        };
+      });
+
+      console.log('[Judge Assignments] Final events with judges:', eventsWithJudgesData);
+      setEventsWithJudges(eventsWithJudgesData);
+
+      // Load available judges
+      const judgesRes = await fetch('/api/users?userType=judge');
+      if (judgesRes.ok) {
+        const judgesData = await judgesRes.json();
+        if (judgesData.success) {
+          console.log('[Judge Assignments] Available judges:', judgesData.users?.length || 0);
+          setAvailableJudges(judgesData.users || []);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading judge assignments:', err);
+      error('Failed to load judge assignments');
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  const handleAddJudge = async (judgeId: string) => {
+    if (!selectedEventId) {
+      error('Invalid event');
+      return;
+    }
+
+    // Check if max judges reached
+    const event = eventsWithJudges.find(e => e.id === selectedEventId);
+    const currentJudgeCount = event?.judges?.length || 0;
+    const maxJudges = event?.expectedJudges || 4;
+    
+    if (currentJudgeCount >= maxJudges) {
+      error(`Maximum number of judges (${maxJudges}) has been reached for this event`);
+      return;
+    }
+
+    try {
+      const session = localStorage.getItem('adminSession');
+      const adminData = session ? JSON.parse(session) : null;
+      
+      const response = await fetch(`/api/events/${selectedEventId}/teams/judges`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          judgeId,
+          assignedBy: adminData?.id || 'admin'
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        success('Judge assigned successfully');
+        setShowAddJudgeModal(false);
+        setSelectedEventId(null);
+        loadJudgeAssignments();
+      } else {
+        // Check if error is about max judges
+        if (data.error?.toLowerCase().includes('maximum') || data.error?.toLowerCase().includes('max')) {
+          error(data.error);
+        } else {
+          error(data.error || 'Failed to assign judge');
+        }
+      }
+    } catch (err) {
+      console.error('Error assigning judge:', err);
+      error('Failed to assign judge');
+    }
+  };
+
+  const handleRemoveJudge = async (eventId: string, judgeId: string, assignmentId?: string) => {
+    // Check if judge has scored anything for this event
+    try {
+      const checkResponse = await fetch(`/api/events/${eventId}/judges/${judgeId}/has-scores`);
+      const checkData = await checkResponse.json();
+      
+      if (checkData.hasScores) {
+        error('Cannot remove judge: This judge has already scored items for this event. Judges with scores cannot be removed.');
+        return;
+      }
+    } catch (err) {
+      console.error('Error checking judge scores:', err);
+      // Continue with removal if check fails (better to allow than block)
+    }
+
+    if (!confirm('Are you sure you want to remove this judge from the event?')) {
+      return;
+    }
+
+    try {
+      // Use the new API endpoint first, fallback to old method if needed
+      if (assignmentId) {
+        // Delete by assignment ID (old method)
+        const response = await fetch(`/api/judge-assignments/${assignmentId}`, {
+          method: 'DELETE',
+        });
+        const data = await response.json();
+        if (data.success) {
+          success('Judge removed successfully');
+          loadJudgeAssignments();
+          return;
+        }
+      }
+      
+      // Try new API endpoint
+      const response = await fetch(`/api/events/${eventId}/teams/judges?judgeId=${judgeId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        success('Judge removed successfully');
+        loadJudgeAssignments();
+      } else {
+        error(data.error || 'Failed to remove judge');
+      }
+    } catch (err) {
+      console.error('Error removing judge:', err);
+      error('Failed to remove judge');
+    }
+  };
+
+  const openAddJudgeModal = (eventId: string) => {
+    setSelectedEventId(eventId);
+    setShowAddJudgeModal(true);
+  };
+
+  const getAvailableJudgesForEvent = (eventId: string) => {
+    const event = eventsWithJudges.find(e => e.id === eventId);
+    if (!event) return [];
+    
+    const assignedJudgeIds = event.judges.map((j: any) => j.id);
+    return availableJudges.filter(j => !assignedJudgeIds.includes(j.id));
+  };
+
+  const loadStaffAccounts = async () => {
+    try {
+      const response = await fetch('/api/clients');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setStaffAccounts(data.clients || []);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading staff accounts:', err);
+    }
+  };
+
+  const handleUpdateDashboardAccess = async (clientId: string, dashboardId: string, enabled: boolean) => {
+    try {
+      const client = staffAccounts.find(c => c.id === clientId);
+      if (!client) return;
+
+      const newDashboards = enabled
+        ? [...(client.allowedDashboards || []), dashboardId]
+        : (client.allowedDashboards || []).filter((d: string) => d !== dashboardId);
+
+      const response = await fetch('/api/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: clientId,
+          allowedDashboards: newDashboards
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        success('Dashboard access updated successfully');
+        loadStaffAccounts();
+      } else {
+        error(data.error || 'Failed to update dashboard access');
+      }
+    } catch (err) {
+      console.error('Error updating dashboard access:', err);
+      error('Failed to update dashboard access');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -1803,14 +1849,23 @@ function AdminDashboard() {
           <nav className="flex flex-col sm:flex-row gap-2">
             {[
               { id: 'events', label: 'Events', icon: '🏆', color: 'indigo' },
-              { id: 'staff', label: 'Judges', icon: '👨‍⚖️', color: 'purple' },
-              { id: 'assignments', label: 'Assignments', icon: '🔗', color: 'pink' },
+              { id: 'users', label: 'Users', icon: '👥', color: 'purple', link: '/admin/users' },
+              { id: 'assignments', label: 'Assignments', icon: '⚖️', color: 'amber' },
               { id: 'dancers', label: 'Dancers', icon: '💃', color: 'rose' },
               { id: 'studios', label: 'Studios', icon: '🏢', color: 'orange' },
-              { id: 'clients', label: 'Staff Accounts', icon: '👤', color: 'emerald' },
               { id: 'sound-tech', label: 'Sound Tech', icon: '🎵', color: 'violet' },
               { id: 'music-tracking', label: 'Music Upload Tracking', icon: '🎼', color: 'cyan' }
             ].map((tab) => (
+                tab.link ? (
+                  <Link
+                    key={tab.id}
+                    href={tab.link}
+                    className={`flex items-center justify-center space-x-2 sm:space-x-3 px-4 sm:px-6 py-3 sm:py-4 rounded-lg sm:rounded-xl font-semibold transition-all duration-300 text-sm sm:text-base transform ${themeClasses.textSecondary} ${theme === 'dark' ? 'hover:bg-gray-700/50 hover:shadow-md' : 'hover:bg-white/80 hover:shadow-md'} hover:scale-102`}
+                  >
+                    <span className="text-lg sm:text-xl">{tab.icon}</span>
+                    <span>{tab.label}</span>
+                  </Link>
+                ) : (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
@@ -1826,6 +1881,7 @@ function AdminDashboard() {
                   <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                 )}
                 </button>
+                )
               ))}
             </nav>
         </div>
@@ -1842,28 +1898,6 @@ function AdminDashboard() {
           />
         )}
 
-        {/* Staff Tab - Enhanced */}
-        {activeTab === 'staff' && (
-          <StaffTabContent
-            judges={judges}
-            setShowCreateJudgeModal={setShowCreateJudgeModal}
-            handleDeleteJudge={handleDeleteJudge}
-            theme={theme}
-            themeClasses={themeClasses}
-          />
-        )}
-
-        {/* Assignments Tab - Enhanced */}
-        {activeTab === 'assignments' && (
-          <AssignmentsTabContent
-            assignments={assignments}
-            setShowAssignJudgeModal={setShowAssignJudgeModal}
-            handleUnassignJudge={handleUnassignJudge}
-            unassigningJudges={unassigningJudges}
-            theme={theme}
-            themeClasses={themeClasses}
-          />
-        )}
 
         {/* Dancers Tab - Enhanced */}
         {activeTab === 'dancers' && (
@@ -3399,245 +3433,8 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* Create Judge Modal */}
-      {showCreateJudgeModal && (
-        <div className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/30">
-            <div className="p-6 border-b border-gray-200/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-lg">👨‍⚖️</span>
-                  </div>
-                  <h2 className="text-xl font-bold ${themeClasses.textPrimary}">Create New Judge</h2>
-                </div>
-                <button
-                  onClick={() => setShowCreateJudgeModal(false)}
-                  className={`${themeClasses.textMuted} ${theme === 'dark' ? 'hover:text-white hover:bg-gray-700/50' : 'hover:text-gray-900 hover:bg-gray-100/50'} p-2 rounded-lg transition-colors`}
-                >
-                  <span className="text-2xl">×</span>
-                </button>
-              </div>
-            </div>
-            
-            <form onSubmit={handleCreateJudge} className="p-6">
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Judge Name</label>
-                  <input
-                    type="text"
-                      value={newJudge.name}
-                      onChange={(e) => {
-                        const cleanValue = e.target.value.replace(/[^a-zA-Z\s\-\']/g, '');
-                        setNewJudge(prev => ({ ...prev, name: cleanValue }));
-                      }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
-                      required
-                    placeholder="Full Name"
-                    />
-                  </div>
-                  
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Email</label>
-                    <input
-                      type="email"
-                      value={newJudge.email}
-                      onChange={(e) => setNewJudge(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
-                      required
-                    placeholder="judge@email.com"
-                    />
-                  </div>
-                  
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Password</label>
-                  <div className="relative">
-                    <input
-                      type={showJudgePassword ? 'text' : 'password'}
-                      value={newJudge.password}
-                      onChange={(e) => setNewJudge(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base font-medium placeholder-gray-400"
-                      required
-                      minLength={6}
-                      placeholder="Minimum 6 characters"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowJudgePassword(v => !v)}
-                      className={`absolute inset-y-0 right-2 my-1 px-3 rounded-lg ${theme === 'dark' ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}
-                      aria-label="Toggle password visibility"
-                    >
-                      {showJudgePassword ? '🙈' : '👁️'}
-                    </button>
-                  </div>
-                </div>
-                  
-                <div className="lg:col-span-1 flex items-center justify-center lg:justify-start">
-                  <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                      id="isAdmin"
-                        checked={newJudge.isAdmin}
-                        onChange={(e) => setNewJudge(prev => ({ ...prev, isAdmin: e.target.checked }))}
-                      className="h-5 w-5 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                      />
-                    <label htmlFor="isAdmin" className="ml-3 block text-sm font-medium">
-                          Admin privileges
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                  
-              {createJudgeMessage && (
-                <div className={`mt-6 p-4 rounded-xl font-medium animate-slideIn ${
-                  createJudgeMessage.includes('Error') 
-                    ? 'bg-red-50 text-red-700 border border-red-200' 
-                    : 'bg-green-50 text-green-700 border border-green-200'
-                }`}>
-                  <div className="flex items-center space-x-2">
-                    <span>{createJudgeMessage.includes('Error') ? '❌' : '✅'}</span>
-                    <span>{createJudgeMessage}</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateJudgeModal(false)}
-                  className={`px-6 py-3 border ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-700/50' : 'border-gray-300 hover:bg-gray-50'} ${themeClasses.textSecondary} rounded-xl transition-colors font-medium`}
-                >
-                  Cancel
-                </button>
-                    <button
-                      type="submit"
-                      disabled={isCreatingJudge}
-                  className="inline-flex items-center space-x-3 px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg font-semibold"
-                >
-                  {isCreatingJudge ? (
-                    <>
-                      <div className="relative w-5 h-5">
-                        <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
-            </div>
-                      <span>Creating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>✨</span>
-                      <span>Create Judge</span>
-                    </>
-                  )}
-                    </button>
-                  </div>
-                </form>
-          </div>
-                  </div>
-                )}
-
-      {/* Assign Judge Modal */}
-      {showAssignJudgeModal && (
-        <div className={`fixed inset-0 ${theme === 'dark' ? 'bg-black/70' : 'bg-black/30'} backdrop-blur-sm flex items-center justify-center p-4 z-50`}>
-          <div className={`${themeClasses.modalBg} rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border ${themeClasses.modalBorder}`}>
-            <div className={`p-6 border-b ${theme === 'dark' ? 'border-gray-700/50' : 'border-gray-200/50'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-lg">🔗</span>
-                  </div>
-                  <h2 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Assign Judge to Event</h2>
-                </div>
-                <button
-                  onClick={() => setShowAssignJudgeModal(false)}
-                  className={`${themeClasses.textMuted} p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-white/10 hover:text-gray-200' : 'hover:bg-gray-100/50 hover:text-gray-700'} transition-colors`}
-                >
-                  <span className="text-2xl">×</span>
-                </button>
-              </div>
-              </div>
-
-            <form onSubmit={handleAssignJudge} className="p-6">
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Select Judge</label>
-                  <select
-                    value={assignment.judgeId}
-                    onChange={(e) => setAssignment(prev => ({ ...prev, judgeId: e.target.value }))}
-                    className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 text-base font-medium ${theme === 'dark' ? 'bg-gray-800/90 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'}`}
-                    required
-                  >
-                    <option value="">Choose a judge</option>
-                    {judges.filter(judge => !judge.isAdmin).map(judge => (
-                      <option key={judge.id} value={judge.id}>{judge.name} ({judge.email})</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div className="lg:col-span-1">
-                  <label className={`block text-sm font-semibold ${themeClasses.textSecondary} mb-3`}>Select Event</label>
-                  <select
-                    value={assignment.eventId}
-                    onChange={(e) => setAssignment(prev => ({ ...prev, eventId: e.target.value }))}
-                    className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 text-base font-medium ${theme === 'dark' ? 'bg-gray-800/90 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'}`}
-                    required
-                  >
-                    <option value="">Choose an event</option>
-                    {events.map(event => (
-                      <option key={event.id} value={event.id}>
-                        {event.name} {event.performanceType === 'All' ? '(All Performance Types)' : `(${event.performanceType})`}
-                      </option>
-                    ))}
-                  </select>
-                  <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
-                    💡 Unified events support all performance types (Solo, Duet, Trio, Group) within the same event.
-                  </p>
-                </div>
-              </div>
-
-              {assignmentMessage && (
-                <div className={`mt-6 p-4 rounded-xl font-medium animate-slideIn ${
-                  assignmentMessage.includes('Error') 
-                    ? 'bg-red-50 text-red-700 border border-red-200' 
-                    : 'bg-green-50 text-green-700 border border-green-200'
-                }`}>
-                  <div className="flex items-center space-x-2">
-                    <span>{assignmentMessage.includes('Error') ? '❌' : '✅'}</span>
-                    <span>{assignmentMessage}</span>
-                </div>
-              </div>
-          )}
-
-              <div className={`flex justify-end space-x-4 mt-8 pt-6 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-                <button
-                  type="button"
-                  onClick={() => setShowAssignJudgeModal(false)}
-                  className={`px-6 py-3 border ${theme === 'dark' ? 'border-gray-600 hover:bg-white/10' : 'border-gray-300 hover:bg-gray-50'} ${themeClasses.textSecondary} rounded-xl transition-colors font-medium`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isAssigning}
-                  className="inline-flex items-center space-x-3 px-8 py-3 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl hover:from-pink-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg font-semibold"
-                >
-                  {isAssigning ? (
-                    <>
-                      <div className="relative w-5 h-5">
-                        <div className="absolute inset-0 border-2 border-white/30 rounded-full"></div>
-            </div>
-                      <span>Assigning...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>✨</span>
-                      <span>Assign to All Types</span>
-                    </>
-                  )}
-                </button>
-        </div>
-            </form>
-      </div>
-        </div>
-      )}
+      {/* Create Judge Modal - Removed, use /admin/users page instead */}
+      {/* Assign Judge Modal - Removed, use event teams page instead */}
 
 
       {/* Email Test Modal - Disabled for Phase 1 */}
@@ -4277,365 +4074,394 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* Clients Tab */}
-      {activeTab === 'clients' && (
-        <div className="space-y-6 sm:space-y-8 animate-fadeIn">
-          {/* Staff Creation Form */}
-          <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
-            <div className={`px-4 sm:px-6 py-4 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-b ${themeClasses.cardBorder}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white text-lg">👤</span>
-                  </div>
-                  <div>
-                    <h2 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>Create Staff Account</h2>
-                    <p className={`text-xs ${themeClasses.textMuted}`}>Add a new staff member with dashboard access</p>
-                  </div>
-                </div>
+      {/* Assignments Tab */}
+      {activeTab === 'assignments' && (
+        <JudgeAssignmentsTabContent
+          events={eventsWithJudges}
+          availableJudges={availableJudges}
+          expandedEventId={expandedEventId}
+          setExpandedEventId={setExpandedEventId}
+          showAddJudgeModal={showAddJudgeModal}
+          selectedEventId={selectedEventId}
+          openAddJudgeModal={openAddJudgeModal}
+          handleAddJudge={handleAddJudge}
+          handleRemoveJudge={handleRemoveJudge}
+          getAvailableJudgesForEvent={getAvailableJudgesForEvent}
+          setShowAddJudgeModal={setShowAddJudgeModal}
+          setSelectedEventId={setSelectedEventId}
+          staffAccounts={staffAccounts}
+          expandedStaffId={expandedStaffId}
+          setExpandedStaffId={setExpandedStaffId}
+          handleUpdateDashboardAccess={handleUpdateDashboardAccess}
+          loadingAssignments={loadingAssignments}
+          theme={theme}
+          themeClasses={themeClasses}
+        />
+      )}
+    </div>
+  );
+}
+
+const AVAILABLE_DASHBOARDS = [
+  { id: 'announcer-dashboard', name: 'Announcer', icon: '📢' },
+  { id: 'backstage-dashboard', name: 'Backstage', icon: '🎭' },
+  { id: 'media-dashboard', name: 'Media', icon: '📸' },
+  { id: 'registration-dashboard', name: 'Registration', icon: '📝' },
+  { id: 'event-dashboard', name: 'Event Viewer', icon: '🏆' }
+];
+
+function JudgeAssignmentsTabContent({
+  events,
+  availableJudges,
+  expandedEventId,
+  setExpandedEventId,
+  showAddJudgeModal,
+  selectedEventId,
+  openAddJudgeModal,
+  handleAddJudge,
+  handleRemoveJudge,
+  getAvailableJudgesForEvent,
+  setShowAddJudgeModal,
+  setSelectedEventId,
+  staffAccounts,
+  expandedStaffId,
+  setExpandedStaffId,
+  handleUpdateDashboardAccess,
+  loadingAssignments,
+  theme,
+  themeClasses
+}: JudgeAssignmentsTabContentProps) {
+  return (
+    <div className="space-y-6 sm:space-y-8 animate-fadeIn">
+      <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
+        <div className={`px-4 sm:px-6 py-4 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border-b ${themeClasses.cardBorder}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-lg">⚖️</span>
+              </div>
+              <div>
+                <h2 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>Assignments</h2>
+                <p className={`text-xs ${themeClasses.textMuted}`}>Manage judge assignments and dashboard access for events</p>
               </div>
             </div>
-            
-            <form onSubmit={handleCreateClient} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
-                    Staff Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={clientForm.name}
-                    onChange={(e) => setClientForm(prev => ({ ...prev, name: e.target.value }))}
-                    className={`w-full px-4 py-2.5 border rounded-lg ${themeClasses.cardBorder} ${themeClasses.cardBg} ${themeClasses.textPrimary} focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors`}
-                    placeholder="Enter staff member name"
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
-                    Email Address <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={clientForm.email}
-                    onChange={(e) => setClientForm(prev => ({ ...prev, email: e.target.value }))}
-                    className={`w-full px-4 py-2.5 border rounded-lg ${themeClasses.cardBorder} ${themeClasses.cardBg} ${themeClasses.textPrimary} focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors`}
-                    placeholder="staff@email.com"
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
-                    Password <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={clientForm.password}
-                    onChange={(e) => setClientForm(prev => ({ ...prev, password: e.target.value }))}
-                    className={`w-full px-4 py-2.5 border rounded-lg ${themeClasses.cardBorder} ${themeClasses.cardBg} ${themeClasses.textPrimary} focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors`}
-                    placeholder="Minimum 8 characters"
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={clientForm.phone}
-                    onChange={(e) => setClientForm(prev => ({ ...prev, phone: e.target.value }))}
-                    className={`w-full px-4 py-2.5 border rounded-lg ${themeClasses.cardBorder} ${themeClasses.cardBg} ${themeClasses.textPrimary} focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors`}
-                    placeholder="+27 12 345 6789"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-3`}>
-                  Allowed Dashboards
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {[
-                    { id: 'announcer-dashboard', name: 'Announcer', icon: '📢' },
-                    { id: 'backstage-dashboard', name: 'Backstage', icon: '🎭' },
-                    { id: 'media-dashboard', name: 'Media', icon: '📸' },
-                    { id: 'registration-dashboard', name: 'Registration', icon: '📝' },
-                    { id: 'event-dashboard', name: 'Event Viewing', icon: '🏆' },
-                    { id: 'judge-dashboard', name: 'Judge', icon: '⚖️' }
-                  ].map((dashboard) => (
-                    <label 
-                      key={dashboard.id} 
-                      className={`flex items-center space-x-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        clientForm.allowedDashboards.includes(dashboard.id)
-                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-emerald-300'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={clientForm.allowedDashboards.includes(dashboard.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setClientForm(prev => ({
-                              ...prev,
-                              allowedDashboards: [...prev.allowedDashboards, dashboard.id]
-                            }));
-                          } else {
-                            setClientForm(prev => ({
-                              ...prev,
-                              allowedDashboards: prev.allowedDashboards.filter(d => d !== dashboard.id)
-                            }));
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="text-lg">{dashboard.icon}</span>
-                      <span className={`text-sm font-medium ${themeClasses.textPrimary}`}>{dashboard.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`p-4 rounded-lg border-2 ${themeClasses.cardBorder} ${themeClasses.cardBg}`}>
-                <label className="flex items-start space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={clientForm.canViewAllEvents}
-                    onChange={(e) => setClientForm(prev => ({ ...prev, canViewAllEvents: e.target.checked }))}
-                    className="mt-1 w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <div>
-                    <span className={`text-sm font-semibold ${themeClasses.textPrimary} block`}>Can view all events</span>
-                    <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
-                      If unchecked, staff will only see events they are specifically assigned to
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <div>
-                <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
-                  Notes
-                </label>
-                <textarea
-                  value={clientForm.notes}
-                  onChange={(e) => setClientForm(prev => ({ ...prev, notes: e.target.value }))}
-                  rows={3}
-                  className={`w-full px-4 py-2.5 border rounded-lg ${themeClasses.cardBorder} ${themeClasses.cardBg} ${themeClasses.textPrimary} focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors resize-none`}
-                  placeholder="Internal notes about this staff member..."
-                />
-              </div>
-
-              <div className="flex justify-end pt-4 border-t ${themeClasses.cardBorder}">
-                <button
-                  type="submit"
-                  disabled={isCreatingClient}
-                  className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-semibold rounded-lg hover:from-emerald-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  {isCreatingClient ? (
-                    <span className="flex items-center space-x-2">
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      <span>Creating...</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center space-x-2">
-                      <span>✓</span>
-                      <span>Create Staff Account</span>
-                    </span>
-                  )}
-                </button>
-              </div>
-            </form>
           </div>
+        </div>
 
-          {/* Staff List */}
-          <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
-            <div className={`px-4 sm:px-6 py-4 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-b ${themeClasses.cardBorder}`}>
-              <h2 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>Staff Accounts</h2>
-              <p className={`text-sm ${themeClasses.textMuted} mt-1`}>
-                Manage staff accounts and their dashboard access permissions
-              </p>
+        <div className="p-6">
+          {loadingAssignments ? (
+            <div className={`text-center py-12 ${themeClasses.textMuted}`}>
+              <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <svg className="animate-spin h-12 w-12 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium mb-2">Loading assignments...</h3>
+              <p className="text-sm">Please wait while we fetch the data.</p>
+            </div>
+          ) : events.length === 0 ? (
+            <div className={`text-center py-12 ${themeClasses.textMuted}`}>
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                <span className="text-2xl">📅</span>
+              </div>
+              <h3 className="text-lg font-medium mb-2">No Events Available</h3>
+              <p className="text-sm">No events have been created yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className={`${themeClasses.cardBg} rounded-xl border ${themeClasses.cardBorder} p-4 sm:p-6`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>{event.name}</h3>
+                        <span className={`px-2 py-1 bg-amber-500/20 text-amber-300 rounded text-xs`}>
+                          {event.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <span className={themeClasses.textMuted}>Date: </span>
+                          <span className={themeClasses.textPrimary}>
+                            {new Date(event.eventDate).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className={themeClasses.textMuted}>Venue: </span>
+                          <span className={themeClasses.textPrimary}>{event.venue}</span>
+                        </div>
+                        <div>
+                          <span className={themeClasses.textMuted}>Region: </span>
+                          <span className={themeClasses.textPrimary}>{event.region}</span>
+                        </div>
+                        <div>
+                          <span className={themeClasses.textMuted}>Judges: </span>
+                          <span className={themeClasses.textPrimary}>
+                            {event.judges?.length || 0}/{event.expectedJudges || 4}
+                            {((event.judges?.length || 0) < (event.expectedJudges || 4)) && (
+                              <span className="text-amber-500 ml-1" title="Event needs 4 judges">
+                                ⚠️
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setExpandedEventId(
+                        expandedEventId === event.id ? null : event.id
+                      )}
+                      className="ml-4 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+                    >
+                      {expandedEventId === event.id ? 'Hide' : 'View'} Judges
+                    </button>
+                  </div>
+
+                  {expandedEventId === event.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-700/20">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className={`text-lg font-semibold ${themeClasses.textPrimary}`}>
+                          Assigned Judges ({event.judges?.length || 0}/{event.expectedJudges || 4})
+                        </h4>
+                        {(event.judges?.length || 0) >= (event.expectedJudges || 4) ? (
+                          <div className="px-4 py-2 bg-gray-500 text-white rounded-lg text-sm cursor-not-allowed opacity-50">
+                            Maximum Reached ({event.expectedJudges || 4}/{event.expectedJudges || 4})
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => openAddJudgeModal(event.id)}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={getAvailableJudgesForEvent(event.id).length === 0}
+                          >
+                            + Add Judge
+                          </button>
+                        )}
+                      </div>
+
+                      {!event.judges || event.judges.length === 0 ? (
+                        <div className={`text-center py-8 ${themeClasses.textMuted}`}>
+                          <p>No judges assigned to this event yet.</p>
+                          {(event.judges?.length || 0) < (event.expectedJudges || 4) && getAvailableJudgesForEvent(event.id).length > 0 && (
+                            <button
+                              onClick={() => openAddJudgeModal(event.id)}
+                              className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm"
+                            >
+                              Add First Judge
+                            </button>
+                          )}
+                          {(event.judges?.length || 0) >= (event.expectedJudges || 4) && (
+                            <p className="mt-4 text-sm text-amber-500">Maximum number of judges ({event.expectedJudges || 4}) has been reached.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {event.judges
+                            .sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                            .map((judge: any, index: number) => (
+                              <div
+                                key={judge.id}
+                                className={`${theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'} rounded-lg p-4 flex items-center justify-between`}
+                              >
+                                <div className="flex items-center space-x-4">
+                                  <div className="w-10 h-10 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold">
+                                    {index + 1}
+                                  </div>
+                                  <div>
+                                    <div className={themeClasses.textPrimary + ' font-medium'}>{judge.name}</div>
+                                    <div className={themeClasses.textMuted + ' text-sm'}>{judge.email}</div>
+                                    {judge.phone && (
+                                      <div className={themeClasses.textMuted + ' text-sm'}>{judge.phone}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleRemoveJudge(event.id, judge.id, judge.assignmentId)}
+                                  className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors text-sm"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add Judge Modal */}
+      {showAddJudgeModal && selectedEventId && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`${themeClasses.cardBg} rounded-2xl border ${themeClasses.cardBorder} p-6 max-w-md w-full max-h-[80vh] overflow-y-auto`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-xl font-bold ${themeClasses.textPrimary}`}>Add Judge to Event</h3>
+              <button
+                onClick={() => {
+                  setShowAddJudgeModal(false);
+                  setSelectedEventId(null);
+                }}
+                className={themeClasses.textMuted + ' hover:' + themeClasses.textPrimary + ' transition-colors'}
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="p-6">
-              {clients.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">👤</span>
-                  </div>
-                  <h3 className={`text-lg font-semibold ${themeClasses.textPrimary} mb-2`}>No Staff Yet</h3>
-                  <p className={`${themeClasses.textMuted}`}>
-                    Create your first staff account to get started
-                  </p>
+            <div className="mb-4">
+              <label className={`block text-sm font-medium ${themeClasses.textPrimary} mb-2`}>
+                Select Judge
+              </label>
+              {getAvailableJudgesForEvent(selectedEventId).length === 0 ? (
+                <div className={`text-center py-8 ${themeClasses.textMuted}`}>
+                  <p>All available judges are already assigned to this event.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className={`border-b ${themeClasses.cardBorder}`}>
-                        <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.textMuted} uppercase tracking-wider`}>
-                          Staff Member
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.textMuted} uppercase tracking-wider`}>
-                          Phone
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.textMuted} uppercase tracking-wider`}>
-                          Dashboards
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.textMuted} uppercase tracking-wider`}>
-                          Status
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.textMuted} uppercase tracking-wider`}>
-                          Last Login
-                        </th>
-                        <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.textMuted} uppercase tracking-wider`}>
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${themeClasses.cardBorder}`}>
-                      {clients.map((client) => (
-                        <tr key={client.id} className={themeClasses.tableRowHover}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className={`text-sm font-medium ${themeClasses.textPrimary}`}>
-                                {client.name}
-                              </div>
-                              <div className={`text-sm ${themeClasses.textMuted}`}>
-                                {client.email}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`text-sm ${themeClasses.textPrimary}`}>
-                              {client.phone || '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex flex-wrap gap-1">
-                              {client.allowedDashboards && client.allowedDashboards.length > 0 ? (
-                                client.allowedDashboards.map((dashboard) => (
-                                  <span
-                                    key={dashboard}
-                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"
-                                  >
-                                    {dashboard.replace('-dashboard', '')}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-gray-400">No access</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex flex-col space-y-1">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                client.isActive && client.isApproved
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {client.isActive && client.isApproved ? 'Active' : 'Inactive'}
-                              </span>
-                              {client.canViewAllEvents && (
-                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                  All Events
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {client.lastLoginAt 
-                              ? new Date(client.lastLoginAt).toLocaleDateString()
-                              : 'Never'
-                            }
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={async () => {
-                                  const newStatus = !client.isActive;
-                                  try {
-                                    const response = await fetch('/api/clients', {
-                                      method: 'PUT',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        id: client.id,
-                                        name: client.name,
-                                        email: client.email,
-                                        phone: client.phone,
-                                        allowedDashboards: client.allowedDashboards,
-                                        canViewAllEvents: client.canViewAllEvents,
-                                        allowedEventIds: client.allowedEventIds,
-                                        isActive: newStatus,
-                                        isApproved: newStatus ? true : client.isApproved, // Auto-approve when activating
-                                        notes: client.notes,
-                                        updatedBy: JSON.parse(localStorage.getItem('adminSession') || '{}').id
-                                      })
-                                    });
-                                    const data = await response.json();
-                                    if (data.success) {
-                                      success(`Staff ${newStatus ? 'activated' : 'deactivated'}`);
-                                      fetchData();
-                                    } else {
-                                      error(data.error || 'Failed to update staff');
-                                    }
-                                  } catch (err) {
-                                    error('Network error');
-                                  }
-                                }}
-                                className={`px-3 py-1 text-xs rounded ${
-                                  client.isActive && client.isApproved
-                                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                    : 'bg-green-100 text-green-700 hover:bg-green-200'
-                                }`}
-                              >
-                                {client.isActive && client.isApproved ? 'Deactivate' : 'Activate'}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  showConfirm(
-                                    'Are you sure you want to delete this staff member? This action cannot be undone.',
-                                    async () => {
-                                      try {
-                                        const response = await fetch(`/api/clients?id=${client.id}`, {
-                                          method: 'DELETE'
-                                        });
-                                        const data = await response.json();
-                                        if (data.success) {
-                                          success('Staff deleted successfully');
-                                          fetchData();
-                                        } else {
-                                          error(data.error || 'Failed to delete staff');
-                                        }
-                                      } catch (err) {
-                                        error('Network error');
-                                      }
-                                    }
-                                  );
-                                }}
-                                className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {getAvailableJudgesForEvent(selectedEventId).map((judge) => (
+                    <button
+                      key={judge.id}
+                      onClick={() => handleAddJudge(judge.id)}
+                      className={`w-full text-left ${theme === 'dark' ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-lg p-4 transition-colors`}
+                    >
+                      <div className={themeClasses.textPrimary + ' font-medium'}>{judge.name}</div>
+                      <div className={themeClasses.textMuted + ' text-sm'}>{judge.email}</div>
+                      {judge.phone && (
+                        <div className={themeClasses.textMuted + ' text-sm'}>{judge.phone}</div>
+                      )}
+                    </button>
+                  ))}
                 </div>
               )}
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowAddJudgeModal(false);
+                  setSelectedEventId(null);
+                }}
+                className={`px-4 py-2 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} text-white rounded-lg transition-colors`}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Dashboard Access Management Section */}
+      <div className={`${themeClasses.cardBg} backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-xl overflow-hidden border ${themeClasses.cardBorder}`}>
+        <div className={`px-4 sm:px-6 py-4 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-b ${themeClasses.cardBorder}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-lg">🎛️</span>
+              </div>
+              <div>
+                <h2 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>Dashboard Access Management</h2>
+                <p className={`text-xs ${themeClasses.textMuted}`}>Manage dashboard access for staff accounts</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {staffAccounts.length === 0 ? (
+            <div className={`text-center py-12 ${themeClasses.textMuted}`}>
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                <span className="text-2xl">👤</span>
+              </div>
+              <h3 className="text-lg font-medium mb-2">No Staff Accounts</h3>
+              <p className="text-sm">No staff accounts have been created yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {staffAccounts.map((client) => (
+                <div
+                  key={client.id}
+                  className={`${themeClasses.cardBg} rounded-xl border ${themeClasses.cardBorder} p-4 sm:p-6`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className={`text-lg sm:text-xl font-bold ${themeClasses.textPrimary}`}>{client.name}</h3>
+                        <span className={`px-2 py-1 ${client.isApproved ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'} rounded text-xs`}>
+                          {client.isApproved ? 'Approved' : 'Pending'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className={themeClasses.textMuted}>Email: </span>
+                          <span className={themeClasses.textPrimary}>{client.email}</span>
+                        </div>
+                        {client.phone && (
+                          <div>
+                            <span className={themeClasses.textMuted}>Phone: </span>
+                            <span className={themeClasses.textPrimary}>{client.phone}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className={themeClasses.textMuted}>Dashboards: </span>
+                          <span className={themeClasses.textPrimary}>
+                            {client.allowedDashboards?.length || 0} enabled
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setExpandedStaffId(
+                        expandedStaffId === client.id ? null : client.id
+                      )}
+                      className="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    >
+                      {expandedStaffId === client.id ? 'Hide' : 'Manage'} Access
+                    </button>
+                  </div>
+
+                  {expandedStaffId === client.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-700/20">
+                      <h4 className={`text-lg font-semibold ${themeClasses.textPrimary} mb-4`}>
+                        Dashboard Permissions
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {AVAILABLE_DASHBOARDS.map((dashboard) => {
+                          const hasAccess = client.allowedDashboards?.includes(dashboard.id) || false;
+                          return (
+                            <label
+                              key={dashboard.id}
+                              className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                                hasAccess 
+                                  ? 'bg-green-500/10 border-green-500/20' 
+                                  : 'bg-gray-700/30 border-gray-700/50'
+                              } cursor-pointer hover:bg-gray-700/50 transition-colors`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={hasAccess}
+                                onChange={(e) => handleUpdateDashboardAccess(client.id, dashboard.id, e.target.checked)}
+                                className="w-5 h-5 rounded border-gray-600 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-2xl">{dashboard.icon}</span>
+                              <span className={themeClasses.textPrimary + ' font-medium'}>{dashboard.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -4808,6 +4634,8 @@ function EventsTabContent({ events, setShowCreateEventModal, handleEditEvent, ha
   );
 }
 
+// Removed - use /admin/users page instead
+/*
 interface StaffTabContentProps {
   judges: Judge[];
   setShowCreateJudgeModal: (show: boolean) => void;
@@ -4900,7 +4728,7 @@ function StaffTabContent({ judges, setShowCreateJudgeModal, handleDeleteJudge, t
                         {!judge.isAdmin && (
                           <>
                             <button
-                              onClick={() => {/* TODO: Implement edit roles functionality */}}
+                              onClick={() => {}}
                               className="inline-flex items-center px-3 py-1 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors"
                             >
                               ⚙️ Roles
@@ -4925,7 +4753,10 @@ function StaffTabContent({ judges, setShowCreateJudgeModal, handleDeleteJudge, t
     </div>
   );
 }
+*/
 
+// Removed - use event teams page instead
+/*
 interface AssignmentsTabContentProps {
   assignments: JudgeAssignment[];
   setShowAssignJudgeModal: (show: boolean) => void;
@@ -5022,6 +4853,7 @@ function AssignmentsTabContent({ assignments, setShowAssignJudgeModal, handleUna
     </div>
   );
 }
+*/
 
 interface DancersTabContentProps {
   dancers: Dancer[];

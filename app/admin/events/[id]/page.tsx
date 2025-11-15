@@ -1303,6 +1303,12 @@ function EventParticipantsPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Link
+                href={`/admin/events/${eventId}/teams`}
+                className={`px-4 py-2 ${themeClasses.buttonPrimary} rounded-lg font-semibold transition-all duration-200 hover:shadow-md`}
+              >
+                👥 Event Teams
+              </Link>
               <ThemeToggle />
               
               <Link
