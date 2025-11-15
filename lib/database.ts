@@ -2495,7 +2495,8 @@ export const db = {
       largeGroupFeePerDancer: row.large_group_fee_per_dancer != null ? parseFloat(row.large_group_fee_per_dancer) : 190,
       currency: row.currency || 'ZAR',
       participationMode: row.participation_mode || 'hybrid',
-      certificateTemplateUrl: row.certificate_template_url || undefined
+      certificateTemplateUrl: row.certificate_template_url || undefined,
+      numberOfJudges: row.number_of_judges != null ? parseInt(row.number_of_judges) : 4
     } as Event;
   },
 
