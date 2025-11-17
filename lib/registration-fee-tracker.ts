@@ -155,72 +155,51 @@ export const calculateSmartEODSAFee = async (
     console.log(`   - All internal IDs: ${allInternalIds.join(', ')}`);
     console.log(`   - Event ID: ${options.eventId}`);
     
-    // Single deterministic SQL query that checks all ID fields
-    // This replaces the client-side filtering with a proper database query
-    // Query checks: contestant_id, eodsa_id, and participant_ids JSON array
+    // Single deterministic query: Get ALL solos for event, then filter client-side
+    // This ensures we check all ID fields comprehensively
+    const allSolosInEvent = await sqlClient`
+      SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
+      FROM event_entries
+      WHERE event_id = ${options.eventId}
+      AND performance_type = 'Solo'
+      ORDER BY submitted_at ASC
+    ` as any[];
+    
+    // Filter entries that match the dancer using all ID fields
+    // Match if: contestant_id OR eodsa_id OR participant_ids array contains any of our IDs
     let existingSoloEntries: any[] = [];
     let matchingEntryIds: string[] = [];
     
-    // Build participant_ids conditions for JSONB containment check
-    // Check if participant_ids array contains any of our IDs
-    const participantIdChecks = allInternalIds.map(id => `(participant_ids::jsonb ? '${id.replace(/'/g, "''")}')`).join(' OR ');
-    const eodsaIdCheck = dancerEodsaId ? `OR (participant_ids::jsonb ? '${dancerEodsaId.replace(/'/g, "''")}')` : '';
-    
-    if (dancerEodsaId && allInternalIds.length > 0) {
-      // Query with EODSA ID and internal IDs - use raw SQL for complex conditions
-      const query = `
-        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
-        FROM event_entries
-        WHERE event_id = $1
-        AND performance_type = 'Solo'
-        AND (
-          contestant_id = ANY($2::text[])
-          OR eodsa_id = $3
-          ${participantIdChecks ? `OR ${participantIdChecks}` : ''}
-          ${eodsaIdCheck}
-        )
-        ORDER BY submitted_at ASC
-      `;
+    for (const entry of allSolosInEvent) {
+      const entryEodsaId = entry.eodsa_id;
+      const entryContestantId = entry.contestant_id;
+      let entryParticipantIds: string[] = [];
       
-      existingSoloEntries = await sqlClient.unsafe(query, [
-        options.eventId,
-        allInternalIds,
-        dancerEodsaId
-      ]) as unknown as any[];
-    } else if (allInternalIds.length > 0) {
-      // Query with only internal IDs (no EODSA ID available)
-      const query = `
-        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
-        FROM event_entries
-        WHERE event_id = $1
-        AND performance_type = 'Solo'
-        AND (
-          contestant_id = ANY($2::text[])
-          ${participantIdChecks ? `OR ${participantIdChecks}` : ''}
-        )
-        ORDER BY submitted_at ASC
-      `;
+      try {
+        if (typeof entry.participant_ids === 'string') {
+          entryParticipantIds = JSON.parse(entry.participant_ids);
+        } else if (Array.isArray(entry.participant_ids)) {
+          entryParticipantIds = entry.participant_ids;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
       
-      existingSoloEntries = await sqlClient.unsafe(query, [
-        options.eventId,
-        allInternalIds
-      ]) as unknown as any[];
-    } else {
-      // Fallback: just check by participantId
-      existingSoloEntries = await sqlClient`
-        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
-        FROM event_entries
-        WHERE event_id = ${options.eventId}
-        AND performance_type = 'Solo'
-        AND (
-          contestant_id = ${participantId}
-          OR (participant_ids::jsonb ? ${participantId})
-        )
-        ORDER BY submitted_at ASC
-      ` as any[];
+      // Match if:
+      // 1. contestant_id matches any internal ID
+      // 2. eodsa_id matches dancer's EODSA ID
+      // 3. participant_ids array contains any internal ID or EODSA ID
+      const matchesContestantId = allInternalIds.includes(entryContestantId);
+      const matchesEodsaId = dancerEodsaId && entryEodsaId === dancerEodsaId;
+      const matchesParticipantIds = allInternalIds.some(id => entryParticipantIds.includes(id)) ||
+                                    (dancerEodsaId && entryParticipantIds.includes(dancerEodsaId));
+      
+      if (matchesContestantId || matchesEodsaId || matchesParticipantIds) {
+        existingSoloEntries.push(entry);
+        matchingEntryIds.push(entry.id);
+      }
     }
     
-    matchingEntryIds = existingSoloEntries.map((entry: any) => entry.id);
     existingSoloCount = existingSoloEntries.length;
     
     // Debug logging for dev/staging
