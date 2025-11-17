@@ -703,36 +703,45 @@ export default function CompetitionEntryPage() {
         });
       }
 
-      // Compute performance-only fee locally using event configuration
-      let fee = 0;
-      if (capitalizedPerformanceType === 'Solo') {
-        // Solo pricing: solo1Fee, solo2Fee, solo3Fee are INDIVIDUAL fees, NOT cumulative
-        // soloCount is the solo number (1st, 2nd, 3rd, etc.)
-        const solo1Fee = event?.solo1Fee || 400;
-        const solo2Fee = event?.solo2Fee || 200;
-        const solo3Fee = event?.solo3Fee || 100;
-        const soloAdditionalFee = event?.soloAdditionalFee || 100;
-        
-        if (soloCount === 1) {
-          fee = solo1Fee;
-        } else if (soloCount === 2) {
-          fee = solo2Fee;
-        } else if (soloCount === 3) {
-          fee = solo3Fee;
-        } else {
-          // 4th+ solos: Additional solo fee
-          fee = soloAdditionalFee;
+      // BACKEND IS SOURCE OF TRUTH - Always use API for fee calculation
+      if (eventId && currentForm.mastery) {
+        try {
+          const response = await fetch('/api/eodsa-fees', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              masteryLevel: currentForm.mastery,
+              performanceType: capitalizedPerformanceType,
+              participantIds: participantIds,
+              soloCount: soloCount,
+              includeRegistration: false, // Only get performance fee, not registration (registration handled separately)
+              eventId: eventId
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            const fee = data.fees.performanceFee || 0;
+            console.log('💰 Backend Fee Calculation Result:', { 
+              fee, 
+              soloCount, 
+              type: capitalizedPerformanceType,
+              breakdown: data.fees.breakdown,
+              registrationFee: data.fees.registrationFee
+            });
+            return fee;
+          } else {
+            throw new Error('API call failed');
+          }
+        } catch (error) {
+          console.error('Error fetching fee from backend API:', error);
+          // Fallback to basic calculation only if API fails
+          return calculateFallbackEntryFee(performanceType, participantIds.length, participantIds);
         }
-      } else if (capitalizedPerformanceType === 'Duet' || capitalizedPerformanceType === 'Trio') {
-        fee = (event?.duoTrioFeePerDancer || 280) * participantIds.length;
-      } else if (capitalizedPerformanceType === 'Group') {
-        const perPerson = participantIds.length <= 9 
-          ? (event?.groupFeePerDancer || 220)
-          : (event?.largeGroupFeePerDancer || 190);
-        fee = perPerson * participantIds.length;
       }
-      console.log('SOLO_DEBUG: calculateEntryFee:feeResult', { fee, soloCount, type: capitalizedPerformanceType });
-      return fee;
+      
+      // Final fallback if no eventId or mastery
+      return calculateFallbackEntryFee(performanceType, participantIds.length, participantIds);
     } catch (error) {
       console.error('Error in smart fee calculation, falling back to basic calculation:', error);
       return calculateFallbackEntryFee(performanceType, participantIds.length, participantIds);
