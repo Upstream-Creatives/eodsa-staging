@@ -207,58 +207,13 @@ export const calculateSmartEODSAFee = async (
       }
     }
     
-    // If no results, try alternative query with more flexible matching
-    if (existingSoloEntries.length === 0 && dancerEodsaId) {
-      console.log(`⚠️ No entries found with first query, trying alternative query...`);
-      // Try querying ALL solos for this event and filtering client-side
-      const allSolos = await sqlClient`
-        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
-        FROM event_entries
-        WHERE event_id = ${options.eventId}
-        AND performance_type = 'Solo'
-        ORDER BY submitted_at ASC
-      ` as any[];
-      
-      console.log(`   - Found ${allSolos.length} total solo entries in event`);
-      
-      // Filter client-side by checking if any ID matches
-      existingSoloEntries = allSolos.filter((entry: any) => {
-        const entryEodsaId = entry.eodsa_id;
-        const entryContestantId = entry.contestant_id;
-        let entryParticipantIds: string[] = [];
-        
-        try {
-          if (typeof entry.participant_ids === 'string') {
-            entryParticipantIds = JSON.parse(entry.participant_ids);
-          } else if (Array.isArray(entry.participant_ids)) {
-            entryParticipantIds = entry.participant_ids;
-          }
-        } catch (e) {
-          console.error('Error parsing participant_ids:', e);
-        }
-        
-        // Check if any of our IDs match any field
-        const matches = allDancerIds.some(id => 
-          entryEodsaId === id ||
-          entryContestantId === id ||
-          entryParticipantIds.includes(id)
-        ) || (dancerEodsaId && (
-          entryEodsaId === dancerEodsaId ||
-          entryParticipantIds.includes(dancerEodsaId)
-        ));
-        
-        if (matches) {
-          console.log(`   - ✅ Matched entry ${entry.id}: eodsa_id=${entryEodsaId}, contestant_id=${entryContestantId}, participant_ids=${JSON.stringify(entryParticipantIds)}`);
-        }
-        
-        return matches;
-      });
-      
-      console.log(`   - After client-side filtering: ${existingSoloEntries.length} entries found`);
-    }
-    
     console.log(`🔍 Looking for existing solos for dancer ${participantId} (EODSA: ${dancerEodsaId || 'N/A'}) in event ${options.eventId}`);
     console.log(`   - Found ${existingSoloEntries.length} existing solo entries`);
+    
+    if (existingSoloEntries.length === 0 && dancerEodsaId) {
+      console.warn(`⚠️ No existing solo entries found after filtering all ${allSolosInEvent.length} solos in event`);
+      console.warn(`   - Searched with IDs: ${allDancerIds.join(', ')} and EODSA ID: ${dancerEodsaId}`);
+    }
     existingSoloEntries.forEach((entry, idx) => {
       console.log(`   - Entry ${idx + 1}: ID ${entry.id}, Fee R${entry.calculated_fee}, Payment: ${entry.payment_status}`);
       console.log(`     - participant_ids: ${JSON.stringify(entry.participant_ids)}`);
