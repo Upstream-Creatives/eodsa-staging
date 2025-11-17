@@ -75,19 +75,56 @@ export const calculateSmartEODSAFee = async (
   if (performanceType === 'Solo' && participantIds.length === 1) {
     const participantId = participantIds[0];
     
+    // First, get the dancer's EODSA ID from the internal ID
+    let dancerEodsaId: string | null = null;
+    try {
+      const dancerInfo = await sqlClient`
+        SELECT eodsa_id FROM dancers WHERE id = ${participantId} LIMIT 1
+      ` as any[];
+      
+      if (dancerInfo.length > 0 && dancerInfo[0].eodsa_id) {
+        dancerEodsaId = dancerInfo[0].eodsa_id;
+      }
+    } catch (error) {
+      console.error('Error getting dancer EODSA ID:', error);
+    }
+    
     // Get ALL existing solo entries for this dancer in this event (paid AND unpaid)
-    const existingSoloEntries = await sqlClient`
-      SELECT id, calculated_fee, payment_status, participant_ids
-      FROM event_entries
-      WHERE event_id = ${options.eventId}
-      AND performance_type = 'Solo'
-      AND (
-        eodsa_id = ${participantId}
-        OR contestant_id = ${participantId}
-        OR (participant_ids::jsonb ? ${participantId})
-      )
-      ORDER BY submitted_at ASC
-    ` as any[];
+    // Check by BOTH internal ID (participant_ids) and EODSA ID
+    let existingSoloEntries: any[] = [];
+    if (dancerEodsaId) {
+      existingSoloEntries = await sqlClient`
+        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
+        FROM event_entries
+        WHERE event_id = ${options.eventId}
+        AND performance_type = 'Solo'
+        AND (
+          eodsa_id = ${dancerEodsaId}
+          OR contestant_id = ${participantId}
+          OR (participant_ids::jsonb ? ${participantId})
+          OR (participant_ids::jsonb ? ${dancerEodsaId})
+        )
+        ORDER BY submitted_at ASC
+      ` as any[];
+    } else {
+      existingSoloEntries = await sqlClient`
+        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
+        FROM event_entries
+        WHERE event_id = ${options.eventId}
+        AND performance_type = 'Solo'
+        AND (
+          contestant_id = ${participantId}
+          OR (participant_ids::jsonb ? ${participantId})
+        )
+        ORDER BY submitted_at ASC
+      ` as any[];
+    }
+    
+    console.log(`🔍 Looking for existing solos for dancer ${participantId} (EODSA: ${dancerEodsaId || 'N/A'}) in event ${options.eventId}`);
+    console.log(`   - Found ${existingSoloEntries.length} existing solo entries`);
+    existingSoloEntries.forEach((entry, idx) => {
+      console.log(`   - Entry ${idx + 1}: ID ${entry.id}, Fee R${entry.calculated_fee}, Payment: ${entry.payment_status}`);
+    });
     
     const existingSoloCount = existingSoloEntries.length;
     
@@ -102,16 +139,30 @@ export const calculateSmartEODSAFee = async (
     // This includes checking other entry types too, not just solos
     const registrationAlreadyAssigned = existingSoloEntries.length > 0 || 
       await (async () => {
-        const anyEntry = await sqlClient`
-          SELECT COUNT(*) as count FROM event_entries
-          WHERE event_id = ${options.eventId}
-          AND (
-            eodsa_id = ${participantId}
-            OR contestant_id = ${participantId}
-            OR (participant_ids::jsonb ? ${participantId})
-          )
-          LIMIT 1
-        ` as any[];
+        let anyEntry: any[] = [];
+        if (dancerEodsaId) {
+          anyEntry = await sqlClient`
+            SELECT COUNT(*) as count FROM event_entries
+            WHERE event_id = ${options.eventId}
+            AND (
+              eodsa_id = ${dancerEodsaId}
+              OR contestant_id = ${participantId}
+              OR (participant_ids::jsonb ? ${participantId})
+              OR (participant_ids::jsonb ? ${dancerEodsaId})
+            )
+            LIMIT 1
+          ` as any[];
+        } else {
+          anyEntry = await sqlClient`
+            SELECT COUNT(*) as count FROM event_entries
+            WHERE event_id = ${options.eventId}
+            AND (
+              contestant_id = ${participantId}
+              OR (participant_ids::jsonb ? ${participantId})
+            )
+            LIMIT 1
+          ` as any[];
+        }
         return anyEntry && anyEntry[0] && anyEntry[0].count > 0;
       })();
     
