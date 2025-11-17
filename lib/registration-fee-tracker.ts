@@ -32,7 +32,7 @@ export const calculateSmartEODSAFee = async (
   const dancers = await unifiedDb.getDancersWithRegistrationStatus(participantIds);
 
   // SIMPLIFIED APPROACH: Ignore global registration_fee_paid column
-  // Only check if dancer has ANY entries for THIS specific event
+  // Only check if dancer has ANY entries for THIS specific event (paid or unpaid)
   const dancersWithPendingCheck = await Promise.all(
     dancers.map(async (dancer) => {
       // Check if this dancer has ANY entries for THIS specific event (paid or unpaid)
@@ -43,16 +43,23 @@ export const calculateSmartEODSAFee = async (
           const { getSql } = await import('./database');
           const sqlClient = getSql();
           // Check for ANY entries for this dancer in this event
+          // Check by participant_ids (JSON array), eodsa_id, or contestant_id
+          // Use JSONB containment for proper JSON array checking
           const existingEntries = await sqlClient`
             SELECT COUNT(*) as count FROM event_entries
-            WHERE contestant_id = ${dancer.id}
-            AND event_id = ${options.eventId}
+            WHERE event_id = ${options.eventId}
+            AND (
+              eodsa_id = ${dancer.eodsaId || dancer.id}
+              OR contestant_id = ${dancer.id}
+              OR (participant_ids::jsonb ? ${dancer.id})
+              OR (participant_ids::jsonb ? ${dancer.eodsaId || ''})
+            )
             LIMIT 1
           ` as any[];
 
           hasEntryForThisEvent = existingEntries && existingEntries[0] && existingEntries[0].count > 0;
 
-          console.log(`🔍 Dancer ${dancer.name} (${dancer.id}):`);
+          console.log(`🔍 Dancer ${dancer.name} (${dancer.id}, EODSA: ${dancer.eodsaId}):`);
           console.log(`   - Has entry for this event (${options.eventId}): ${hasEntryForThisEvent}`);
           console.log(`   - Registration fee logic: ${hasEntryForThisEvent ? 'WAIVED (already has entry in this event)' : 'CHARGED (new entry for this event)'}`);
         } catch (error) {
@@ -99,6 +106,82 @@ export const calculateSmartEODSAFee = async (
     }
   }
 
+  // For solo entries, calculate cumulative package pricing with deduction of already-paid amounts
+  let paidSoloCount = 0;
+  let shouldChargeForSolo = 0;
+  
+  if (performanceType === 'Solo' && options?.eventId && participantIds.length === 1) {
+    try {
+      const { getSql } = await import('./database');
+      const sqlClient = getSql();
+      
+      // Get all PAID solo entries for this dancer in this event
+      // Use JSONB containment for proper JSON array checking
+      const paidSoloEntries = await sqlClient`
+        SELECT calculated_fee, participant_ids
+        FROM event_entries
+        WHERE event_id = ${options.eventId}
+        AND performance_type = 'Solo'
+        AND payment_status = 'paid'
+        AND (
+          eodsa_id = ${participantIds[0]}
+          OR (participant_ids::jsonb ? ${participantIds[0]})
+        )
+      ` as any[];
+      
+      paidSoloCount = paidSoloEntries.length;
+      
+      // Get event package fees (these are CUMULATIVE totals, not individual fees)
+      const solo1Package = eventFees.eventSolo1Fee || 550;  // 1 Solo Package total
+      const solo2Package = eventFees.eventSolo2Fee || 942;   // 2 Solos Package total
+      const solo3Package = eventFees.eventSolo3Fee || 1256;  // 3 Solos Package total
+      const additionalSoloFee = eventFees.eventSoloAdditionalFee || 349;
+      
+      // Calculate what package total they should have paid for their existing paid solos
+      let packageTotalForPaidSolos = 0;
+      if (paidSoloCount === 0) {
+        packageTotalForPaidSolos = 0;
+      } else if (paidSoloCount === 1) {
+        packageTotalForPaidSolos = solo1Package;
+      } else if (paidSoloCount === 2) {
+        packageTotalForPaidSolos = solo2Package;
+      } else if (paidSoloCount === 3) {
+        packageTotalForPaidSolos = solo3Package;
+      } else {
+        // 4+ solos: 3-solo package + additional solos
+        packageTotalForPaidSolos = solo3Package + ((paidSoloCount - 3) * additionalSoloFee);
+      }
+      
+      // Calculate what package total they should pay for the new total (paid + this new one)
+      const newTotalSoloCount = paidSoloCount + 1;
+      let packageTotalForNewCount = 0;
+      if (newTotalSoloCount === 1) {
+        packageTotalForNewCount = solo1Package;
+      } else if (newTotalSoloCount === 2) {
+        packageTotalForNewCount = solo2Package;
+      } else if (newTotalSoloCount === 3) {
+        packageTotalForNewCount = solo3Package;
+      } else {
+        // 4+ solos: 3-solo package + additional solos
+        packageTotalForNewCount = solo3Package + ((newTotalSoloCount - 3) * additionalSoloFee);
+      }
+      
+      // Calculate what should be charged now (new package total - what they should have already paid)
+      shouldChargeForSolo = Math.max(0, packageTotalForNewCount - packageTotalForPaidSolos);
+      
+      console.log(`💰 Cumulative Solo Package Pricing:`);
+      console.log(`   - Paid solo entries: ${paidSoloCount}`);
+      console.log(`   - Package total for ${paidSoloCount} solos: R${packageTotalForPaidSolos}`);
+      console.log(`   - New total solo count: ${newTotalSoloCount}`);
+      console.log(`   - Package total for ${newTotalSoloCount} solos: R${packageTotalForNewCount}`);
+      console.log(`   - Should charge now: R${shouldChargeForSolo}`);
+    } catch (error) {
+      console.error('Error calculating cumulative solo package pricing:', error);
+      // Fallback to regular solo fee
+      shouldChargeForSolo = eventFees.eventSolo1Fee || 550;
+    }
+  }
+
   // Calculate fees with intelligent registration fee handling and event-specific fees
   const feeBreakdown = calculateEODSAFee(
     masteryLevel,
@@ -112,6 +195,13 @@ export const calculateSmartEODSAFee = async (
       ...eventFees // Spread all event-specific fees
     }
   );
+
+  // Override solo fee with cumulative package pricing if calculated
+  if (performanceType === 'Solo' && shouldChargeForSolo > 0) {
+    feeBreakdown.performanceFee = shouldChargeForSolo;
+    feeBreakdown.totalFee = feeBreakdown.registrationFee + feeBreakdown.performanceFee;
+    feeBreakdown.breakdown = `Solo Package (${paidSoloCount + 1} solos total) - Incremental charge`;
+  }
 
   return {
     ...feeBreakdown,

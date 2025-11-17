@@ -76,7 +76,7 @@ export const initializeDatabase = async () => {
     
     // Add participation mode column to events table (live, virtual, or hybrid)
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS participation_mode TEXT DEFAULT 'hybrid' CHECK (participation_mode IN ('live', 'virtual', 'hybrid'))`;
-    
+
     // Add certificate template URL column to events table
     await sqlClient`ALTER TABLE events ADD COLUMN IF NOT EXISTS certificate_template_url TEXT`;
     
@@ -1015,6 +1015,93 @@ export const db = {
 
   async getAllPerformances() {
     const sqlClient = getSql();
+    
+    // CRITICAL: First ensure all approved+paid entries have performances
+    // This fixes the issue where PayFast payments create entries but performances might be missing
+    try {
+      const missingPerformances = await sqlClient`
+        SELECT ee.id, ee.item_name, ee.participant_ids, ee.contestant_id, ee.event_id,
+               ee.choreographer, ee.mastery, ee.item_style, ee.estimated_duration,
+               ee.entry_type, ee.music_file_url, ee.music_file_name,
+               ee.video_external_url, ee.video_external_type
+        FROM event_entries ee
+        WHERE ee.approved = true
+        AND ee.payment_status = 'paid'
+        AND NOT EXISTS (
+          SELECT 1 FROM performances p WHERE p.event_entry_id = ee.id
+        )
+      ` as any[];
+      
+      // Create missing performances for approved+paid entries
+      if (missingPerformances.length > 0) {
+        console.log(`🔧 Creating ${missingPerformances.length} missing performance(s) for approved+paid entries`);
+        
+        for (const entry of missingPerformances) {
+          try {
+            // Parse participant IDs
+            let participantIds: string[] = [];
+            if (entry.participant_ids) {
+              try {
+                participantIds = typeof entry.participant_ids === 'string' 
+                  ? JSON.parse(entry.participant_ids) 
+                  : entry.participant_ids;
+              } catch {
+                participantIds = [];
+              }
+            }
+            
+            // Get participant names from unified dancers
+            const participantNames: string[] = [];
+            try {
+              const { unifiedDb } = await import('./database');
+              for (const pid of participantIds) {
+                try {
+                  const dancer = await unifiedDb.getDancerById(pid);
+                  if (dancer?.name) {
+                    participantNames.push(dancer.name);
+                  } else {
+                    participantNames.push(`Participant ${participantNames.length + 1}`);
+                  }
+                } catch {
+                  participantNames.push(`Participant ${participantNames.length + 1}`);
+                }
+              }
+            } catch {
+              // Fallback: use generic names
+              participantIds.forEach((_, i) => participantNames.push(`Participant ${i + 1}`));
+            }
+            
+            // Create the performance
+            await this.createPerformance({
+              eventId: entry.event_id,
+              eventEntryId: entry.id,
+              contestantId: entry.contestant_id,
+              title: entry.item_name || 'Untitled Performance',
+              participantNames: participantNames.length > 0 ? participantNames : ['Participant 1'],
+              duration: entry.estimated_duration || 0,
+              choreographer: entry.choreographer || '',
+              mastery: entry.mastery || 'Water (Competitive)',
+              itemStyle: entry.item_style || '',
+              status: 'scheduled',
+              itemNumber: undefined,
+              entryType: entry.entry_type || 'live',
+              videoExternalUrl: entry.video_external_url || undefined,
+              videoExternalType: entry.video_external_type || undefined,
+              musicFileUrl: entry.music_file_url || undefined,
+              musicFileName: entry.music_file_name || undefined
+            });
+            
+            console.log(`✅ Created missing performance for entry: ${entry.id} (${entry.item_name})`);
+          } catch (perfErr) {
+            console.error(`⚠️ Failed to create missing performance for entry ${entry.id}:`, perfErr);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring performances exist:', error);
+      // Continue even if this fails - we still want to return existing performances
+    }
+    
     const result = await sqlClient`
       SELECT p.*, c.name as contestant_name 
       FROM performances p 
@@ -1022,31 +1109,56 @@ export const db = {
       ORDER BY p.scheduled_time ASC
     ` as any[];
     
-    return result.map((row: any) => ({
-      id: row.id,
-      eventId: row.event_id,
-      eventEntryId: row.event_entry_id,
-      contestantId: row.contestant_id,
-      title: row.title,
-      participantNames: JSON.parse(row.participant_names),
-      duration: row.duration,
-      itemNumber: row.item_number,
-      performanceOrder: row.performance_order,
-      withdrawnFromJudging: row.withdrawn_from_judging || false,
-      choreographer: row.choreographer,
-      mastery: row.mastery,
-      itemStyle: row.item_style,
-      ageCategory: row.age_category || null,
-      scheduledTime: row.scheduled_time,
-      status: row.status,
-      contestantName: row.contestant_name,
-      musicCue: row.music_cue || null,
-      entryType: row.entry_type || 'live',
-      videoExternalUrl: row.video_external_url || null,
-      videoExternalType: row.video_external_type || null,
-      musicFileUrl: row.music_file_url || null,
-      musicFileName: row.music_file_name || null
-    })) as (Performance & { contestantName: string })[];
+    return result.map((row: any) => {
+      // Safely parse participant_names - handle both JSON and plain string/array
+      let participantNames: string[] = [];
+      try {
+        if (row.participant_names) {
+          if (typeof row.participant_names === 'string') {
+            // Try to parse as JSON first
+            try {
+              participantNames = JSON.parse(row.participant_names);
+            } catch {
+              // If not JSON, treat as a single string or comma-separated
+              participantNames = row.participant_names.includes(',') 
+                ? row.participant_names.split(',').map((n: string) => n.trim())
+                : [row.participant_names];
+            }
+          } else if (Array.isArray(row.participant_names)) {
+            participantNames = row.participant_names;
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing participant_names:', error, row.participant_names);
+        participantNames = [];
+      }
+
+      return {
+        id: row.id,
+        eventId: row.event_id,
+        eventEntryId: row.event_entry_id,
+        contestantId: row.contestant_id,
+        title: row.title,
+        participantNames,
+        duration: row.duration,
+        itemNumber: row.item_number,
+        performanceOrder: row.performance_order,
+        withdrawnFromJudging: row.withdrawn_from_judging || false,
+        choreographer: row.choreographer,
+        mastery: row.mastery,
+        itemStyle: row.item_style,
+        ageCategory: row.age_category || null,
+        scheduledTime: row.scheduled_time,
+        status: row.status,
+        contestantName: row.contestant_name,
+        musicCue: row.music_cue || null,
+        entryType: row.entry_type || 'live',
+        videoExternalUrl: row.video_external_url || null,
+        videoExternalType: row.video_external_type || null,
+        musicFileUrl: row.music_file_url || null,
+        musicFileName: row.music_file_name || null
+      };
+    }) as (Performance & { contestantName: string })[];
   },
 
   async getPerformanceById(performanceId: string) {
@@ -2190,6 +2302,144 @@ export const db = {
       WHERE id = ${performanceId}
     `;
 
+    // Check if certificate already exists for this performance
+    const existingCert = await sqlClient`
+      SELECT id FROM certificates WHERE performance_id = ${performanceId} LIMIT 1
+    ` as any[];
+
+    // Only generate certificate if it doesn't exist yet
+    if (existingCert.length === 0) {
+      // Trigger certificate generation (async, don't wait)
+      // This will be handled by the API route
+      try {
+        // Get performance details for certificate generation
+        const perfResult = await sqlClient`
+          SELECT 
+            p.*,
+            e.event_date,
+            e.name as event_name,
+            ee.performance_type,
+            ee.contestant_id,
+            c.studio_name,
+            c.type as contestant_type
+          FROM performances p
+          JOIN events e ON e.id = p.event_id
+          LEFT JOIN event_entries ee ON ee.id = p.event_entry_id
+          LEFT JOIN contestants c ON c.id = ee.contestant_id
+          WHERE p.id = ${performanceId}
+        ` as any[];
+
+        if (perfResult.length > 0) {
+          const perf = perfResult[0];
+          
+          // Get scores to calculate average
+          const scores = await this.getScoresByPerformance(performanceId);
+          if (scores && scores.length > 0) {
+            const { getTotalJudgesForEvent } = await import('@/lib/database');
+            const totalJudgesAssigned = await getTotalJudgesForEvent(perf.event_id, performanceId);
+            
+            const totalPercentage = scores.reduce((sum, score) => {
+              const scoreTotal = score.technicalScore + score.musicalScore + score.performanceScore + score.stylingScore + score.overallImpressionScore;
+              return sum + scoreTotal;
+            }, 0);
+            const averagePercentage = Math.round(totalPercentage / (totalJudgesAssigned > 0 ? totalJudgesAssigned : scores.length));
+
+            // Get medallion
+            const { getMedalFromPercentage } = await import('@/lib/certificate-generator');
+            const medallion = getMedalFromPercentage(averagePercentage);
+
+            // Get participant names
+            let participantNames: string[] = [];
+            try {
+              if (perf.participant_names) {
+                if (typeof perf.participant_names === 'string') {
+                  try {
+                    participantNames = JSON.parse(perf.participant_names);
+                  } catch {
+                    participantNames = perf.participant_names.includes(',') 
+                      ? perf.participant_names.split(',').map((n: string) => n.trim())
+                      : [perf.participant_names];
+                  }
+                } else if (Array.isArray(perf.participant_names)) {
+                  participantNames = perf.participant_names;
+                }
+              }
+            } catch (error) {
+              console.error('Error parsing participant_names:', error);
+              participantNames = [];
+            }
+
+            // Determine display name (studio name for groups, participant names for solos)
+            const isGroupPerformance = perf.performance_type && ['Duet', 'Trio', 'Group'].includes(perf.performance_type);
+            const displayName = isGroupPerformance && perf.studio_name 
+              ? perf.studio_name 
+              : participantNames.join(', ');
+
+            // Trigger certificate generation via API route (fire and forget)
+            // Use a server-side fetch to avoid bundling issues
+            if (typeof fetch !== 'undefined') {
+              const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+              const certificateUrl = `${baseUrl}/certificates/${performanceId}`;
+              
+              // Call certificate generation API (don't await - fire and forget)
+              fetch(`${baseUrl}/api/certificates/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  dancerId: perf.contestant_id || '',
+                  dancerName: displayName,
+                  eodsaId: perf.eodsa_id || undefined,
+                  performanceId: performanceId,
+                  eventEntryId: perf.event_entry_id,
+                  eventId: perf.event_id,
+                  performanceType: perf.performance_type,
+                  studioName: perf.studio_name || undefined,
+                  percentage: averagePercentage,
+                  style: perf.item_style || '',
+                  title: perf.title || '',
+                  medallion: medallion,
+                  eventDate: perf.event_date || new Date().toISOString().split('T')[0], // Use event start date
+                  createdBy: publishedBy
+                })
+              }).then(async (certResponse) => {
+                if (certResponse.ok) {
+                  const certData = await certResponse.json();
+                  console.log(`✅ Certificate generated automatically for performance ${performanceId}`);
+                  
+                  // Trigger email notifications via API route (fire and forget)
+                  if (certData.certificateId) {
+                    fetch(`${baseUrl}/api/certificates/notify`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        performanceId: performanceId,
+                        eventEntryId: perf.event_entry_id,
+                        certificateUrl: certificateUrl,
+                        dancerName: displayName,
+                        performanceTitle: perf.title || '',
+                        percentage: averagePercentage,
+                        medallion: medallion
+                      })
+                    }).catch((emailError) => {
+                      console.error('Error triggering certificate email notifications:', emailError);
+                    });
+                  }
+                } else {
+                  console.error(`⚠️ Failed to generate certificate for performance ${performanceId}:`, await certResponse.text());
+                }
+              }).catch((certError) => {
+                console.error('Error generating certificate:', certError);
+                // Don't fail the publish operation if certificate generation fails
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error in certificate generation trigger:', error);
+        // Don't fail the publish operation if certificate generation fails
+      }
+    }
+
     return { success: true };
   },
 
@@ -2286,6 +2536,7 @@ export const db = {
         j.name as judge_name,
         p.id as performance_id,
         p.title as performance_title,
+        p.event_id,
         p.scores_published,
         p.scores_published_at,
         ee.item_name as entry_title
@@ -2308,6 +2559,7 @@ export const db = {
       judgeName: row.judge_name,
       performanceId: row.performance_id,
       performanceTitle: row.performance_title || row.entry_title,
+      eventId: row.event_id,
       technicalScore: parseFloat(row.technical_score),
       musicalScore: parseFloat(row.musical_score || 0),
       performanceScore: parseFloat(row.performance_score || 0),
@@ -2664,6 +2916,95 @@ export const db = {
   // NEW: Get performances by event ID
   async getPerformancesByEvent(eventId: string) {
     const sqlClient = getSql();
+    
+    // CRITICAL: First ensure all approved+paid entries have performances
+    // This fixes the issue where PayFast payments create entries but performances might be missing
+    try {
+      const missingPerformances = await sqlClient`
+        SELECT ee.id, ee.item_name, ee.participant_ids, ee.contestant_id, 
+               ee.choreographer, ee.mastery, ee.item_style, ee.estimated_duration,
+               ee.entry_type, ee.music_file_url, ee.music_file_name,
+               ee.video_external_url, ee.video_external_type
+        FROM event_entries ee
+        WHERE ee.event_id = ${eventId}
+        AND ee.approved = true
+        AND ee.payment_status = 'paid'
+        AND NOT EXISTS (
+          SELECT 1 FROM performances p WHERE p.event_entry_id = ee.id
+        )
+      ` as any[];
+      
+      // Create missing performances for approved+paid entries
+      if (missingPerformances.length > 0) {
+        console.log(`🔧 Creating ${missingPerformances.length} missing performance(s) for approved+paid entries in event ${eventId}`);
+        
+        for (const entry of missingPerformances) {
+          try {
+            // Parse participant IDs
+            let participantIds: string[] = [];
+            if (entry.participant_ids) {
+              try {
+                participantIds = typeof entry.participant_ids === 'string' 
+                  ? JSON.parse(entry.participant_ids) 
+                  : entry.participant_ids;
+              } catch {
+                participantIds = [];
+              }
+            }
+            
+            // Get participant names from unified dancers
+            const participantNames: string[] = [];
+            try {
+              const { unifiedDb } = await import('./database');
+              for (const pid of participantIds) {
+                try {
+                  const dancer = await unifiedDb.getDancerById(pid);
+                  if (dancer?.name) {
+                    participantNames.push(dancer.name);
+                  } else {
+                    participantNames.push(`Participant ${participantNames.length + 1}`);
+                  }
+                } catch {
+                  participantNames.push(`Participant ${participantNames.length + 1}`);
+                }
+              }
+            } catch {
+              // Fallback: use generic names
+              participantIds.forEach((_, i) => participantNames.push(`Participant ${i + 1}`));
+            }
+            
+            // Create the performance
+            await this.createPerformance({
+              eventId: eventId,
+              eventEntryId: entry.id,
+              contestantId: entry.contestant_id,
+              title: entry.item_name || 'Untitled Performance',
+              participantNames: participantNames.length > 0 ? participantNames : ['Participant 1'],
+              duration: entry.estimated_duration || 0,
+              choreographer: entry.choreographer || '',
+              mastery: entry.mastery || 'Water (Competitive)',
+              itemStyle: entry.item_style || '',
+              status: 'scheduled',
+              itemNumber: undefined,
+              entryType: entry.entry_type || 'live',
+              videoExternalUrl: entry.video_external_url || undefined,
+              videoExternalType: entry.video_external_type || undefined,
+              musicFileUrl: entry.music_file_url || undefined,
+              musicFileName: entry.music_file_name || undefined
+            });
+            
+            console.log(`✅ Created missing performance for entry: ${entry.id} (${entry.item_name})`);
+          } catch (perfErr) {
+            console.error(`⚠️ Failed to create missing performance for entry ${entry.id}:`, perfErr);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring performances exist:', error);
+      // Continue even if this fails - we still want to return existing performances
+    }
+    
+    // Now get all performances for the event
     const result = await sqlClient`
       SELECT 
         p.*, 

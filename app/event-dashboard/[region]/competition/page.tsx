@@ -703,26 +703,98 @@ export default function CompetitionEntryPage() {
         });
       }
 
-      // Compute performance-only fee locally using event configuration
+      // For solo entries, use API to get cumulative package pricing with deduction
+      if (capitalizedPerformanceType === 'Solo' && eventId && participantIds.length === 1) {
+        try {
+          const response = await fetch('/api/eodsa-fees', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              masteryLevel: currentForm.mastery || 'Water (Competitive)',
+              performanceType: 'Solo',
+              participantIds: participantIds,
+              soloCount: soloCount,
+              includeRegistration: false, // Only get performance fee, not registration
+              eventId: eventId
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            const fee = data.fees.performanceFee || 0;
+            console.log('SOLO_DEBUG: calculateEntryFee:apiResult', { fee, soloCount, type: capitalizedPerformanceType });
+            return fee;
+          }
+        } catch (error) {
+          console.error('Error fetching cumulative solo fee from API:', error);
+        }
+      }
+      
+      // Fallback: Compute performance-only fee locally using event configuration
       let fee = 0;
       if (capitalizedPerformanceType === 'Solo') {
-        // Solo pricing: solo1Fee, solo2Fee, solo3Fee are INDIVIDUAL fees, NOT cumulative
-        // soloCount is the solo number (1st, 2nd, 3rd, etc.)
-        const solo1Fee = event?.solo1Fee || 400;
-        const solo2Fee = event?.solo2Fee || 200;
-        const solo3Fee = event?.solo3Fee || 100;
-        const soloAdditionalFee = event?.soloAdditionalFee || 100;
+        // For solo entries, use cumulative package pricing
+        // solo1Fee, solo2Fee, solo3Fee are CUMULATIVE package totals
+        const solo1Package = event?.solo1Fee || 550;  // 1 Solo Package total
+        const solo2Package = event?.solo2Fee || 942;   // 2 Solos Package total
+        const solo3Package = event?.solo3Fee || 1256;  // 3 Solos Package total
+        const additionalSoloFee = event?.soloAdditionalFee || 349;
         
-        if (soloCount === 1) {
-          fee = solo1Fee;
-        } else if (soloCount === 2) {
-          fee = solo2Fee;
-        } else if (soloCount === 3) {
-          fee = solo3Fee;
+        // Count existing paid solos for this dancer
+        const existingPaidSolos = existingDbEntries.filter(entry => {
+          if (entry.performanceType !== 'Solo' || entry.paymentStatus !== 'paid') return false;
+          if (entry.participantIds && entry.participantIds.length === 1) {
+            return entry.participantIds[0] === participantIds[0];
+          }
+          return false;
+        }).length;
+        
+        // Count session solos (entries being added in this session but not yet saved)
+        const sessionSoloCount = entries.filter(entry => 
+          entry.performanceType === 'Solo' && 
+          entry.participantIds.length === 1 && 
+          entry.participantIds[0] === participantIds[0]
+        ).length;
+        
+        const totalSoloCount = existingPaidSolos + sessionSoloCount + 1;
+        
+        // Calculate what package total they should have paid for existing paid solos
+        let packageTotalForPaidSolos = 0;
+        if (existingPaidSolos === 0) {
+          packageTotalForPaidSolos = 0;
+        } else if (existingPaidSolos === 1) {
+          packageTotalForPaidSolos = solo1Package;
+        } else if (existingPaidSolos === 2) {
+          packageTotalForPaidSolos = solo2Package;
+        } else if (existingPaidSolos === 3) {
+          packageTotalForPaidSolos = solo3Package;
         } else {
-          // 4th+ solos: Additional solo fee
-          fee = soloAdditionalFee;
+          packageTotalForPaidSolos = solo3Package + ((existingPaidSolos - 3) * additionalSoloFee);
         }
+        
+        // Calculate what package total they should pay for the new total
+        let packageTotalForNewCount = 0;
+        if (totalSoloCount === 1) {
+          packageTotalForNewCount = solo1Package;
+        } else if (totalSoloCount === 2) {
+          packageTotalForNewCount = solo2Package;
+        } else if (totalSoloCount === 3) {
+          packageTotalForNewCount = solo3Package;
+        } else {
+          packageTotalForNewCount = solo3Package + ((totalSoloCount - 3) * additionalSoloFee);
+        }
+        
+        // Charge the difference (new package total - what they should have already paid)
+        fee = Math.max(0, packageTotalForNewCount - packageTotalForPaidSolos);
+        
+        console.log('SOLO_DEBUG: calculateEntryFee:cumulative', { 
+          existingPaidSolos, 
+          sessionSoloCount, 
+          totalSoloCount,
+          packageTotalForPaidSolos,
+          packageTotalForNewCount,
+          fee 
+        });
       } else if (capitalizedPerformanceType === 'Duet' || capitalizedPerformanceType === 'Trio') {
         fee = (event?.duoTrioFeePerDancer || 280) * participantIds.length;
       } else if (capitalizedPerformanceType === 'Group') {
@@ -1724,10 +1796,14 @@ export default function CompetitionEntryPage() {
                 <div className="grid grid-cols-1 gap-4 sm:gap-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-slate-300 mb-3">Item Name *</label>
+                      <label className="block text-sm font-semibold text-slate-300 mb-3">
+                        Item Name * 
+                        <span className="text-xs text-slate-400 ml-2 font-normal">(Max 26 characters for certificate display)</span>
+                      </label>
                       <input
                         type="text"
                         value={currentForm.itemName}
+                        maxLength={26}
                         onChange={(e) => {
                           const value = e.target.value;
                           // Prevent empty strings with just spaces and enforce minimum length
@@ -1738,9 +1814,29 @@ export default function CompetitionEntryPage() {
                           }
                           setCurrentForm({...currentForm, itemName: value});
                         }}
-                        className="w-full p-4 bg-slate-700/50 border-2 border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base"
+                        className={`w-full p-4 border-2 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-base ${
+                          currentForm.itemName.length > 22 
+                            ? 'bg-yellow-900/20 border-yellow-500' 
+                            : 'bg-slate-700/50 border-slate-600'
+                        }`}
                         placeholder="Enter your performance title"
                       />
+                      <div className={`mt-1 text-xs flex justify-between ${
+                        currentForm.itemName.length > 22 
+                          ? 'text-yellow-400' 
+                          : currentForm.itemName.length > 20 
+                          ? 'text-yellow-300' 
+                          : 'text-slate-400'
+                      }`}>
+                        <span>
+                          {currentForm.itemName.length >= 26 
+                            ? '⚠️ Maximum length reached' 
+                            : currentForm.itemName.length > 22 
+                            ? '⚠️ Approaching limit' 
+                            : 'Max 26 characters'}
+                        </span>
+                        <span>{currentForm.itemName.length}/26</span>
+                      </div>
                     </div>
                     
                     <div>
