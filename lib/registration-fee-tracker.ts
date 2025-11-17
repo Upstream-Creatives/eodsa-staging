@@ -106,83 +106,185 @@ export const calculateSmartEODSAFee = async (
     }
   }
 
-  // For solo entries, calculate cumulative package pricing with deduction of already-paid amounts
-  let paidSoloCount = 0;
-  let shouldChargeForSolo = 0;
+  // For solo entries: calculate cumulative package pricing with proper deduction
+  // BACKEND IS SOURCE OF TRUTH - calculates everything from scratch
+  let calculatedPerformanceFee = 0;
+  let calculatedRegistrationFee = 0;
+  let existingSoloCount = 0;
   
   if (performanceType === 'Solo' && options?.eventId && participantIds.length === 1) {
+    const participantId = participantIds[0];
+    
+    // First, get the dancer's EODSA ID from the internal ID
+    const { getSql } = await import('./database');
+    const sqlClient = getSql();
+    
+    let dancerEodsaId: string | null = null;
     try {
-      const { getSql } = await import('./database');
-      const sqlClient = getSql();
+      const dancerInfo = await sqlClient`
+        SELECT eodsa_id FROM dancers WHERE id = ${participantId} LIMIT 1
+      ` as any[];
       
-      // Get all PAID solo entries for this dancer in this event
-      // Use JSONB containment for proper JSON array checking
-      const paidSoloEntries = await sqlClient`
-        SELECT calculated_fee, participant_ids
+      if (dancerInfo.length > 0 && dancerInfo[0].eodsa_id) {
+        dancerEodsaId = dancerInfo[0].eodsa_id;
+      }
+    } catch (error) {
+      console.error('Error getting dancer EODSA ID:', error);
+    }
+    
+    // Get ALL existing solo entries for this dancer in this event (paid AND unpaid)
+    // Check by BOTH internal ID (participant_ids) and EODSA ID
+    let existingSoloEntries: any[] = [];
+    if (dancerEodsaId) {
+      existingSoloEntries = await sqlClient`
+        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
         FROM event_entries
         WHERE event_id = ${options.eventId}
         AND performance_type = 'Solo'
-        AND payment_status = 'paid'
         AND (
-          eodsa_id = ${participantIds[0]}
-          OR (participant_ids::jsonb ? ${participantIds[0]})
+          eodsa_id = ${dancerEodsaId}
+          OR contestant_id = ${participantId}
+          OR (participant_ids::jsonb ? ${participantId})
+          OR (participant_ids::jsonb ? ${dancerEodsaId})
         )
+        ORDER BY submitted_at ASC
       ` as any[];
-      
-      paidSoloCount = paidSoloEntries.length;
-      
-      // Get event package fees (these are CUMULATIVE totals, not individual fees)
-      const solo1Package = eventFees.eventSolo1Fee || 550;  // 1 Solo Package total
-      const solo2Package = eventFees.eventSolo2Fee || 942;   // 2 Solos Package total
-      const solo3Package = eventFees.eventSolo3Fee || 1256;  // 3 Solos Package total
-      const additionalSoloFee = eventFees.eventSoloAdditionalFee || 349;
-      
-      // Calculate what package total they should have paid for their existing paid solos
-      let packageTotalForPaidSolos = 0;
-      if (paidSoloCount === 0) {
-        packageTotalForPaidSolos = 0;
-      } else if (paidSoloCount === 1) {
-        packageTotalForPaidSolos = solo1Package;
-      } else if (paidSoloCount === 2) {
-        packageTotalForPaidSolos = solo2Package;
-      } else if (paidSoloCount === 3) {
-        packageTotalForPaidSolos = solo3Package;
-      } else {
-        // 4+ solos: 3-solo package + additional solos
-        packageTotalForPaidSolos = solo3Package + ((paidSoloCount - 3) * additionalSoloFee);
-      }
-      
-      // Calculate what package total they should pay for the new total (paid + this new one)
-      const newTotalSoloCount = paidSoloCount + 1;
-      let packageTotalForNewCount = 0;
-      if (newTotalSoloCount === 1) {
-        packageTotalForNewCount = solo1Package;
-      } else if (newTotalSoloCount === 2) {
-        packageTotalForNewCount = solo2Package;
-      } else if (newTotalSoloCount === 3) {
-        packageTotalForNewCount = solo3Package;
-      } else {
-        // 4+ solos: 3-solo package + additional solos
-        packageTotalForNewCount = solo3Package + ((newTotalSoloCount - 3) * additionalSoloFee);
-      }
-      
-      // Calculate what should be charged now (new package total - what they should have already paid)
-      shouldChargeForSolo = Math.max(0, packageTotalForNewCount - packageTotalForPaidSolos);
-      
-      console.log(`💰 Cumulative Solo Package Pricing:`);
-      console.log(`   - Paid solo entries: ${paidSoloCount}`);
-      console.log(`   - Package total for ${paidSoloCount} solos: R${packageTotalForPaidSolos}`);
-      console.log(`   - New total solo count: ${newTotalSoloCount}`);
-      console.log(`   - Package total for ${newTotalSoloCount} solos: R${packageTotalForNewCount}`);
-      console.log(`   - Should charge now: R${shouldChargeForSolo}`);
-    } catch (error) {
-      console.error('Error calculating cumulative solo package pricing:', error);
-      // Fallback to regular solo fee
-      shouldChargeForSolo = eventFees.eventSolo1Fee || 550;
+    } else {
+      existingSoloEntries = await sqlClient`
+        SELECT id, calculated_fee, payment_status, participant_ids, eodsa_id, contestant_id
+        FROM event_entries
+        WHERE event_id = ${options.eventId}
+        AND performance_type = 'Solo'
+        AND (
+          contestant_id = ${participantId}
+          OR (participant_ids::jsonb ? ${participantId})
+        )
+        ORDER BY submitted_at ASC
+      ` as any[];
     }
+    
+    console.log(`🔍 Looking for existing solos for dancer ${participantId} (EODSA: ${dancerEodsaId || 'N/A'}) in event ${options.eventId}`);
+    console.log(`   - Found ${existingSoloEntries.length} existing solo entries`);
+    existingSoloEntries.forEach((entry, idx) => {
+      console.log(`   - Entry ${idx + 1}: ID ${entry.id}, Fee R${entry.calculated_fee}, Payment: ${entry.payment_status}`);
+    });
+    
+    existingSoloCount = existingSoloEntries.length;
+    
+    // Get package fees (these are CUMULATIVE package totals, not individual fees)
+    const solo1Package = eventFees.eventSolo1Fee || 550;  // 1 Solo Package total (performance only)
+    const solo2Package = eventFees.eventSolo2Fee || 942;   // 2 Solos Package total (performance only)
+    const solo3Package = eventFees.eventSolo3Fee || 1256;  // 3 Solos Package total (performance only)
+    const additionalSoloFee = eventFees.eventSoloAdditionalFee || 349;
+    const registrationFee = eventFees.eventRegistrationFee || 175;
+    
+    // Check if registration was already assigned (has ANY entry in this event, paid or unpaid)
+    // This includes checking other entry types too, not just solos
+    const registrationAlreadyAssigned = existingSoloEntries.length > 0 || 
+      await (async () => {
+        let anyEntry: any[] = [];
+        if (dancerEodsaId) {
+          anyEntry = await sqlClient`
+            SELECT COUNT(*) as count FROM event_entries
+            WHERE event_id = ${options.eventId}
+            AND (
+              eodsa_id = ${dancerEodsaId}
+              OR contestant_id = ${participantId}
+              OR (participant_ids::jsonb ? ${participantId})
+              OR (participant_ids::jsonb ? ${dancerEodsaId})
+            )
+            LIMIT 1
+          ` as any[];
+        } else {
+          anyEntry = await sqlClient`
+            SELECT COUNT(*) as count FROM event_entries
+            WHERE event_id = ${options.eventId}
+            AND (
+              contestant_id = ${participantId}
+              OR (participant_ids::jsonb ? ${participantId})
+            )
+            LIMIT 1
+          ` as any[];
+        }
+        return anyEntry && anyEntry[0] && anyEntry[0].count > 0;
+      })();
+    
+    // Calculate what package total they should have been charged for existing solos
+    // This is based on the solo count, not what they actually paid
+    let previousPackageTotal = 0;
+    if (existingSoloCount === 0) {
+      previousPackageTotal = 0;
+    } else if (existingSoloCount === 1) {
+      previousPackageTotal = solo1Package;
+    } else if (existingSoloCount === 2) {
+      previousPackageTotal = solo2Package;
+    } else if (existingSoloCount === 3) {
+      previousPackageTotal = solo3Package;
+    } else {
+      // 4+ solos: 3-solo package + additional solos
+      previousPackageTotal = solo3Package + ((existingSoloCount - 3) * additionalSoloFee);
+    }
+    
+    // Calculate new total solo count
+    const newTotalSoloCount = existingSoloCount + 1;
+    
+    // Calculate new package total (performance fees only, registration is separate)
+    let newPackagePerformanceTotal = 0;
+    if (newTotalSoloCount === 1) {
+      newPackagePerformanceTotal = solo1Package;
+    } else if (newTotalSoloCount === 2) {
+      newPackagePerformanceTotal = solo2Package;
+    } else if (newTotalSoloCount === 3) {
+      newPackagePerformanceTotal = solo3Package;
+    } else {
+      // 4+ solos: 3-solo package + additional solos
+      newPackagePerformanceTotal = solo3Package + ((newTotalSoloCount - 3) * additionalSoloFee);
+    }
+    
+    // Calculate performance fee increment (new package total - previous package total)
+    // This is what they should pay for performance fees NOW
+    calculatedPerformanceFee = Math.max(0, newPackagePerformanceTotal - previousPackageTotal);
+    
+    // Registration fee: only charge if NOT already assigned
+    calculatedRegistrationFee = registrationAlreadyAssigned ? 0 : registrationFee;
+    
+    // Calculate total amount already charged (sum of ALL calculated_fee values)
+    // This is what they've ACTUALLY been charged (might include previous registration)
+    const previousChargesTotal = existingSoloEntries.reduce((sum, entry) => {
+      return sum + (parseFloat(entry.calculated_fee) || 0);
+    }, 0);
+    
+    // Total amount due now = performance increment + registration (if not assigned)
+    const amountDueNow = calculatedPerformanceFee + calculatedRegistrationFee;
+    
+    console.log(`💰 Backend Fee Calculation (Source of Truth):`);
+    console.log(`   - Existing solo entries: ${existingSoloCount}`);
+    console.log(`   - Previous package total: R${previousPackageTotal}`);
+    console.log(`   - Previous charges total (actual): R${previousChargesTotal}`);
+    console.log(`   - New total solo count: ${newTotalSoloCount}`);
+    console.log(`   - New package performance total: R${newPackagePerformanceTotal}`);
+    console.log(`   - Registration already assigned: ${registrationAlreadyAssigned}`);
+    console.log(`   - Performance fee increment: R${calculatedPerformanceFee}`);
+    console.log(`   - Registration fee: R${calculatedRegistrationFee}`);
+    console.log(`   - Amount due now: R${amountDueNow}`);
+    console.log(`   - Breakdown: Performance R${calculatedPerformanceFee} + Registration R${calculatedRegistrationFee}`);
+    
+    // Return calculated fees (backend is source of truth)
+    return {
+      registrationFee: calculatedRegistrationFee,
+      performanceFee: calculatedPerformanceFee,
+      totalFee: calculatedPerformanceFee + calculatedRegistrationFee,
+      breakdown: `Solo Package (${existingSoloCount + 1} solos total) - Previous: R${previousPackageTotal}`,
+      registrationBreakdown: calculatedRegistrationFee > 0 
+        ? `Registration fee (first entry in this event)`
+        : `Registration fee waived (already assigned on previous entry)`,
+      currency: eventFees.eventCurrency || 'ZAR',
+      unpaidRegistrationDancers: calculatedRegistrationFee > 0 ? participantIds : [],
+      paidRegistrationDancers: calculatedRegistrationFee === 0 ? participantIds : []
+    };
   }
 
-  // Calculate fees with intelligent registration fee handling and event-specific fees
+  // For non-solo entries: standard calculation with registration check
   const feeBreakdown = calculateEODSAFee(
     masteryLevel,
     performanceType,
@@ -190,18 +292,11 @@ export const calculateSmartEODSAFee = async (
     {
       soloCount: options?.soloCount || 1,
       includeRegistration: true,
-      participantDancers: dancersWithPendingCheck, // Use the enhanced dancer data
-      eventId: options?.eventId, // Pass eventId for event-specific fees
-      ...eventFees // Spread all event-specific fees
+      participantDancers: dancersWithPendingCheck,
+      eventId: options?.eventId,
+      ...eventFees
     }
   );
-
-  // Override solo fee with cumulative package pricing if calculated
-  if (performanceType === 'Solo' && shouldChargeForSolo > 0) {
-    feeBreakdown.performanceFee = shouldChargeForSolo;
-    feeBreakdown.totalFee = feeBreakdown.registrationFee + feeBreakdown.performanceFee;
-    feeBreakdown.breakdown = `Solo Package (${paidSoloCount + 1} solos total) - Incremental charge`;
-  }
 
   return {
     ...feeBreakdown,
