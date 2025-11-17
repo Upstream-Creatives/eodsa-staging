@@ -493,7 +493,10 @@ export const calculateEODSAFee = (
     
     if (unpaidDancers.length > 0) {
       // Use event-specific registration fee if provided, otherwise use default
-      const regFeePerDancer = eventRegistrationFee || EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION];
+      // Check explicitly for null/undefined to allow 0 as a valid value
+      const regFeePerDancer = (eventRegistrationFee !== null && eventRegistrationFee !== undefined) 
+        ? eventRegistrationFee 
+        : EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION];
       registrationFee = regFeePerDancer * unpaidDancers.length;
       
       if (unpaidDancers.length === participantDancers.length) {
@@ -508,7 +511,10 @@ export const calculateEODSAFee = (
   } else if (includeRegistration) {
     // Fallback calculation if no dancer data provided
     // Use event-specific registration fee if provided, otherwise use default
-    const regFeePerDancer = eventRegistrationFee || EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION];
+    // Check explicitly for null/undefined to allow 0 as a valid value
+    const regFeePerDancer = (eventRegistrationFee !== null && eventRegistrationFee !== undefined)
+      ? eventRegistrationFee
+      : EODSA_FEES.REGISTRATION[masteryLevel as keyof typeof EODSA_FEES.REGISTRATION];
     registrationFee = regFeePerDancer * numberOfParticipants;
     registrationBreakdown = `Registration fee for ${numberOfParticipants} dancer${numberOfParticipants > 1 ? 's' : ''}`;
   }

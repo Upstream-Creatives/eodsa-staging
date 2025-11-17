@@ -17,8 +17,7 @@ export interface EnhancedDancer extends Dancer {
   registrationFeeMasteryLevel?: string;
 }
 
-// Enhanced fee calculation - BACKEND IS SOURCE OF TRUTH
-// Calculates fees from scratch based on existing entries, package pricing, and registration assignment
+// Enhanced fee calculation that checks dancer registration status
 export const calculateSmartEODSAFee = async (
   masteryLevel: string,
   performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group',
@@ -28,54 +27,98 @@ export const calculateSmartEODSAFee = async (
     eventId?: string;
   }
 ) => {
-  if (!options?.eventId) {
-    // Fallback to basic calculation if no eventId
-    return calculateEODSAFee(
-      masteryLevel,
-      performanceType,
-      participantIds.length,
-      {
-        soloCount: options?.soloCount || 1,
-        includeRegistration: true
+  // REGISTRATION FEE CHECKING FOR ALL PERFORMANCE TYPES
+  // Get dancer registration status for all participants regardless of performance type
+  const dancers = await unifiedDb.getDancersWithRegistrationStatus(participantIds);
+
+  // SIMPLIFIED APPROACH: Ignore global registration_fee_paid column
+  // Only check if dancer has ANY entries for THIS specific event (paid or unpaid)
+  const dancersWithPendingCheck = await Promise.all(
+    dancers.map(async (dancer) => {
+      // Check if this dancer has ANY entries for THIS specific event (paid or unpaid)
+      let hasEntryForThisEvent = false;
+
+      if (options?.eventId) {
+        try {
+          const { getSql } = await import('./database');
+          const sqlClient = getSql();
+          // Check for ANY entries for this dancer in this event
+          // Check by participant_ids (JSON array), eodsa_id, or contestant_id
+          // Use JSONB containment for proper JSON array checking
+          const existingEntries = await sqlClient`
+            SELECT COUNT(*) as count FROM event_entries
+            WHERE event_id = ${options.eventId}
+            AND (
+              eodsa_id = ${dancer.eodsaId || dancer.id}
+              OR contestant_id = ${dancer.id}
+              OR (participant_ids::jsonb ? ${dancer.id})
+              OR (participant_ids::jsonb ? ${dancer.eodsaId || ''})
+            )
+            LIMIT 1
+          ` as any[];
+
+          hasEntryForThisEvent = existingEntries && existingEntries[0] && existingEntries[0].count > 0;
+
+          console.log(`🔍 Dancer ${dancer.name} (${dancer.id}, EODSA: ${dancer.eodsaId}):`);
+          console.log(`   - Has entry for this event (${options.eventId}): ${hasEntryForThisEvent}`);
+          console.log(`   - Registration fee logic: ${hasEntryForThisEvent ? 'WAIVED (already has entry in this event)' : 'CHARGED (new entry for this event)'}`);
+        } catch (error) {
+          console.error(`Error checking existing entries for dancer ${dancer.id}:`, error);
+        }
       }
-    );
-  }
 
-  // Fetch event-specific fees
-  let eventFees: any = {};
-  try {
-    const { db } = await import('./database');
-    const event = await db.getEventById(options.eventId);
-    if (event) {
-      eventFees = {
-        eventRegistrationFee: event.registrationFeePerDancer,
-        eventSolo1Fee: event.solo1Fee,
-        eventSolo2Fee: event.solo2Fee,
-        eventSolo3Fee: event.solo3Fee,
-        eventSoloAdditionalFee: event.soloAdditionalFee,
-        eventDuoTrioFee: event.duoTrioFeePerDancer,
-        eventGroupFee: event.groupFeePerDancer,
-        eventCurrency: event.currency
+      return {
+        ...dancer,
+        // Only consider registration fee as "paid" if they already have an entry for THIS event
+        registrationFeePaid: hasEntryForThisEvent,
+        registrationFeeMasteryLevel: hasEntryForThisEvent ? masteryLevel : undefined
       };
-      
-      console.log(`💰 Event fees for ${options.eventId}:`);
-      console.log(`   - Registration: R${eventFees.eventRegistrationFee}`);
-      console.log(`   - Solo 1 Package: R${eventFees.eventSolo1Fee}`);
-      console.log(`   - Solo 2 Package: R${eventFees.eventSolo2Fee}`);
-      console.log(`   - Solo 3 Package: R${eventFees.eventSolo3Fee}`);
+    })
+  );
+  
+  // Fetch ALL event-specific fees if eventId provided
+  let eventFees: any = {};
+  if (options?.eventId) {
+    try {
+      const { db } = await import('./database');
+      const event = await db.getEventById(options.eventId);
+      if (event) {
+        eventFees = {
+          eventRegistrationFee: event.registrationFeePerDancer,
+          eventSolo1Fee: event.solo1Fee,
+          eventSolo2Fee: event.solo2Fee,
+          eventSolo3Fee: event.solo3Fee,
+          eventSoloAdditionalFee: event.soloAdditionalFee,
+          eventDuoTrioFee: event.duoTrioFeePerDancer,
+          eventGroupFee: event.groupFeePerDancer,
+          eventCurrency: event.currency
+        };
+        
+        console.log(`💰 Using event-specific fees for event ${options.eventId}:`);
+        console.log(`   - Currency: ${event.currency}`);
+        console.log(`   - Registration: ${event.currency}${event.registrationFeePerDancer}`);
+        console.log(`   - Solo 1: ${event.currency}${event.solo1Fee}`);
+        console.log(`   - Duo/Trio per dancer: ${event.currency}${event.duoTrioFeePerDancer}`);
+        console.log(`   - Group per dancer: ${event.currency}${event.groupFeePerDancer}`);
+      }
+    } catch (error) {
+      console.error('Error fetching event fees:', error);
     }
-  } catch (error) {
-    console.error('Error fetching event fees:', error);
   }
-
-  const { getSql } = await import('./database');
-  const sqlClient = getSql();
 
   // For solo entries: calculate cumulative package pricing with proper deduction
-  if (performanceType === 'Solo' && participantIds.length === 1) {
+  // BACKEND IS SOURCE OF TRUTH - calculates everything from scratch
+  let calculatedPerformanceFee = 0;
+  let calculatedRegistrationFee = 0;
+  let existingSoloCount = 0;
+  
+  if (performanceType === 'Solo' && options?.eventId && participantIds.length === 1) {
     const participantId = participantIds[0];
     
     // First, get the dancer's EODSA ID from the internal ID
+    const { getSql } = await import('./database');
+    const sqlClient = getSql();
+    
     let dancerEodsaId: string | null = null;
     try {
       const dancerInfo = await sqlClient`
@@ -126,7 +169,7 @@ export const calculateSmartEODSAFee = async (
       console.log(`   - Entry ${idx + 1}: ID ${entry.id}, Fee R${entry.calculated_fee}, Payment: ${entry.payment_status}`);
     });
     
-    const existingSoloCount = existingSoloEntries.length;
+    existingSoloCount = existingSoloEntries.length;
     
     // Get package fees (these are CUMULATIVE package totals, not individual fees)
     const solo1Package = eventFees.eventSolo1Fee || 550;  // 1 Solo Package total (performance only)
@@ -200,10 +243,10 @@ export const calculateSmartEODSAFee = async (
     
     // Calculate performance fee increment (new package total - previous package total)
     // This is what they should pay for performance fees NOW
-    const calculatedPerformanceFee = Math.max(0, newPackagePerformanceTotal - previousPackageTotal);
+    calculatedPerformanceFee = Math.max(0, newPackagePerformanceTotal - previousPackageTotal);
     
     // Registration fee: only charge if NOT already assigned
-    const finalRegistrationFee = registrationAlreadyAssigned ? 0 : registrationFee;
+    calculatedRegistrationFee = registrationAlreadyAssigned ? 0 : registrationFee;
     
     // Calculate total amount already charged (sum of ALL calculated_fee values)
     // This is what they've ACTUALLY been charged (might include previous registration)
@@ -212,7 +255,7 @@ export const calculateSmartEODSAFee = async (
     }, 0);
     
     // Total amount due now = performance increment + registration (if not assigned)
-    const amountDueNow = calculatedPerformanceFee + finalRegistrationFee;
+    const amountDueNow = calculatedPerformanceFee + calculatedRegistrationFee;
     
     console.log(`💰 Backend Fee Calculation (Source of Truth):`);
     console.log(`   - Existing solo entries: ${existingSoloCount}`);
@@ -222,58 +265,26 @@ export const calculateSmartEODSAFee = async (
     console.log(`   - New package performance total: R${newPackagePerformanceTotal}`);
     console.log(`   - Registration already assigned: ${registrationAlreadyAssigned}`);
     console.log(`   - Performance fee increment: R${calculatedPerformanceFee}`);
-    console.log(`   - Registration fee: R${finalRegistrationFee}`);
+    console.log(`   - Registration fee: R${calculatedRegistrationFee}`);
     console.log(`   - Amount due now: R${amountDueNow}`);
-    console.log(`   - Breakdown: Performance R${calculatedPerformanceFee} + Registration R${finalRegistrationFee}`);
+    console.log(`   - Breakdown: Performance R${calculatedPerformanceFee} + Registration R${calculatedRegistrationFee}`);
     
+    // Return calculated fees (backend is source of truth)
     return {
-      registrationFee: finalRegistrationFee,
+      registrationFee: calculatedRegistrationFee,
       performanceFee: calculatedPerformanceFee,
-      totalFee: calculatedPerformanceFee + finalRegistrationFee,
-      breakdown: `Solo Package (${newTotalSoloCount} solos) - Previous: R${previousChargesTotal}`,
-      registrationBreakdown: finalRegistrationFee > 0 
+      totalFee: calculatedPerformanceFee + calculatedRegistrationFee,
+      breakdown: `Solo Package (${existingSoloCount + 1} solos total) - Previous: R${previousPackageTotal}`,
+      registrationBreakdown: calculatedRegistrationFee > 0 
         ? `Registration fee (first entry in this event)`
         : `Registration fee waived (already assigned on previous entry)`,
       currency: eventFees.eventCurrency || 'ZAR',
-      unpaidRegistrationDancers: finalRegistrationFee > 0 ? participantIds : [],
-      paidRegistrationDancers: finalRegistrationFee === 0 ? participantIds : []
+      unpaidRegistrationDancers: calculatedRegistrationFee > 0 ? participantIds : [],
+      paidRegistrationDancers: calculatedRegistrationFee === 0 ? participantIds : []
     };
   }
 
   // For non-solo entries: standard calculation with registration check
-  const dancers = await unifiedDb.getDancersWithRegistrationStatus(participantIds);
-  
-  const dancersWithPendingCheck = await Promise.all(
-    dancers.map(async (dancer) => {
-      // Check if this dancer has ANY entries for THIS specific event (paid or unpaid)
-      let hasEntryForThisEvent = false;
-      
-      try {
-        const existingEntries = await sqlClient`
-          SELECT COUNT(*) as count FROM event_entries
-          WHERE event_id = ${options.eventId}
-          AND (
-            eodsa_id = ${dancer.eodsaId || dancer.id}
-            OR contestant_id = ${dancer.id}
-            OR (participant_ids::jsonb ? ${dancer.id})
-            OR (participant_ids::jsonb ? ${dancer.eodsaId || ''})
-          )
-          LIMIT 1
-        ` as any[];
-
-        hasEntryForThisEvent = existingEntries && existingEntries[0] && existingEntries[0].count > 0;
-      } catch (error) {
-        console.error(`Error checking existing entries for dancer ${dancer.id}:`, error);
-      }
-
-      return {
-        ...dancer,
-        registrationFeePaid: hasEntryForThisEvent,
-        registrationFeeMasteryLevel: hasEntryForThisEvent ? masteryLevel : undefined
-      };
-    })
-  );
-
   const feeBreakdown = calculateEODSAFee(
     masteryLevel,
     performanceType,
@@ -282,15 +293,20 @@ export const calculateSmartEODSAFee = async (
       soloCount: options?.soloCount || 1,
       includeRegistration: true,
       participantDancers: dancersWithPendingCheck,
-      eventId: options.eventId,
+      eventId: options?.eventId,
       ...eventFees
     }
   );
 
   return {
     ...feeBreakdown,
-    unpaidRegistrationDancers: dancersWithPendingCheck.filter(d => !d.registrationFeePaid),
-    paidRegistrationDancers: dancersWithPendingCheck.filter(d => d.registrationFeePaid)
+    unpaidRegistrationDancers: dancersWithPendingCheck.filter(d => 
+      !d.registrationFeePaid || 
+      (d.registrationFeeMasteryLevel && d.registrationFeeMasteryLevel !== masteryLevel)
+    ),
+    paidRegistrationDancers: dancersWithPendingCheck.filter(d => 
+      d.registrationFeePaid && d.registrationFeeMasteryLevel === masteryLevel
+    )
   };
 };
 
