@@ -2342,45 +2342,8 @@ function FeeBreakdownComponent({ entry, event }: { entry: EventEntry | null; eve
         else if (participantCount >= 4) performanceType = 'Group';
 
         // For solo entries, we need to calculate solo count
-        let soloCount = 1;
-        if (performanceType === 'Solo' && entry.participantIds && entry.participantIds.length === 1) {
-          // Count existing solos for this dancer in this event
-          const sqlClient = getSql();
-          const allSolos = await sqlClient`
-            SELECT id, participant_ids, eodsa_id, contestant_id
-            FROM event_entries
-            WHERE event_id = ${entry.eventId}
-            AND performance_type = 'Solo'
-            AND id != ${entry.id}
-            ORDER BY submitted_at ASC
-          ` as any[];
-
-          // Count matching entries (same logic as fee calculation)
-          const participantId = entry.participantIds[0];
-          let matchingCount = 0;
-          for (const solo of allSolos) {
-            let entryParticipantIds: string[] = [];
-            try {
-              if (typeof solo.participant_ids === 'string') {
-                entryParticipantIds = JSON.parse(solo.participant_ids);
-              } else if (Array.isArray(solo.participant_ids)) {
-                entryParticipantIds = solo.participant_ids;
-              }
-            } catch (e) {
-              // Ignore parse errors
-            }
-
-            const matches = solo.contestant_id === entry.contestantId ||
-                           solo.eodsa_id === entry.eodsaId ||
-                           entryParticipantIds.includes(participantId) ||
-                           entryParticipantIds.includes(entry.eodsaId);
-
-            if (matches) {
-              matchingCount++;
-            }
-          }
-          soloCount = matchingCount + 1; // +1 for this entry
-        }
+        // The API will handle this calculation, so we don't need to calculate it here
+        // Just pass the participant IDs and let the backend calculate the correct solo count
 
         // Call API to get fee breakdown
         const response = await fetch('/api/eodsa-fees', {
