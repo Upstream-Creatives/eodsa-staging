@@ -144,6 +144,15 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+    
+    console.log(`[Qualification] Event retrieved: ${event.id} - ${event.name}`);
+    console.log(`[Qualification] Event raw data:`, JSON.stringify({
+      eventType: (event as any).eventType,
+      eventMode: (event as any).eventMode,
+      qualificationRequired: (event as any).qualificationRequired,
+      qualificationSource: (event as any).qualificationSource,
+      minimumQualificationScore: (event as any).minimumQualificationScore
+    }, null, 2));
 
     // Check if event is still accepting registrations
     const now = new Date();
@@ -183,11 +192,45 @@ export async function POST(request: NextRequest) {
     }
 
     // QUALIFICATION VALIDATION - Check if dancer meets qualification requirements
-    const qualificationRequired = (event as any).qualificationRequired ?? false;
+    // Safety check: If event is NATIONAL_EVENT, automatically require qualification
+    let eventType = (event as any).eventType || 'REGIONAL_EVENT';
+    
+    console.log(`[Qualification] Event configuration check for event ${event.id} (${event.name}):`);
+    console.log(`  - eventType from DB: ${(event as any).eventType || 'NULL'}`);
+    console.log(`  - qualificationRequired from DB: ${(event as any).qualificationRequired}`);
+    console.log(`  - qualificationSource from DB: ${(event as any).qualificationSource || 'NULL'}`);
+    console.log(`  - minimumQualificationScore from DB: ${(event as any).minimumQualificationScore || 'NULL'}`);
+    
+    // Additional safety: If event name contains "national" but event_type is not set, treat as NATIONAL_EVENT
+    if (!(event as any).eventType && event.name && event.name.toLowerCase().includes('national')) {
+      console.warn(`⚠️ [Qualification] Event "${event.name}" (${event.id}) has "national" in name but event_type not set. Treating as NATIONAL_EVENT.`);
+      eventType = 'NATIONAL_EVENT';
+    }
+    
+    let qualificationRequired = (event as any).qualificationRequired ?? false;
+    
+    // Auto-enforce qualification for NATIONAL_EVENT if not explicitly set
+    if (eventType === 'NATIONAL_EVENT' && !qualificationRequired) {
+      console.warn(`⚠️ [Qualification] NATIONAL_EVENT "${event.name}" (${event.id}) has qualificationRequired=false. Auto-enforcing qualification.`);
+      qualificationRequired = true;
+      // Also ensure qualification_source is set
+      if (!(event as any).qualificationSource) {
+        (event as any).qualificationSource = 'REGIONAL';
+      }
+      if (!(event as any).minimumQualificationScore) {
+        (event as any).minimumQualificationScore = 75;
+      }
+    }
+    
+    console.log(`[Qualification] Final validation state:`);
+    console.log(`  - eventType: ${eventType}`);
+    console.log(`  - qualificationRequired: ${qualificationRequired}`);
     
     if (qualificationRequired) {
       const qualificationSource = (event as any).qualificationSource || null;
       const minimumQualificationScore = (event as any).minimumQualificationScore || null;
+      
+      console.log(`[Qualification] ✅ Qualification REQUIRED - source: ${qualificationSource}, minScore: ${minimumQualificationScore}`);
       
       // Get the first participant (primary dancer) for qualification check
       const primaryDancerId = body.participantIds[0];
@@ -222,15 +265,19 @@ export async function POST(request: NextRequest) {
       
       if (qualificationSource === 'REGIONAL') {
         if (minimumQualificationScore === null || minimumQualificationScore === undefined) {
+          console.error(`[Qualification] REGIONAL qualification required but minimumQualificationScore is null/undefined for event ${body.eventId}`);
           return NextResponse.json(
             { error: 'This event requires qualification from a Regional Event, but no minimum score is set. Please contact support.' },
             { status: 400 }
           );
         }
         
+        console.log(`[Qualification] Checking REGIONAL qualification for dancer ${primaryDancerId} (EODSA: ${body.eodsaId}) with minimum score ${minimumQualificationScore}`);
         const hasQualification = await db.checkRegionalQualification(primaryDancerId, minimumQualificationScore);
+        console.log(`[Qualification] Qualification check result: ${hasQualification}`);
         
         if (!hasQualification) {
+          console.log(`[Qualification] ❌ BLOCKING entry - dancer ${primaryDancerId} does not have qualifying regional performance`);
           // Log blocked entry
           try {
             await sqlClient`

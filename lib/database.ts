@@ -4752,20 +4752,27 @@ export const db = {
   async checkRegionalQualification(dancerId: string, minimumScore: number): Promise<boolean> {
     const sqlClient = getSql();
     
+    console.log(`[checkRegionalQualification] Checking qualification for dancerId: ${dancerId}, minimumScore: ${minimumScore}`);
+    
     // Get dancer's EODSA ID
     const dancerResult = await sqlClient`
       SELECT eodsa_id FROM dancers WHERE id = ${dancerId}
     ` as any[];
     
-    if (dancerResult.length === 0) return false;
+    if (dancerResult.length === 0) {
+      console.log(`[checkRegionalQualification] Dancer not found: ${dancerId}`);
+      return false;
+    }
     const eodsaId = dancerResult[0].eodsa_id;
+    console.log(`[checkRegionalQualification] Found dancer EODSA ID: ${eodsaId}`);
     
     // Check for performances in REGIONAL_EVENT events with score >= minimumScore
+    // IMPORTANT: Use e.id = ee.event_id to ensure we're checking the correct event
     const result = await sqlClient`
       SELECT DISTINCT p.id
       FROM performances p
       JOIN event_entries ee ON ee.id = p.event_entry_id
-      JOIN events e ON e.id = p.event_id
+      JOIN events e ON e.id = ee.event_id
       JOIN scores s ON s.performance_id = p.id
       WHERE (
         ee.eodsa_id = ${eodsaId}
@@ -4781,6 +4788,13 @@ export const db = {
       ) >= ${minimumScore}
       LIMIT 1
     ` as any[];
+    
+    console.log(`[checkRegionalQualification] Query result count: ${result.length}`);
+    if (result.length > 0) {
+      console.log(`[checkRegionalQualification] ✅ Dancer HAS qualifying performance`);
+    } else {
+      console.log(`[checkRegionalQualification] ❌ Dancer does NOT have qualifying performance`);
+    }
     
     return result.length > 0;
   },

@@ -334,7 +334,16 @@ export function calculateAgeOnDate(dateOfBirth: Date | string, referenceDate: Da
 }
 
 export const REGIONS = [
-  'Nationals'
+  'Nationals',
+  'Gauteng',
+  'Western Cape',
+  'KwaZulu-Natal',
+  'Eastern Cape',
+  'Free State',
+  'Limpopo',
+  'Mpumalanga',
+  'Northern Cape',
+  'North West'
 ];
 
 export const PERFORMANCE_TYPES = {
