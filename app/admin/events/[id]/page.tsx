@@ -2341,11 +2341,8 @@ function FeeBreakdownComponent({ entry, event }: { entry: EventEntry | null; eve
         else if (participantCount === 3) performanceType = 'Trio';
         else if (participantCount >= 4) performanceType = 'Group';
 
-        // For solo entries, we need to calculate solo count
-        // The API will handle this calculation, so we don't need to calculate it here
-        // Just pass the participant IDs and let the backend calculate the correct solo count
-
         // Call API to get fee breakdown
+        // The API will calculate solo count automatically based on existing entries
         const response = await fetch('/api/eodsa-fees', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2353,7 +2350,7 @@ function FeeBreakdownComponent({ entry, event }: { entry: EventEntry | null; eve
             masteryLevel: entry.mastery || 'Water (Competitive)',
             performanceType: performanceType,
             participantIds: entry.participantIds || [],
-            soloCount: performanceType === 'Solo' ? undefined : undefined, // Let API calculate solo count
+            // Don't pass soloCount - let API calculate it based on existing entries
             includeRegistration: true,
             eventId: entry.eventId
           })
@@ -2361,6 +2358,9 @@ function FeeBreakdownComponent({ entry, event }: { entry: EventEntry | null; eve
 
         if (response.ok) {
           const data = await response.json();
+          // Extract solo count from debug info if available
+          const soloCount = data.details?.soloCount || (performanceType === 'Solo' ? data.debug?.existingSoloCount ? data.debug.existingSoloCount + 1 : 1 : undefined);
+          
           setBreakdown({
             performanceFee: data.fees.performanceFee || 0,
             registrationFee: data.fees.registrationFee || 0,
