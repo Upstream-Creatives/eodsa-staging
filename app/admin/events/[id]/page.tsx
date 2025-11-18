@@ -24,6 +24,14 @@ interface Event {
   status: string;
   maxParticipants?: number;
   entryFee: number;
+  currency?: string;
+  registrationFeePerDancer?: number;
+  solo1Fee?: number;
+  solo2Fee?: number;
+  solo3Fee?: number;
+  soloAdditionalFee?: number;
+  duoTrioFeePerDancer?: number;
+  groupFeePerDancer?: number;
 }
 
 interface EventEntry {
@@ -2343,32 +2351,41 @@ function FeeBreakdownComponent({ entry, event }: { entry: EventEntry | null; eve
 
         // Call API to get fee breakdown
         // The API will calculate solo count automatically based on existing entries
+        const requestBody = {
+          masteryLevel: entry.mastery || 'Water (Competitive)',
+          performanceType: performanceType,
+          participantIds: entry.participantIds || [],
+          // Don't pass soloCount - let API calculate it based on existing entries
+          includeRegistration: true,
+          eventId: entry.eventId
+        };
+        
+        console.log('🔍 Fee Breakdown Request:', requestBody);
+        
         const response = await fetch('/api/eodsa-fees', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            masteryLevel: entry.mastery || 'Water (Competitive)',
-            performanceType: performanceType,
-            participantIds: entry.participantIds || [],
-            // Don't pass soloCount - let API calculate it based on existing entries
-            includeRegistration: true,
-            eventId: entry.eventId
-          })
+          body: JSON.stringify(requestBody)
         });
 
         if (response.ok) {
           const data = await response.json();
+          console.log('✅ Fee Breakdown Response:', data);
+          
           // Extract solo count from debug info if available
-          const soloCount = data.details?.soloCount || (performanceType === 'Solo' ? data.debug?.existingSoloCount ? data.debug.existingSoloCount + 1 : 1 : undefined);
+          const soloCount = data.details?.soloCount || (performanceType === 'Solo' ? (data.debug?.existingSoloCount !== undefined ? data.debug.existingSoloCount + 1 : 1) : undefined);
           
           setBreakdown({
-            performanceFee: data.fees.performanceFee || 0,
-            registrationFee: data.fees.registrationFee || 0,
-            totalFee: data.fees.totalFee || entry.calculatedFee,
-            breakdown: data.fees.breakdown || '',
-            registrationBreakdown: data.fees.registrationBreakdown || '',
+            performanceFee: data.fees?.performanceFee || 0,
+            registrationFee: data.fees?.registrationFee || 0,
+            totalFee: data.fees?.totalFee || entry.calculatedFee,
+            breakdown: data.fees?.breakdown || '',
+            registrationBreakdown: data.fees?.registrationBreakdown || '',
             soloCount: performanceType === 'Solo' ? soloCount : undefined
           });
+        } else {
+          const errorData = await response.json();
+          console.error('❌ Fee Breakdown API Error:', errorData);
         }
       } catch (error) {
         console.error('Error calculating fee breakdown:', error);
@@ -2384,7 +2401,7 @@ function FeeBreakdownComponent({ entry, event }: { entry: EventEntry | null; eve
 
   if (!entry || !event) return null;
 
-  const currencySymbol = event.currency === 'USD' ? '$' : event.currency === 'EUR' ? '€' : event.currency === 'GBP' ? '£' : 'R';
+  const currencySymbol = (event.currency === 'USD') ? '$' : (event.currency === 'EUR') ? '€' : (event.currency === 'GBP') ? '£' : 'R';
 
   return (
     <div className={`${themeClasses.metricCardBg} ${themeClasses.cardRadius} p-5 border ${themeClasses.metricCardBorder}`}>
