@@ -1114,7 +1114,88 @@ export default function CompetitionEntryPage() {
 
   const calculateTotalFee = async () => {
     setIsCalculatingFee(true);
-    const performanceFee = entries.reduce((total, entry) => total + entry.fee, 0);
+    
+    // Recalculate fees for all entries using the API (backend is source of truth)
+    // This ensures cumulative solo package pricing is correct
+    let totalPerformanceFee = 0;
+    
+    // For solo entries, we need to recalculate in order to get cumulative package pricing
+    const soloEntries = entries.filter(e => e.performanceType === 'Solo');
+    const nonSoloEntries = entries.filter(e => e.performanceType !== 'Solo');
+    
+    // Calculate solo fees using API with proper solo count tracking
+    for (let i = 0; i < soloEntries.length; i++) {
+      const entry = soloEntries[i];
+      if (entry.participantIds.length === 1 && eventId) {
+        try {
+          // Count existing solos in DB + previous solos in this session
+          let existingSoloCount = 0;
+          if (studioInfo) {
+            existingSoloCount = await getExistingSoloCountForDancer(entry.participantIds[0]);
+          } else {
+            existingSoloCount = existingDbEntries.filter(e => {
+              if (!e.participantIds || e.participantIds.length !== 1) return false;
+              let entryParticipants: string[] = [];
+              if (Array.isArray(e.participantIds)) {
+                entryParticipants = e.participantIds;
+              } else if (typeof e.participantIds === 'string') {
+                try {
+                  entryParticipants = JSON.parse(e.participantIds);
+                } catch {
+                  entryParticipants = [e.participantIds];
+                }
+              }
+              return entryParticipants.includes(entry.participantIds[0]);
+            }).length;
+          }
+          
+          // Count solos already processed in this session (before current entry)
+          const sessionSoloCount = soloEntries.slice(0, i).filter(e => 
+            e.participantIds.length === 1 && e.participantIds[0] === entry.participantIds[0]
+          ).length;
+          
+          const soloCount = existingSoloCount + sessionSoloCount + 1;
+          
+          // Get fee from API (backend is source of truth)
+          const response = await fetch('/api/eodsa-fees', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              masteryLevel: entry.mastery || 'Water (Competitive)',
+              performanceType: 'Solo',
+              participantIds: entry.participantIds,
+              soloCount: soloCount,
+              includeRegistration: false, // Only get performance fee
+              eventId: eventId
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            const fee = data.fees.performanceFee || 0;
+            totalPerformanceFee += fee;
+            // Update entry fee to match API calculation
+            entry.fee = fee;
+          } else {
+            // Fallback to stored fee
+            totalPerformanceFee += entry.fee || 0;
+          }
+        } catch (error) {
+          console.error('Error recalculating solo fee:', error);
+          // Fallback to stored fee
+          totalPerformanceFee += entry.fee || 0;
+        }
+      } else {
+        // Fallback to stored fee
+        totalPerformanceFee += entry.fee || 0;
+      }
+    }
+    
+    // For non-solo entries, use stored fees (they don't have cumulative pricing)
+    nonSoloEntries.forEach(entry => {
+      totalPerformanceFee += entry.fee || 0;
+    });
+    
     const uniqueParticipants = new Set<string>();
     entries.forEach(entry => {
       entry.participantIds.forEach(id => uniqueParticipants.add(id));
@@ -1169,7 +1250,7 @@ export default function CompetitionEntryPage() {
       }
     }
     
-    const result = { performanceFee, registrationFee, total: performanceFee + registrationFee };
+    const result = { performanceFee: totalPerformanceFee, registrationFee, total: totalPerformanceFee + registrationFee };
     setTotalFeeCalculation(result);
     setIsCalculatingFee(false);
     return result;
