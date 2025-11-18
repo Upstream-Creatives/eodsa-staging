@@ -229,9 +229,48 @@ export function validateAndCorrectEntryFee(
   let explanation: string;
   
   if (performanceType === 'Solo') {
-    const currentSoloCount = existingSoloCount + 1;
-    correctFee = calculateSoloEntryFee(currentSoloCount, eventConfig);
-    explanation = `Solo entry #${currentSoloCount}: ${getSoloFeeExplanation(currentSoloCount, eventConfig)}`;
+    // Use CUMULATIVE PACKAGE PRICING (same logic as calculateSmartEODSAFee)
+    // solo1Fee, solo2Fee, solo3Fee are CUMULATIVE package totals, not individual fees
+    const fees = { ...DEFAULT_FEES, ...eventConfig };
+    const solo1Package = fees.solo1Fee || 550;
+    const solo2Package = fees.solo2Fee || 942;
+    const solo3Package = fees.solo3Fee || 1256;
+    const additionalSoloFee = fees.soloAdditionalFee || 349;
+    
+    // Calculate previous package total (what they should have paid for existing solos)
+    let previousPackageTotal = 0;
+    if (existingSoloCount === 0) {
+      previousPackageTotal = 0;
+    } else if (existingSoloCount === 1) {
+      previousPackageTotal = solo1Package;
+    } else if (existingSoloCount === 2) {
+      previousPackageTotal = solo2Package;
+    } else if (existingSoloCount === 3) {
+      previousPackageTotal = solo3Package;
+    } else {
+      // 4+ solos: 3-solo package + additional solos
+      previousPackageTotal = solo3Package + ((existingSoloCount - 3) * additionalSoloFee);
+    }
+    
+    // Calculate new package total (what they should pay for new total count)
+    const newTotalSoloCount = existingSoloCount + 1;
+    let newPackageTotal = 0;
+    if (newTotalSoloCount === 1) {
+      newPackageTotal = solo1Package;
+    } else if (newTotalSoloCount === 2) {
+      newPackageTotal = solo2Package;
+    } else if (newTotalSoloCount === 3) {
+      newPackageTotal = solo3Package;
+    } else {
+      // 4+ solos: 3-solo package + additional solos
+      newPackageTotal = solo3Package + ((newTotalSoloCount - 3) * additionalSoloFee);
+    }
+    
+    // Entry fee is the INCREMENTAL difference (new package - previous package)
+    correctFee = Math.max(0, newPackageTotal - previousPackageTotal);
+    
+    const currencySymbol = fees.currency === 'USD' ? '$' : fees.currency === 'EUR' ? '€' : fees.currency === 'GBP' ? '£' : 'R';
+    explanation = `Solo Package (${newTotalSoloCount} solos total): ${currencySymbol}${newPackageTotal} - Previous: ${currencySymbol}${previousPackageTotal} = ${currencySymbol}${correctFee}`;
   } else {
     correctFee = calculateNonSoloFee(performanceType, participantCount, eventConfig);
     explanation = `${performanceType} with ${participantCount} participants`;
@@ -239,7 +278,7 @@ export function validateAndCorrectEntryFee(
   
   return {
     validatedFee: correctFee,
-    wasCorrect: submittedFee === correctFee,
+    wasCorrect: Math.abs(submittedFee - correctFee) < 0.01, // Allow small rounding differences
     explanation
   };
 }
