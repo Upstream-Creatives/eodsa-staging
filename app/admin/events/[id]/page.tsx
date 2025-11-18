@@ -2314,6 +2314,171 @@ function EventParticipantsPage() {
   );
 }
 
+// Fee Breakdown Component for Entry Details Modal
+function FeeBreakdownComponent({ entry, event }: { entry: EventEntry | null; event: Event | null }) {
+  const { theme } = useTheme();
+  const themeClasses = getThemeClasses(theme);
+  const [breakdown, setBreakdown] = useState<{
+    performanceFee: number;
+    registrationFee: number;
+    totalFee: number;
+    breakdown: string;
+    registrationBreakdown: string;
+    soloCount?: number;
+  } | null>(null);
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false);
+
+  useEffect(() => {
+    const calculateBreakdown = async () => {
+      if (!entry || !event) return;
+      
+      setLoadingBreakdown(true);
+      try {
+        // Determine performance type from participant count
+        const participantCount = entry.participantIds?.length || 1;
+        let performanceType: 'Solo' | 'Duet' | 'Trio' | 'Group' = 'Solo';
+        if (participantCount === 2) performanceType = 'Duet';
+        else if (participantCount === 3) performanceType = 'Trio';
+        else if (participantCount >= 4) performanceType = 'Group';
+
+        // For solo entries, we need to calculate solo count
+        let soloCount = 1;
+        if (performanceType === 'Solo' && entry.participantIds && entry.participantIds.length === 1) {
+          // Count existing solos for this dancer in this event
+          const sqlClient = getSql();
+          const allSolos = await sqlClient`
+            SELECT id, participant_ids, eodsa_id, contestant_id
+            FROM event_entries
+            WHERE event_id = ${entry.eventId}
+            AND performance_type = 'Solo'
+            AND id != ${entry.id}
+            ORDER BY submitted_at ASC
+          ` as any[];
+
+          // Count matching entries (same logic as fee calculation)
+          const participantId = entry.participantIds[0];
+          let matchingCount = 0;
+          for (const solo of allSolos) {
+            let entryParticipantIds: string[] = [];
+            try {
+              if (typeof solo.participant_ids === 'string') {
+                entryParticipantIds = JSON.parse(solo.participant_ids);
+              } else if (Array.isArray(solo.participant_ids)) {
+                entryParticipantIds = solo.participant_ids;
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+
+            const matches = solo.contestant_id === entry.contestantId ||
+                           solo.eodsa_id === entry.eodsaId ||
+                           entryParticipantIds.includes(participantId) ||
+                           entryParticipantIds.includes(entry.eodsaId);
+
+            if (matches) {
+              matchingCount++;
+            }
+          }
+          soloCount = matchingCount + 1; // +1 for this entry
+        }
+
+        // Call API to get fee breakdown
+        const response = await fetch('/api/eodsa-fees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            masteryLevel: entry.mastery || 'Water (Competitive)',
+            performanceType: performanceType,
+            participantIds: entry.participantIds || [],
+            soloCount: performanceType === 'Solo' ? soloCount : undefined,
+            includeRegistration: true,
+            eventId: entry.eventId
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setBreakdown({
+            performanceFee: data.fees.performanceFee || 0,
+            registrationFee: data.fees.registrationFee || 0,
+            totalFee: data.fees.totalFee || entry.calculatedFee,
+            breakdown: data.fees.breakdown || '',
+            registrationBreakdown: data.fees.registrationBreakdown || '',
+            soloCount: performanceType === 'Solo' ? soloCount : undefined
+          });
+        }
+      } catch (error) {
+        console.error('Error calculating fee breakdown:', error);
+      } finally {
+        setLoadingBreakdown(false);
+      }
+    };
+
+    if (entry && event) {
+      calculateBreakdown();
+    }
+  }, [entry, event]);
+
+  if (!entry || !event) return null;
+
+  const currencySymbol = event.currency === 'USD' ? '$' : event.currency === 'EUR' ? '€' : event.currency === 'GBP' ? '£' : 'R';
+
+  return (
+    <div className={`${themeClasses.metricCardBg} ${themeClasses.cardRadius} p-5 border ${themeClasses.metricCardBorder}`}>
+      <h3 className={`${themeClasses.heading3} mb-4`}>Fee Breakdown</h3>
+      {loadingBreakdown ? (
+        <div className="flex items-center justify-center py-4">
+          <div className={`w-5 h-5 border-2 ${theme === 'dark' ? 'border-emerald-400/30 border-t-emerald-400' : 'border-emerald-600/30 border-t-emerald-600'} rounded-full animate-spin mr-3`}></div>
+          <span className={themeClasses.textSecondary}>Calculating breakdown...</span>
+        </div>
+      ) : breakdown ? (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className={`text-sm font-medium ${themeClasses.textSecondary}`}>Performance Fee:</span>
+            <span className={`text-base font-bold ${themeClasses.textPrimary}`}>
+              {currencySymbol}{breakdown.performanceFee.toFixed(2)}
+            </span>
+          </div>
+          {breakdown.breakdown && (
+            <div className={`text-xs ${themeClasses.textMuted} ml-2`}>
+              {breakdown.breakdown}
+            </div>
+          )}
+          
+          <div className="flex justify-between items-center pt-2 border-t border-gray-600/30">
+            <span className={`text-sm font-medium ${themeClasses.textSecondary}`}>Registration Fee:</span>
+            <span className={`text-base font-bold ${themeClasses.textPrimary}`}>
+              {currencySymbol}{breakdown.registrationFee.toFixed(2)}
+            </span>
+          </div>
+          {breakdown.registrationBreakdown && (
+            <div className={`text-xs ${themeClasses.textMuted} ml-2`}>
+              {breakdown.registrationBreakdown}
+            </div>
+          )}
+          
+          <div className="flex justify-between items-center pt-3 border-t border-gray-600/50 mt-3">
+            <span className={`text-base font-semibold ${themeClasses.textPrimary}`}>Total Fee:</span>
+            <span className={`text-lg font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+              {currencySymbol}{breakdown.totalFee.toFixed(2)}
+            </span>
+          </div>
+          
+          {breakdown.soloCount && (
+            <div className={`text-xs ${themeClasses.textMuted} mt-2 pt-2 border-t border-gray-600/30`}>
+              Solo #{breakdown.soloCount} for this dancer in this event
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className={`text-sm ${themeClasses.textMuted}`}>
+          Unable to calculate breakdown
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Wrap the EventParticipantsPage with ThemeProvider
 export default function EventParticipantsPageWrapper() {
   return (
