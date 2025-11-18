@@ -2401,12 +2401,86 @@ function FeeBreakdownComponent({ entry, event, allEntries }: { entry: EventEntry
             soloCount = data.details?.soloCount || (data.debug?.existingSoloCount !== undefined ? data.debug.existingSoloCount + 1 : 1);
           }
           
+          // CRITICAL: Use ACTUAL charged fee, not recalculated fee
+          // The entry.calculatedFee is what was actually charged at the time
+          const actualTotalFee = entry.calculatedFee;
+          const recalculatedTotalFee = (data.fees?.performanceFee || 0) + (data.fees?.registrationFee || 0);
+          
+          // Reverse-engineer the breakdown from the actual charged fee
+          // For solo entries, try to determine what was charged
+          let actualPerformanceFee = data.fees?.performanceFee || 0;
+          let actualRegistrationFee = data.fees?.registrationFee || 0;
+          
+          if (performanceType === 'Solo' && event) {
+            // Try to reverse-engineer based on actual total and event fees
+            const regFee = event.registrationFeePerDancer || 175;
+            const solo1Fee = event.solo1Fee || 550;
+            const solo2Fee = event.solo2Fee || 942;
+            const solo3Fee = event.solo3Fee || 1256;
+            
+            // Check if total matches common combinations
+            if (Math.abs(actualTotalFee - (solo1Fee + regFee)) < 0.01) {
+              // First solo with registration
+              actualPerformanceFee = solo1Fee;
+              actualRegistrationFee = regFee;
+            } else if (Math.abs(actualTotalFee - solo1Fee) < 0.01) {
+              // First solo without registration (already had entry)
+              actualPerformanceFee = solo1Fee;
+              actualRegistrationFee = 0;
+            } else if (Math.abs(actualTotalFee - (solo2Fee - solo1Fee)) < 0.01) {
+              // Second solo (incremental)
+              actualPerformanceFee = solo2Fee - solo1Fee;
+              actualRegistrationFee = 0;
+            } else if (Math.abs(actualTotalFee - (solo3Fee - solo2Fee)) < 0.01) {
+              // Third solo (incremental)
+              actualPerformanceFee = solo3Fee - solo2Fee;
+              actualRegistrationFee = 0;
+            } else {
+              // Use recalculated values but note the discrepancy
+              actualPerformanceFee = data.fees?.performanceFee || 0;
+              actualRegistrationFee = actualTotalFee - actualPerformanceFee;
+              if (actualRegistrationFee < 0) {
+                actualRegistrationFee = 0;
+                actualPerformanceFee = actualTotalFee;
+              }
+            }
+          } else {
+            // For non-solo, use recalculated or estimate
+            actualPerformanceFee = data.fees?.performanceFee || 0;
+            actualRegistrationFee = actualTotalFee - actualPerformanceFee;
+            if (actualRegistrationFee < 0) {
+              actualRegistrationFee = 0;
+              actualPerformanceFee = actualTotalFee;
+            }
+          }
+          
+          // Build breakdown text based on actual fees
+          let breakdownText = data.fees?.breakdown || '';
+          if (performanceType === 'Solo' && soloCount) {
+            if (soloCount === 1) {
+              breakdownText = `Solo Package (1 solo)`;
+            } else if (soloCount === 2) {
+              breakdownText = `Solo Package (2 solos total) - Previous: R${event?.solo1Fee || 550}`;
+            } else if (soloCount === 3) {
+              breakdownText = `Solo Package (3 solos total) - Previous: R${event?.solo2Fee || 942}`;
+            } else {
+              breakdownText = `Solo Package (${soloCount} solos total)`;
+            }
+          }
+          
+          let registrationBreakdownText = data.fees?.registrationBreakdown || '';
+          if (actualRegistrationFee > 0) {
+            registrationBreakdownText = `Registration fee (first entry in this event)`;
+          } else {
+            registrationBreakdownText = `Registration fee waived (already assigned on previous entry)`;
+          }
+          
           setBreakdown({
-            performanceFee: data.fees?.performanceFee || 0,
-            registrationFee: data.fees?.registrationFee || 0,
-            totalFee: data.fees?.totalFee || entry.calculatedFee,
-            breakdown: data.fees?.breakdown || '',
-            registrationBreakdown: data.fees?.registrationBreakdown || '',
+            performanceFee: actualPerformanceFee,
+            registrationFee: actualRegistrationFee,
+            totalFee: actualTotalFee, // Always use the actual charged fee
+            breakdown: breakdownText,
+            registrationBreakdown: registrationBreakdownText,
             soloCount: performanceType === 'Solo' ? soloCount : undefined
           });
         } else {
