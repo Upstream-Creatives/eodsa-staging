@@ -204,9 +204,10 @@ export const calculateSmartEODSAFee = async (
     existingSoloCount = dbExistingSoloCount;
     
     // Debug logging for dev/staging
-    console.log(`✅ Database query found ${dbExistingSoloCount} existing solo entries`);
+    console.log(`✅ Database query found ${dbExistingSoloCount} existing solo entries (including pending/unpaid)`);
     console.log(`   - Matching entry IDs: ${matchingEntryIds.join(', ') || 'none'}`);
     console.log(`   - Frontend soloCount: ${options?.soloCount || 'not provided'}`);
+    console.log(`   - Total solos in event: ${allSolosInEvent.length}`);
     
     if (existingSoloEntries.length > 0) {
       existingSoloEntries.forEach((entry, idx) => {
@@ -220,8 +221,33 @@ export const calculateSmartEODSAFee = async (
         } catch (e) {
           // Ignore parse errors
         }
-        console.log(`   - Entry ${idx + 1}: ID=${entry.id}, Fee=R${entry.calculated_fee}, eodsa_id=${entry.eodsa_id}, contestant_id=${entry.contestant_id}, participant_ids=${JSON.stringify(entryParticipantIds)}`);
+        console.log(`   - Entry ${idx + 1}: ID=${entry.id}, Fee=R${entry.calculated_fee}, Payment=${entry.payment_status}, eodsa_id="${entry.eodsa_id}", contestant_id="${entry.contestant_id}", participant_ids=${JSON.stringify(entryParticipantIds)}`);
       });
+    } else {
+      // Enhanced debugging when no matches found
+      console.warn(`⚠️ No matching entries found. Checking why:`);
+      console.warn(`   - Searching for: participantId="${participantId}", dancerEodsaId="${dancerEodsaId}", allInternalIds=[${allInternalIds.join(', ')}]`);
+      if (allSolosInEvent.length > 0) {
+        console.warn(`   - Sample non-matching entries (first 5):`);
+        allSolosInEvent.slice(0, 5).forEach((entry, idx) => {
+          let entryParticipantIds: string[] = [];
+          try {
+            if (typeof entry.participant_ids === 'string') {
+              entryParticipantIds = JSON.parse(entry.participant_ids);
+            } else if (Array.isArray(entry.participant_ids)) {
+              entryParticipantIds = entry.participant_ids;
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+          const matchesC = allInternalIds.includes(entry.contestant_id);
+          const matchesE = dancerEodsaId && entry.eodsa_id === dancerEodsaId;
+          const matchesP = allInternalIds.some(id => entryParticipantIds.includes(id)) ||
+                          (dancerEodsaId && entryParticipantIds.includes(dancerEodsaId));
+          console.warn(`     Entry ${idx + 1}: ID=${entry.id}, eodsa_id="${entry.eodsa_id}", contestant_id="${entry.contestant_id}", participant_ids=${JSON.stringify(entryParticipantIds)}`);
+          console.warn(`       Matches contestant_id: ${matchesC}, Matches eodsa_id: ${matchesE}, Matches participant_ids: ${matchesP}`);
+        });
+      }
     }
     
     // CRITICAL FIX: If database query finds 0 entries but frontend soloCount suggests existing entries,

@@ -419,6 +419,89 @@ export const emailTemplates = {
         </div>
       </div>
     `
+  }),
+
+  certificateAvailable: (dancerName: string, certificateUrl: string, performanceTitle: string, percentage: number, medallion: string) => ({
+    subject: 'Your Certificate is Now Available! 🎉',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🏆 Your Certificate is Ready!</h1>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
+          <h2 style="color: #333; margin: 0 0 20px 0;">Congratulations ${dancerName}!</h2>
+
+          <p style="color: #555; font-size: 16px; line-height: 1.6;">
+            Your performance scores have been approved and your certificate is now available on your dashboard!
+          </p>
+
+          <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin: 20px 0;">
+            <h3 style="color: #667eea; margin: 0 0 15px 0;">Performance Details:</h3>
+            <p style="margin: 5px 0; color: #333;"><strong>Performance:</strong> ${performanceTitle}</p>
+            <p style="margin: 5px 0; color: #333;"><strong>Score:</strong> ${percentage}%</p>
+            <p style="margin: 5px 0; color: #333;"><strong>Medallion:</strong> ${medallion} 🏅</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${certificateUrl}"
+               style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; font-size: 16px;">
+              View Certificate on Dashboard
+            </a>
+          </div>
+
+          <p style="color: #555; font-size: 14px; line-height: 1.6;">
+            You can view, download, and share your certificate from your dashboard. Log in to access it anytime!
+          </p>
+
+          <p style="color: #777; font-size: 14px; text-align: center; margin-top: 30px; border-top: 1px solid #e9ecef; padding-top: 20px;">
+            Questions? Contact us at <a href="mailto:devops@upstreamcreatives.co.za" style="color: #667eea;">devops@upstreamcreatives.co.za</a>
+          </p>
+        </div>
+      </div>
+    `
+  }),
+
+  certificateAvailableToStudio: (studioName: string, dancerName: string, certificateUrl: string, performanceTitle: string, percentage: number, medallion: string) => ({
+    subject: `Certificate Available for ${dancerName} 🎉`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🏆 Certificate Available</h1>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
+          <h2 style="color: #333; margin: 0 0 20px 0;">Hello ${studioName}!</h2>
+
+          <p style="color: #555; font-size: 16px; line-height: 1.6;">
+            A certificate is now available for one of your dancers. The performance scores have been approved and the certificate is ready to view.
+          </p>
+
+          <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin: 20px 0;">
+            <h3 style="color: #667eea; margin: 0 0 15px 0;">Performance Details:</h3>
+            <p style="margin: 5px 0; color: #333;"><strong>Dancer:</strong> ${dancerName}</p>
+            <p style="margin: 5px 0; color: #333;"><strong>Performance:</strong> ${performanceTitle}</p>
+            <p style="margin: 5px 0; color: #333;"><strong>Score:</strong> ${percentage}%</p>
+            <p style="margin: 5px 0; color: #333;"><strong>Medallion:</strong> ${medallion} 🏅</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${certificateUrl}"
+               style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; font-size: 16px;">
+              View Certificate
+            </a>
+          </div>
+
+          <p style="color: #555; font-size: 14px; line-height: 1.6;">
+            The dancer has also been notified and can access their certificate from their dashboard.
+          </p>
+
+          <p style="color: #777; font-size: 14px; text-align: center; margin-top: 30px; border-top: 1px solid #e9ecef; padding-top: 20px;">
+            Questions? Contact us at <a href="mailto:devops@upstreamcreatives.co.za" style="color: #667eea;">devops@upstreamcreatives.co.za</a>
+          </p>
+        </div>
+      </div>
+    `
   })
 };
 
@@ -561,6 +644,46 @@ export const emailService = {
       return { success: true };
     } catch (error) {
       console.error('Error sending certificate email:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  // Send certificate available notification to dancer
+  async sendCertificateAvailableEmail(dancerName: string, email: string, certificateUrl: string, performanceTitle: string, percentage: number, medallion: string) {
+    try {
+      const template = emailTemplates.certificateAvailable(dancerName, certificateUrl, performanceTitle, percentage, medallion);
+
+      await transporter.sendMail({
+        from: '"EODSA" <devops@upstreamcreatives.co.za>',
+        to: email,
+        subject: template.subject,
+        html: template.html
+      });
+
+      console.log('Certificate available email sent successfully to dancer:', email);
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending certificate available email:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  // Send certificate available notification to studio
+  async sendCertificateAvailableEmailToStudio(studioName: string, email: string, dancerName: string, certificateUrl: string, performanceTitle: string, percentage: number, medallion: string) {
+    try {
+      const template = emailTemplates.certificateAvailableToStudio(studioName, dancerName, certificateUrl, performanceTitle, percentage, medallion);
+
+      await transporter.sendMail({
+        from: '"EODSA" <devops@upstreamcreatives.co.za>',
+        to: email,
+        subject: template.subject,
+        html: template.html
+      });
+
+      console.log('Certificate available email sent successfully to studio:', email);
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending certificate available email to studio:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },
