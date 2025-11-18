@@ -96,6 +96,7 @@ interface Studio {
   registrationNumber: string;
   approved: boolean;
   approvedBy?: string;
+  approvedByName?: string;
   approvedAt?: string;
   rejectionReason?: string;
   createdAt: string;
