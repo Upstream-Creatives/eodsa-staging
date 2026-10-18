@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import type { Contestant, Performance, Judge, Score, Dancer, EventEntry, Ranking, Event } from './types';
 import { getMedalFromPercentage, resolveScoringEventType } from './types';
+import { getAverageCompetitionAgeCategory } from './competition-age';
 import { calculateRoundedPercentage, getMedalFromPercentage as getMedalFromPercentageCert } from './certificate-generator';
 
 // Custom fetch for Neon with better error handling and timeout
@@ -114,6 +115,66 @@ export const generateEODSAId = () => {
   const digits = Math.floor(100000 + Math.random() * 900000); // 6 digits
   return `${letter}${digits}`;
 };
+
+function parseRankingParticipantIds(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((id) => String(id)).filter(Boolean);
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((id) => String(id)).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function birthDateValue(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  return null;
+}
+
+function isUsableRankingAgeCategory(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  return trimmed !== '' && trimmed !== 'N/A' && trimmed !== 'All' && trimmed !== 'All Ages';
+}
+
+async function loadDancerBirthDates(sqlClient: any, participantIds: string[]): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(participantIds.filter(Boolean))];
+  const dobById = new Map<string, string>();
+  if (uniqueIds.length === 0) return dobById;
+
+  const dancers = await sqlClient`
+    SELECT id, eodsa_id, date_of_birth
+    FROM dancers
+    WHERE id = ANY(${uniqueIds}) OR eodsa_id = ANY(${uniqueIds})
+  ` as any[];
+
+  for (const dancer of dancers) {
+    const dob = birthDateValue(dancer.date_of_birth);
+    if (!dob) continue;
+    if (dancer.id) dobById.set(String(dancer.id), dob);
+    if (dancer.eodsa_id) dobById.set(String(dancer.eodsa_id), dob);
+  }
+  return dobById;
+}
+
+function resolveRankingAgeCategory(
+  storedAgeCategory: unknown,
+  eventDate: unknown,
+  participantIds: string[],
+  dobByParticipantId: Map<string, string>
+): string {
+  if (participantIds.length > 0 && eventDate) {
+    const datesOfBirth = participantIds.map((id) => dobByParticipantId.get(id) ?? null);
+    const calculated = getAverageCompetitionAgeCategory(datesOfBirth, { eventDate: eventDate as string });
+    if (isUsableRankingAgeCategory(calculated)) return calculated;
+  }
+  if (isUsableRankingAgeCategory(storedAgeCategory)) return storedAgeCategory;
+  return 'N/A';
+}
 
 // Generate Studio Registration Number: letter + 6 digits (e.g. "S123456")
 export const generateStudioRegistrationId = () => {
@@ -2027,36 +2088,24 @@ export const db = {
         });
       }
     
-      // Calculate age categories for all results first
-      const { calculateAgeCategoryForEntry } = await import('./age-category-calculator');
+      // Age categories are competition age (1 October of the season), computed from
+      // dancer birth dates. One batched lookup — a query per dancer fails under
+      // load and those rows were saved as N/A, so age filters dropped them.
       const publicResult = (result as any[]).filter((row: any) => row.event_type !== 'AUDITION_EVENT');
-      const resultsWithAgeCategories = await Promise.all(
-        publicResult.map(async (row: any) => {
-          let calculatedAgeCategory = row.age_category;
-          
-          // Try to calculate age category from participant_ids if available
-          if (row.participant_ids && row.event_date) {
-            try {
-              const participantIds = JSON.parse(row.participant_ids || '[]');
-              if (participantIds.length > 0) {
-                calculatedAgeCategory = await calculateAgeCategoryForEntry(
-                  participantIds,
-                  row.event_date,
-                  sqlClient
-                );
-              }
-            } catch (error) {
-              console.warn('Error calculating age category for ranking:', error);
-              // Fall back to event age category
-            }
-          }
-          
-          return {
-            ...row,
-            calculated_age_category: calculatedAgeCategory
-          };
-        })
+      const participantIdsByRow = publicResult.map((row: any) => parseRankingParticipantIds(row.participant_ids));
+      const dobByParticipantId = await loadDancerBirthDates(
+        sqlClient,
+        participantIdsByRow.flat()
       );
+      const resultsWithAgeCategories = publicResult.map((row: any, index: number) => ({
+        ...row,
+        calculated_age_category: resolveRankingAgeCategory(
+          row.age_category,
+          row.event_date,
+          participantIdsByRow[index],
+          dobByParticipantId
+        )
+      }));
     
       // Build final result objects with participant names
       // Note: No deduplication here - the frontend handles deduplication when filters are applied
